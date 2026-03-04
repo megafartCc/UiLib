@@ -203,7 +203,11 @@ function Library:CreateWindow(title)
     titleText.TextTransparency = 1
     titleText.ZIndex = 5
 
-    -- Premium text is now under username on the right side
+    -- Avatar sizing (needed for positioning below)
+    local avatarSize = 38
+    local avatarRingSize = avatarSize + 4
+
+    -- Premium text under username on the right side
     local premiumText = Instance.new("TextLabel", titleBar)
     premiumText.Name = "Premium"
     premiumText.Size = UDim2.new(0, 120, 0, 14)
@@ -220,8 +224,6 @@ function Library:CreateWindow(title)
     -- ==============================
     -- RIGHT SIDE: Avatar + Username
     -- ==============================
-    local avatarSize = 38
-    local avatarRingSize = avatarSize + 4
 
     -- Avatar ring (accent-colored border)
     local avatarRing = Instance.new("Frame", titleBar)
