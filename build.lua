@@ -70,7 +70,7 @@ Library.Theme = {
     Warning        = Color3.fromRGB(250, 168, 26),
     Error          = Color3.fromRGB(237, 66, 69),
     CornerRadius   = UDim.new(0, 8),
-    WindowCorner   = UDim.new(0, 10),
+    WindowCorner   = UDim.new(0, 6),
 }
 
 Library.Config = {
@@ -170,8 +170,7 @@ function Library:CreateWindow(title)
     main.ClipsDescendants = true
     main.ZIndex = 1
 
-    -- Start collapsed for open animation
-    main.Size = UDim2.fromOffset(config.WindowWidth, 0)
+    -- Start at full size (no open animation)
 
     Instance.new("UICorner", main).CornerRadius = theme.WindowCorner
 
@@ -194,7 +193,7 @@ function Library:CreateWindow(title)
     local titleText = Instance.new("TextLabel", titleBar)
     titleText.Name = "Title"
     titleText.Size = UDim2.new(0.5, 0, 0, 18)
-    titleText.Position = UDim2.fromOffset(16, 12)
+    titleText.Position = UDim2.fromOffset(16, 20)
     titleText.BackgroundTransparency = 1
     titleText.Text = win.Title
     titleText.TextColor3 = theme.Text
@@ -204,17 +203,17 @@ function Library:CreateWindow(title)
     titleText.TextTransparency = 1
     titleText.ZIndex = 5
 
-    -- Left side: "Premium" badge text below title
+    -- Premium text is now under username on the right side
     local premiumText = Instance.new("TextLabel", titleBar)
     premiumText.Name = "Premium"
-    premiumText.Size = UDim2.new(0.5, 0, 0, 14)
-    premiumText.Position = UDim2.fromOffset(16, 33)
+    premiumText.Size = UDim2.new(0, 120, 0, 14)
+    premiumText.Position = UDim2.new(1, -avatarRingSize - 14 - 8 - 120, 0, 36)
     premiumText.BackgroundTransparency = 1
     premiumText.Text = "Premium"
-    premiumText.TextColor3 = theme.Premium
-    premiumText.TextSize = 12
-    premiumText.Font = config.Font
-    premiumText.TextXAlignment = Enum.TextXAlignment.Left
+    premiumText.TextColor3 = theme.Text
+    premiumText.TextSize = 11
+    premiumText.Font = config.FontLight
+    premiumText.TextXAlignment = Enum.TextXAlignment.Right
     premiumText.TextTransparency = 1
     premiumText.ZIndex = 5
 
@@ -236,12 +235,12 @@ function Library:CreateWindow(title)
 
     Instance.new("UICorner", avatarRing).CornerRadius = UDim.new(1, 0) -- full circle
 
-    -- Avatar image (inside ring)
+    -- Avatar image (inside ring, no border)
     local avatarImg = Instance.new("ImageLabel", avatarRing)
     avatarImg.Name = "AvatarImage"
     avatarImg.Size = UDim2.fromOffset(avatarSize, avatarSize)
-    avatarImg.Position = UDim2.fromOffset(2, 2) -- 2px padding = ring thickness
-    avatarImg.BackgroundColor3 = theme.Surface
+    avatarImg.Position = UDim2.fromOffset(2, 2)
+    avatarImg.BackgroundTransparency = 1
     avatarImg.BorderSizePixel = 0
     avatarImg.ZIndex = 7
     avatarImg.ImageTransparency = 1
@@ -258,11 +257,11 @@ function Library:CreateWindow(title)
         end
     end)
 
-    -- Username text (to the left of avatar)
+    -- Username text (to the left of avatar, higher)
     local usernameText = Instance.new("TextLabel", titleBar)
     usernameText.Name = "Username"
     usernameText.Size = UDim2.new(0, 120, 0, 16)
-    usernameText.Position = UDim2.new(1, -avatarRingSize - 14 - 8 - 120, 0.5, -8)
+    usernameText.Position = UDim2.new(1, -avatarRingSize - 14 - 8 - 120, 0, 18)
     usernameText.BackgroundTransparency = 1
     usernameText.Text = lp.DisplayName or lp.Name
     usernameText.TextColor3 = theme.TextDim
@@ -362,44 +361,13 @@ function Library:CreateWindow(title)
         if gpe then return end
         if input.KeyCode == config.ToggleKey then
             win.Visible = not win.Visible
-            if win.Visible then
-                main.Visible = true
-                shadowFrame.Visible = true
-                self:Spring(main, "Popup", {
-                    Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
-                })
-                self:Spring(shadowFrame, "Popup", {
-                    Size = UDim2.fromOffset(config.WindowWidth + 24, config.WindowHeight + 24)
-                })
-                showAll()
-            else
-                self:Spring(main, "Snappy", {
-                    Size = UDim2.fromOffset(config.WindowWidth, 0)
-                })
-                self:Spring(shadowFrame, "Snappy", {
-                    Size = UDim2.fromOffset(config.WindowWidth + 24, 0)
-                })
-                hideAll()
-                task.delay(0.35, function()
-                    if not win.Visible then
-                        main.Visible = false
-                        shadowFrame.Visible = false
-                    end
-                end)
-            end
+            main.Visible = win.Visible
+            shadowFrame.Visible = win.Visible
         end
     end)
 
-    -- ==============================
-    -- OPEN ANIMATION
-    -- ==============================
+    -- No open animation — show everything immediately
     task.defer(function()
-        self:Spring(main, "Popup", {
-            Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
-        })
-        self:Spring(shadowFrame, "Popup", {
-            Size = UDim2.fromOffset(config.WindowWidth + 24, config.WindowHeight + 24)
-        })
         showAll()
     end)
 
