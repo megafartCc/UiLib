@@ -66,6 +66,87 @@ function Library:CreateWindow(opts)
         transientPopupClosers[panel] = closeFn
     end
 
+    local function resolveDropdownValue(options, rawValue, allowFallback)
+        if type(options) ~= "table" or #options == 0 then
+            return nil
+        end
+
+        if rawValue == nil then
+            return allowFallback and options[1] or nil
+        end
+
+        if type(rawValue) == "number" and rawValue % 1 == 0 and options[rawValue] ~= nil then
+            return options[rawValue]
+        end
+
+        for _, opt in ipairs(options) do
+            if opt == rawValue or tostring(opt) == tostring(rawValue) then
+                return opt
+            end
+        end
+
+        return allowFallback and options[1] or nil
+    end
+
+    local function buildSelectedSet(options, rawValue)
+        local selected = {}
+        if type(rawValue) ~= "table" then
+            return selected
+        end
+
+        local sequenceCount = #rawValue
+        if sequenceCount > 0 then
+            for _, value in ipairs(rawValue) do
+                local resolved = resolveDropdownValue(options, value, false)
+                if resolved ~= nil then
+                    selected[resolved] = true
+                end
+            end
+        end
+
+        for key, value in pairs(rawValue) do
+            if not (type(key) == "number" and key >= 1 and key <= sequenceCount) then
+                if value == true then
+                    local resolved = resolveDropdownValue(options, key, false)
+                    if resolved ~= nil then
+                        selected[resolved] = true
+                    end
+                elseif value then
+                    local resolved = resolveDropdownValue(options, value, false)
+                    if resolved ~= nil then
+                        selected[resolved] = true
+                    end
+                end
+            end
+        end
+
+        return selected
+    end
+
+    local function getSelectedValues(options, selectedSet)
+        local values = {}
+        for _, opt in ipairs(options or {}) do
+            if selectedSet and selectedSet[opt] then
+                table.insert(values, opt)
+            end
+        end
+        return values
+    end
+
+    local function getDropdownConfigKey(requestedKey, sectionName, dropdownName)
+        if requestedKey == false then
+            return nil
+        end
+        if requestedKey ~= nil then
+            return requestedKey
+        end
+        return string.format("%s.%s", tostring(sectionName or "Section"), tostring(dropdownName or "Dropdown"))
+    end
+
+    local function fireMultiDropdownCallback(callback, selectedSet)
+        callback(selectedSet, selectedSet)
+    end
+
     -- ScreenGui
     local sg = scope:New "ScreenGui" {
         Name = randomStr(),
@@ -1416,7 +1497,7 @@ function Library:CreateWindow(opts)
                     dropOpts = dropOpts or {}
                     local dName = dropOpts.Name or "Dropdown"
                     local dOptions = dropOpts.Options or {"Option 1", "Option 2"}
-                    local dDefault = dropOpts.Default or dOptions[1]
+                    local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
                     local dCallback = dropOpts.Callback or function() end
 
                     local dropdown = { Value = dDefault }
@@ -1464,7 +1545,7 @@ function Library:CreateWindow(opts)
                     selVal.Position = UDim2.new(0, 6, 0, 0)
                     selVal.Size = UDim2.new(1, -20, 1, 0)
                     selVal.Font = config.FontMedium
-                    selVal.Text = dDefault
+                    selVal.Text = tostring(dDefault)
                     selVal.TextColor3 = colors.Text
                     selVal.TextSize = 10
                     selVal.TextXAlignment = Enum.TextXAlignment.Left
@@ -1518,8 +1599,8 @@ function Library:CreateWindow(opts)
                         ol.Position = UDim2.new(0, 6, 0, 0)
                         ol.Size = UDim2.new(1, -12, 1, 0)
                         ol.Font = config.FontMedium
-                        ol.Text = opt
-                        ol.TextColor3 = (opt == dDefault) and colors.Main or colors.Text
+                        ol.Text = tostring(opt)
+                        ol.TextColor3 = (opt == dropdown.Value) and colors.Main or colors.Text
                         ol.TextSize = 10
                         ol.TextXAlignment = Enum.TextXAlignment.Left
                         ol.ZIndex = 52
@@ -1538,7 +1619,7 @@ function Library:CreateWindow(opts)
                         end)
                         ob.Activated:Connect(function()
                             dropdown.Value = opt
-                            selVal.Text = opt
+                            selVal.Text = tostring(opt)
                             isOpen = false
                             Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
                             task.delay(0.15, function() dPanel.Visible = false end)
@@ -1982,7 +2063,7 @@ function Library:CreateWindow(opts)
 
                     optBtn.Activated:Connect(function()
                         dropdown.Value = opt
-                        valText.Text = opt
+                        valText.Text = tostring(opt)
                         isOpen = false
                         Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
                         task.delay(0.15, function() dropPanel.Visible = false end)
@@ -2071,17 +2152,17 @@ function Library:CreateWindow(opts)
                 local dOptions = dropOpts.Options or {"Option 1", "Option 2"}
                 local dDefaults = dropOpts.Default or {}
                 local dCallback = dropOpts.Callback or function() end
+                local dSaveKey = getDropdownConfigKey(dropOpts.SaveKey, secName, dName)
 
                 -- Build selected set
-                local selectedSet = {}
-                for _, v in ipairs(dDefaults) do selectedSet[v] = true end
+                local selectedSet = buildSelectedSet(dOptions, dDefaults)
 
                 local multi = { Values = selectedSet }
 
                 local function getDisplayText()
                     local sel = {}
                     for _, opt in ipairs(dOptions) do
-                        if selectedSet[opt] then table.insert(sel, opt) end
+                        if selectedSet[opt] then table.insert(sel, tostring(opt)) end
                     end
                     if #sel == 0 then return "None" end
                     local txt = table.concat(sel, ", ")
@@ -2211,7 +2292,7 @@ function Library:CreateWindow(opts)
                     optLabel.Position = UDim2.new(0, 24, 0, 0)
                     optLabel.Size = UDim2.new(1, -30, 1, 0)
                     optLabel.Font = config.FontMedium
-                    optLabel.Text = opt
+                    optLabel.Text = tostring(opt)
                     optLabel.TextColor3 = selectedSet[opt] and colors.Main or colors.Text
                     optLabel.TextSize = 11
                     optLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -2238,8 +2319,9 @@ function Library:CreateWindow(opts)
                         end
                         valText.Text = getDisplayText()
                         multi.Values = selectedSet
-                        dCallback(selectedSet)
+                        fireMultiDropdownCallback(dCallback, selectedSet)
                         if multi._onChange then multi._onChange() end
+                        Library:_markDirty()
                     end)
                     optVisuals[opt] = { chk = chk, chkIcon = chkIcon, chkStroke = chkStroke, optLabel = optLabel }
                 end
@@ -2282,16 +2364,22 @@ function Library:CreateWindow(opts)
                 end), nextCleanupKey("MultiDropdownOutside"))
 
                 -- Register for config save/load
-                Library:RegisterConfig(secName .. "." .. dName, "multi",
-                    function() return multi.Values end,
-                    function(val)
-                        if type(val) ~= "table" then return end
-                        for k in pairs(selectedSet) do selectedSet[k] = nil end
-                        for k, v in pairs(val) do selectedSet[k] = v end
-                        multi.Values = selectedSet
-                        valText.Text = getDisplayText()
-                    end
-                )
+                if dSaveKey then
+                    Library:RegisterConfig(dSaveKey, "multi",
+                        function() return getSelectedValues(dOptions, selectedSet) end,
+                        function(val)
+                            if type(val) ~= "table" then return end
+                            for k in pairs(selectedSet) do selectedSet[k] = nil end
+                            for k, v in pairs(buildSelectedSet(dOptions, val)) do
+                                selectedSet[k] = v
+                            end
+                            multi.Values = selectedSet
+                            multi:Refresh()
+                            fireMultiDropdownCallback(dCallback, selectedSet)
+                            if multi._onChange then multi._onChange() end
+                        end
+                    )
+                end
                 table.insert(win._searchItems, { name = dName, menuName = menuName, secName = secName, menuRef = menu })
 
                 function multi:Refresh()
@@ -2487,7 +2575,7 @@ function Library:CreateWindow(opts)
                 opts = opts or {}
                 local dName = opts.Name or "Dropdown"
                 local dOptions = opts.Options or {"Option 1", "Option 2"}
-                local dDefault = opts.Default or dOptions[1]
+                local dDefault = resolveDropdownValue(dOptions, opts.Default, true)
                 local dEnabled = opts.Enabled ~= false
                 local dCallback = opts.Callback or function() end
                 local dToggleCallback = opts.OnToggle or function() end
@@ -2557,6 +2645,7 @@ function Library:CreateWindow(opts)
                         Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                     end
                     dToggleCallback(dt.Enabled)
+                    Library:_markDirty()
                 end)
 
                 -- Dropdown button (between label and checkbox)
@@ -2581,7 +2670,7 @@ function Library:CreateWindow(opts)
                 valText.Position = UDim2.new(0, 8, 0, 0)
                 valText.Size = UDim2.new(1, -26, 1, 0)
                 valText.Font = config.FontMedium
-                valText.Text = dDefault
+                valText.Text = tostring(dDefault)
                 valText.TextColor3 = colors.Text
                 valText.TextSize = 11
                 valText.TextXAlignment = Enum.TextXAlignment.Left
@@ -2636,8 +2725,8 @@ function Library:CreateWindow(opts)
                     optLabel.Position = UDim2.new(0, 8, 0, 0)
                     optLabel.Size = UDim2.new(1, -16, 1, 0)
                     optLabel.Font = config.FontMedium
-                    optLabel.Text = opt
-                    optLabel.TextColor3 = (opt == dDefault) and colors.Main or colors.Text
+                    optLabel.Text = tostring(opt)
+                    optLabel.TextColor3 = (opt == dt.Value) and colors.Main or colors.Text
                     optLabel.TextSize = 11
                     optLabel.TextXAlignment = Enum.TextXAlignment.Left
                     optLabel.ZIndex = 52
@@ -2656,16 +2745,17 @@ function Library:CreateWindow(opts)
                     end)
                     optBtn.Activated:Connect(function()
                         dt.Value = opt
-                        valText.Text = opt
+                        valText.Text = tostring(opt)
                         isOpen = false
                         Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
                         task.delay(0.15, function() dropPanel.Visible = false end)
                         arrow.Text = "▼"
                         for _, b in ipairs(optionButtons) do
                             local l = b:FindFirstChildOfClass("TextLabel")
-                            if l then l.TextColor3 = (l.Text == opt) and colors.Main or colors.Text end
+                            if l then l.TextColor3 = (l.Text == tostring(opt)) and colors.Main or colors.Text end
                         end
                         dCallback(opt)
+                        Library:_markDirty()
                     end)
                     table.insert(optionButtons, optBtn)
                 end
@@ -2711,20 +2801,22 @@ function Library:CreateWindow(opts)
                     function(val)
                         if type(val) ~= "table" then return end
                         if val.value ~= nil then
-                            dt.Value = val.value
-                            valText.Text = val.value
+                            local resolved = resolveDropdownValue(dOptions, val.value, true)
+                            dt.Value = resolved
+                            valText.Text = tostring(resolved)
                             for _, b in ipairs(optionButtons) do
                                 local l = b:FindFirstChildOfClass("TextLabel")
-                                if l then l.TextColor3 = (l.Text == val.value) and colors.Main or colors.Text end
+                                if l then l.TextColor3 = (l.Text == tostring(resolved)) and colors.Main or colors.Text end
                             end
+                            dCallback(resolved)
                         end
                         if val.enabled ~= nil then
                             dt.Enabled = val.enabled
-                            cl1.BackgroundTransparency = val.enabled and 0 or 1
-                            cl2.BackgroundTransparency = val.enabled and 0 or 1
+                            checkIcon.ImageTransparency = val.enabled and 0 or 1
                             chkFrame.BackgroundColor3 = val.enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
                             chkStroke.Color = val.enabled and colors.Main or colors.Line
                             chkStroke.Transparency = val.enabled and 0.3 or 0.5
+                            dToggleCallback(dt.Enabled)
                         end
                     end
                 )
@@ -2740,9 +2832,9 @@ function Library:CreateWindow(opts)
                 dropOpts = dropOpts or {}
                 local dName = dropOpts.Name or "Dropdown"
                 local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
-                local dDefault = dropOpts.Default or dOptions[1]
+                local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
                 local dCallback = dropOpts.Callback or function() end
-                local dSaveKey = dropOpts.SaveKey
+                local dSaveKey = getDropdownConfigKey(dropOpts.SaveKey, secName, dName)
 
                 local dropdown = { Value = dDefault }
 
@@ -2788,7 +2880,7 @@ function Library:CreateWindow(opts)
                 valText.Position = UDim2.new(0, 8, 0, 0)
                 valText.Size = UDim2.new(1, -26, 1, 0)
                 valText.Font = config.FontMedium
-                valText.Text = tostring(dDefault)
+                valText.Text = tostring(dropdown.Value)
                 valText.TextColor3 = colors.Text
                 valText.TextSize = 11
                 valText.TextXAlignment = Enum.TextXAlignment.Left
@@ -2843,8 +2935,8 @@ function Library:CreateWindow(opts)
                     optLabel.Position = UDim2.new(0, 8, 0, 0)
                     optLabel.Size = UDim2.new(1, -16, 1, 0)
                     optLabel.Font = config.FontMedium
-                    optLabel.Text = opt
-                    optLabel.TextColor3 = (tostring(opt) == tostring(dDefault)) and colors.Main or colors.Text
+                    optLabel.Text = tostring(opt)
+                    optLabel.TextColor3 = (dropdown.Value == opt) and colors.Main or colors.Text
                     optLabel.TextSize = 11
                     optLabel.TextXAlignment = Enum.TextXAlignment.Left
                     optLabel.ZIndex = 52
@@ -2918,13 +3010,14 @@ function Library:CreateWindow(opts)
                     Library:RegisterConfig(dSaveKey, "dropdown",
                         function() return dropdown.Value end,
                         function(val)
-                            dropdown.Value = val
-                            valText.Text = tostring(val)
+                            local resolved = resolveDropdownValue(dOptions, val, true)
+                            dropdown.Value = resolved
+                            valText.Text = tostring(resolved)
                             for _, b in ipairs(optionButtons) do
                                 local l = b:FindFirstChildOfClass("TextLabel")
-                                if l then l.TextColor3 = (l.Text == tostring(val)) and colors.Main or colors.Text end
+                                if l then l.TextColor3 = (l.Text == tostring(resolved)) and colors.Main or colors.Text end
                             end
-                            dCallback(val)
+                            dCallback(resolved)
                         end
                     )
                 end
