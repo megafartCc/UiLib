@@ -623,19 +623,35 @@ function Library:CreateWindow(opts)
     asBtn.Selectable = false
     asBtn.BorderSizePixel = 0
 
-    asBtn.Activated:Connect(function()
-        Library._autoSave = not Library._autoSave
-        if Library._autoSave then
-            Library:Spring(asCheckIcon, "Smooth", { ImageTransparency = 0 })
-            Library:Spring(asChkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
-            Library:Spring(asChkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
-            -- Save immediately when turning on
-            pcall(function() Library:SaveConfig() end)
-        else
-            Library:Spring(asCheckIcon, "Smooth", { ImageTransparency = 1 })
-            Library:Spring(asChkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
-            Library:Spring(asChkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+    local function updateAutoSaveVisual(enabled, animate)
+        local checkTransparency = enabled and 0 or 1
+        local frameColor = enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+        local strokeColor = enabled and colors.Main or colors.Line
+        local strokeTransparency = enabled and 0.3 or 0.5
+
+        if animate then
+            Library:Spring(asCheckIcon, "Smooth", { ImageTransparency = checkTransparency })
+            Library:Spring(asChkFrame, "Smooth", { BackgroundColor3 = frameColor })
+            Library:Spring(asChkStroke, "Smooth", { Color = strokeColor, Transparency = strokeTransparency })
+            return
         end
+
+        asCheckIcon.ImageTransparency = checkTransparency
+        asChkFrame.BackgroundColor3 = frameColor
+        asChkStroke.Color = strokeColor
+        asChkStroke.Transparency = strokeTransparency
+    end
+
+    local function setAutoSaveEnabled(enabled, animate)
+        Library._autoSave = enabled and true or false
+        updateAutoSaveVisual(Library._autoSave, animate)
+    end
+
+    updateAutoSaveVisual(Library._autoSave, false)
+
+    asBtn.Activated:Connect(function()
+        setAutoSaveEnabled(not Library._autoSave, true)
+        pcall(function() Library:SaveConfig() end)
     end)
 
     -- Save button
@@ -1116,6 +1132,40 @@ function Library:CreateWindow(opts)
     local kbListening = false
     local kbConn = nil
 
+    local function updateKeybindVisual(currentKey)
+        if typeof(currentKey) == "EnumItem" then
+            kbValueBtn.Text = currentKey.Name
+        elseif typeof(currentKey) == "string" then
+            kbValueBtn.Text = currentKey
+        else
+            kbValueBtn.Text = tostring(currentKey)
+        end
+    end
+
+    local function setGuiKeybind(newKey, shouldSave)
+        if typeof(newKey) == "string" then
+            local enumKey = Enum.KeyCode[newKey]
+            if enumKey then
+                newKey = enumKey
+            end
+        end
+
+        if typeof(newKey) ~= "EnumItem" or newKey.EnumType ~= Enum.KeyCode then
+            return false
+        end
+
+        guiKeybind = newKey
+        updateKeybindVisual(newKey)
+
+        if shouldSave then
+            pcall(function() Library:SaveConfig() end)
+        end
+
+        return true
+    end
+
+    updateKeybindVisual(guiKeybind)
+
     kbValueBtn.Activated:Connect(function()
         if kbListening then return end
         kbListening = true
@@ -1126,8 +1176,7 @@ function Library:CreateWindow(opts)
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 -- Ignore modifier keys alone
                 if input.KeyCode == Enum.KeyCode.Unknown then return end
-                guiKeybind = input.KeyCode
-                kbValueBtn.Text = input.KeyCode.Name
+                setGuiKeybind(input.KeyCode, true)
                 Library:Spring(kbStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                 kbListening = false
                 if kbConn then
@@ -1137,6 +1186,27 @@ function Library:CreateWindow(opts)
             end
         end), "KeybindCapture")
     end)
+
+    Library:RegisterConfig("__uilib.settings.auto_save", "setting",
+        function()
+            return Library._autoSave and true or false
+        end,
+        function(val)
+            setAutoSaveEnabled(val == true, false)
+        end
+    )
+
+    Library:RegisterConfig("__uilib.settings.toggle_key", "setting",
+        function()
+            if typeof(guiKeybind) == "EnumItem" then
+                return guiKeybind.Name
+            end
+            return tostring(guiKeybind)
+        end,
+        function(val)
+            setGuiKeybind(val, false)
+        end
+    )
 
     -- ==============================
     -- AddMenu (creates tab + page)
