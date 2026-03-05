@@ -503,7 +503,6 @@ function Library:CreateWindow(opts)
     settingsPanel.Size = UDim2.new(0, 180, 0, 0)
     settingsPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
     settingsPanel.BorderSizePixel = 0
-    settingsPanel.ClipsDescendants = true
     settingsPanel.Visible = false
     settingsPanel.ZIndex = 100
     Instance.new("UICorner", settingsPanel).CornerRadius = UDim.new(0, 5)
@@ -725,7 +724,6 @@ function Library:CreateWindow(opts)
     searchPanel.Size = UDim2.new(0, 240, 0, 0)
     searchPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
     searchPanel.BorderSizePixel = 0
-    searchPanel.ClipsDescendants = true
     searchPanel.Visible = false
     searchPanel.ZIndex = 100
     Instance.new("UICorner", searchPanel).CornerRadius = UDim.new(0, 5)
@@ -969,31 +967,31 @@ function Library:CreateWindow(opts)
     end)
 
     -- ==============================
-    -- TOGGLE (Insert key) with smooth animation
+    -- TOGGLE (Insert key)
     -- ==============================
     local guiKeybind = keybind  -- mutable keybind
-    local guiAnimating = false
-    local originalSize = config.Scale or UDim2.fromOffset(600, 400)
+    local fullWindowSize = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
+    local fullClipSize = UDim2.new(1, 0, 1, 0)
+    
+    win._floatingPanels = {} -- panels that live outside clipFrame and need independent toggle states
+
+    local function syncFloatingPanels()
+        for panel, state in pairs(win._floatingPanels) do
+            panel.Visible = win.Visible and state.Active or false
+        end
+    end
 
     local function smoothToggle()
-        if guiAnimating then return end
-        guiAnimating = true
         win.Visible = not win.Visible
+
         if win.Visible then
             main.Visible = true
-            -- Start small and transparent, animate to full
-            clipFrame.Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 0)
-            Library:Spring(clipFrame, "Smooth", { Size = originalSize })
-            guiAnimating = false
+            main.Size = fullWindowSize
+            clipFrame.Size = fullClipSize
+            syncFloatingPanels()
         else
-            -- Animate to collapsed
-            Library:Spring(clipFrame, "Smooth", { Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 0) })
-            task.delay(0.25, function()
-                if not win.Visible then
-                    main.Visible = false
-                end
-                guiAnimating = false
-            end)
+            main.Visible = false
+            syncFloatingPanels()
         end
     end
 
@@ -3582,7 +3580,11 @@ function Library:CreateWindow(opts)
                         Library:Spring(cl1, "Smooth", { ImageTransparency = 0 })
                         Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
                         Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
-                        hPanel.Visible = true
+                        
+                        -- Set active state so the UI toggle will show it, and show it now if window is open
+                        win._floatingPanels[hPanel] = { Active = true }
+                        if win.Visible then hPanel.Visible = true end
+                        
                         -- Sync from linked on show
                         if hLinked and hLinked.Values then
                             for pName, _ in pairs(partButtons) do
@@ -3594,6 +3596,8 @@ function Library:CreateWindow(opts)
                         Library:Spring(cl1, "Smooth", { ImageTransparency = 1 })
                         Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
                         Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                        
+                        win._floatingPanels[hPanel] = { Active = false }
                         hPanel.Visible = false
                     end
                 end
@@ -3612,256 +3616,7 @@ function Library:CreateWindow(opts)
         return menu
     end
 
-    -- ==============================
-    -- AddESPSection (embedded ESP engine + UI toggles + interactive preview)
-    -- No admin ESP. Positions controlled by preview.
-    -- ==============================
-    function win:AddESPSection(menu, espSecOpts)
-        espSecOpts = espSecOpts or {}
-        local col = espSecOpts.Column or 1
-        local sec = menu:AddSection({ Name = espSecOpts.Name or "PLAYER ESP", Column = col })
 
-        -- ========== EMBEDDED ESP ENGINE ==========
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local Camera = workspace.CurrentCamera
-        local LP = Players.LocalPlayer
-        local V2 = Vector2.new
-        local CF = CFrame.new
-        local C3 = Color3.fromRGB
-
-        local espState = {
-            BoxEnabled = false,
-            NameEnabled = false,
-            HealthEnabled = false,
-            TracersEnabled = false,
-            SkeletonEnabled = false,
-            TeamEnabled = false,
-            HeldItemEnabled = false,
-            MaxDist = 500,
-        }
-
-
-        local tracked = {}
-
-        local function w2s(p)
-            local v, on = Camera:WorldToViewportPoint(p)
-            return V2(v.X, v.Y), on, v.Z
-        end
-
-        local function alive(p)
-            local c = p and p.Character
-            if not c then return false end
-            local h = c:FindFirstChildOfClass("Humanoid")
-            return h and h.Health > 0
-        end
-
-        local function make(plr)
-            if plr == LP or tracked[plr] then return end
-            local d = {}
-            pcall(function()
-                d.box = {}
-                for i = 1, 4 do
-                    local l = Drawing.new("Line")
-                    l.Visible = false; l.Color = C3(255,255,255); l.Thickness = 1
-                    d.box[i] = l
-                end
-                d.tracer = Drawing.new("Line"); d.tracer.Visible = false; d.tracer.Color = C3(255,255,255); d.tracer.Thickness = 1
-                d.name = Drawing.new("Text"); d.name.Visible = false; d.name.Color = C3(255,255,255); d.name.Size = 14; d.name.Center = true; d.name.Outline = true
-                d.team = Drawing.new("Text"); d.team.Visible = false; d.team.Color = C3(255,255,255); d.team.Size = 13; d.team.Center = true; d.team.Outline = true
-                d.hpBg = Drawing.new("Line"); d.hpBg.Visible = false; d.hpBg.Color = C3(0,0,0); d.hpBg.Thickness = 3
-                d.hpFill = Drawing.new("Line"); d.hpFill.Visible = false; d.hpFill.Thickness = 2
-                d.skel = {}; d.skelBuilt = false
-                d.heldItem = Drawing.new("Text"); d.heldItem.Visible = false; d.heldItem.Color = C3(255,200,0); d.heldItem.Size = 13; d.heldItem.Center = true; d.heldItem.Outline = true
-            end)
-            tracked[plr] = d
-        end
-
-        local function nuke(plr)
-            local d = tracked[plr]; if not d then return end
-            pcall(function()
-                for _, l in ipairs(d.box or {}) do l:Remove() end
-                if d.tracer then d.tracer:Remove() end
-                if d.name then d.name:Remove() end
-                if d.team then d.team:Remove() end
-                if d.hpBg then d.hpBg:Remove() end
-                if d.hpFill then d.hpFill:Remove() end
-                if d.heldItem then d.heldItem:Remove() end
-                for _, l in ipairs(d.skel or {}) do l:Remove() end
-            end)
-            tracked[plr] = nil
-        end
-
-        local function buildSkel(plr)
-            local d = tracked[plr]; if not d then return end
-            for _, l in ipairs(d.skel or {}) do pcall(function() l:Remove() end) end
-            d.skel = {}; d.skelBuilt = false
-            local char = plr.Character; if not char then return end
-            local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-            local n = hum.RigType == Enum.HumanoidRigType.R15 and 10 or 8
-            for i = 1, n do
-                local l = Drawing.new("Line"); l.Color = C3(255,255,255); l.Thickness = 2; l.Visible = false
-                d.skel[i] = l
-            end
-            d.skelBuilt = true
-        end
-
-        local function hideD(d)
-            pcall(function()
-                for _, l in ipairs(d.box or {}) do l.Visible = false end
-                if d.tracer then d.tracer.Visible = false end
-                if d.name then d.name.Visible = false end
-                if d.team then d.team.Visible = false end
-                if d.hpBg then d.hpBg.Visible = false end
-                if d.hpFill then d.hpFill.Visible = false end
-                if d.heldItem then d.heldItem.Visible = false end
-                for _, l in ipairs(d.skel or {}) do l.Visible = false end
-            end)
-        end
-
-        local function drawSkelR6(d, char)
-            local head = char:FindFirstChild("Head"); local torso = char:FindFirstChild("Torso")
-            if not head or not torso then for _, l in ipairs(d.skel) do l.Visible = false end; return end
-            local lA,rA,lL,rL = char:FindFirstChild("Left Arm"),char:FindFirstChild("Right Arm"),char:FindFirstChild("Left Leg"),char:FindFirstChild("Right Leg")
-            local tc = torso.CFrame
-            local neck = (tc * CF(0,1,0)).Position; local pelvis = (tc * CF(0,-1,0)).Position
-            local lS = (tc * CF(-1.5,1,0)).Position; local rS = (tc * CF(1.5,1,0)).Position
-            local lH = (tc * CF(-0.5,-1,0)).Position; local rH = (tc * CF(0.5,-1,0)).Position
-            local j = {
-                {head.Position, neck},{lS, rS},{lS, lA and (lA.CFrame*CF(0,-1,0)).Position or lS},
-                {rS, rA and (rA.CFrame*CF(0,-1,0)).Position or rS},{neck, pelvis},{lH, rH},
-                {lH, lL and (lL.CFrame*CF(0,-1,0)).Position or lH},{rH, rL and (rL.CFrame*CF(0,-1,0)).Position or rH},
-            }
-            for i, p in ipairs(j) do
-                local l = d.skel[i]; if l then
-                    local a, oA, zA = w2s(p[1]); local b, oB, zB = w2s(p[2])
-                    if (oA or oB) and zA > 0 and zB > 0 then l.From = a; l.To = b; l.Visible = true else l.Visible = false end
-                end
-            end
-        end
-
-        local function drawSkelR15(d, char)
-            local head,uT,lT = char:FindFirstChild("Head"),char:FindFirstChild("UpperTorso"),char:FindFirstChild("LowerTorso")
-            if not head or not uT then for _, l in ipairs(d.skel) do l.Visible = false end; return end
-            local parts = {
-                {head,uT},{uT,lT},{uT,char:FindFirstChild("LeftUpperArm")},{char:FindFirstChild("LeftUpperArm"),char:FindFirstChild("LeftLowerArm")},
-                {uT,char:FindFirstChild("RightUpperArm")},{char:FindFirstChild("RightUpperArm"),char:FindFirstChild("RightLowerArm")},
-                {lT,char:FindFirstChild("LeftUpperLeg")},{char:FindFirstChild("LeftUpperLeg"),char:FindFirstChild("LeftLowerLeg")},
-                {lT,char:FindFirstChild("RightUpperLeg")},{char:FindFirstChild("RightUpperLeg"),char:FindFirstChild("RightLowerLeg")},
-            }
-            for i, p in ipairs(parts) do
-                local l = d.skel[i]; if l then
-                    if p[1] and p[2] and p[1].Parent and p[2].Parent then
-                        local a, oA, zA = w2s(p[1].Position); local b, oB, zB = w2s(p[2].Position)
-                        if (oA or oB) and zA > 0 and zB > 0 then l.From = a; l.To = b; l.Visible = true else l.Visible = false end
-                    else l.Visible = false end
-                end
-            end
-        end
-
-        -- Main render loop
-        RunService.Heartbeat:Connect(function()
-            Camera = workspace.CurrentCamera
-            for plr, d in pairs(tracked) do
-                pcall(function()
-                    if not alive(plr) then hideD(d); if not Players:FindFirstChild(plr.Name) then nuke(plr) end; return end
-                    local char = plr.Character; local hrp = char:FindFirstChild("HumanoidRootPart"); local hum = char:FindFirstChildOfClass("Humanoid")
-                    if not hrp or not hum then hideD(d); return end
-                    local sv, onS = Camera:WorldToViewportPoint(hrp.Position)
-                    if not onS then hideD(d); return end
-                    local me = LP.Character; local myR = me and me:FindFirstChild("HumanoidRootPart")
-                    if not myR then hideD(d); return end
-                    local dist = (hrp.Position - myR.Position).Magnitude
-                    if dist > espState.MaxDist then hideD(d); return end
-                    local tP = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0,3,0))
-                    local bP = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0,3,0))
-                    local h = math.abs(bP.Y - tP.Y); local w = h / 2
-                    local cx, cy = sv.X, sv.Y
-
-                    if espState.BoxEnabled then
-                        d.box[1].From=V2(cx-w,cy-h/2); d.box[1].To=V2(cx+w,cy-h/2); d.box[1].Visible=true
-                        d.box[2].From=V2(cx-w,cy+h/2); d.box[2].To=V2(cx+w,cy+h/2); d.box[2].Visible=true
-                        d.box[3].From=V2(cx-w,cy-h/2); d.box[3].To=V2(cx-w,cy+h/2); d.box[3].Visible=true
-                        d.box[4].From=V2(cx+w,cy-h/2); d.box[4].To=V2(cx+w,cy+h/2); d.box[4].Visible=true
-                    else for i=1,4 do d.box[i].Visible=false end end
-
-                    if espState.NameEnabled then
-                        d.name.Text = plr.DisplayName or plr.Name
-                        d.name.Position = V2(cx, cy - h/2 - 18)
-                        d.name.Visible = true
-                    else d.name.Visible = false end
-
-                    if espState.TeamEnabled then
-                        local teamName = plr.Team and plr.Team.Name or "No Team"
-                        d.team.Text = teamName
-                        d.team.Color = plr.TeamColor and plr.TeamColor.Color or C3(255,255,255)
-                        d.team.Center = false
-                        d.team.Position = V2(cx + w + 8, cy - h/2)
-                        d.team.Visible = true
-                    else d.team.Visible = false end
-
-                    if espState.HealthEnabled then
-                        local hp = hum.Health / hum.MaxHealth
-                        local bx = cx - w - 5
-                        d.hpBg.From=V2(bx,cy+h/2); d.hpBg.To=V2(bx,cy-h/2); d.hpBg.Visible=true
-                        d.hpFill.From=V2(bx,cy+h/2); d.hpFill.To=V2(bx,cy+h/2-h*hp)
-                        d.hpFill.Color=C3(255,0,0):Lerp(C3(0,255,0),hp); d.hpFill.Visible=true
-                    else d.hpBg.Visible=false; d.hpFill.Visible=false end
-
-                    if espState.TracersEnabled then
-                        d.tracer.From=V2(Camera.ViewportSize.X/2,Camera.ViewportSize.Y); d.tracer.To=V2(cx,cy+h/2); d.tracer.Visible=true
-                    else d.tracer.Visible=false end
-
-                    if espState.SkeletonEnabled then
-                        if not d.skelBuilt then buildSkel(plr) end
-                        if hum.RigType == Enum.HumanoidRigType.R15 then drawSkelR15(d, char) else drawSkelR6(d, char) end
-                    else for _, l in ipairs(d.skel or {}) do pcall(function() l.Visible=false end) end end
-
-                    if espState.HeldItemEnabled then
-                        local tool = char:FindFirstChildWhichIsA("Tool")
-                        if tool then
-                            d.heldItem.Text = tool.Name
-                            d.heldItem.Position = V2(cx, cy + h/2 + 4)
-                            d.heldItem.Visible = true
-                        else d.heldItem.Visible = false end
-                    else d.heldItem.Visible = false end
-                end)
-            end
-        end)
-
-        -- Player tracking
-        local function onPlr(plr)
-            if plr == LP then return end
-            pcall(function()
-                make(plr)
-                plr.CharacterAdded:Connect(function() task.wait(0.5); pcall(buildSkel, plr) end)
-            end)
-        end
-        for _, p in ipairs(Players:GetPlayers()) do pcall(onPlr, p) end
-        Players.PlayerAdded:Connect(function(p) pcall(onPlr, p) end)
-        Players.PlayerRemoving:Connect(function(p) pcall(nuke, p) end)
-
-        -- ========== UI TOGGLES ==========
-
-        sec:AddToggle({ Name = "Box ESP", SaveKey = "esp_box",
-            Callback = function(v) espState.BoxEnabled = v end })
-        sec:AddToggle({ Name = "Name ESP", SaveKey = "esp_name",
-            Callback = function(v) espState.NameEnabled = v end })
-        sec:AddToggle({ Name = "Health ESP", SaveKey = "esp_health",
-            Callback = function(v) espState.HealthEnabled = v end })
-        sec:AddToggle({ Name = "Team ESP", SaveKey = "esp_team",
-            Callback = function(v) espState.TeamEnabled = v end })
-        sec:AddToggle({ Name = "Tracers", SaveKey = "esp_tracers",
-            Callback = function(v) espState.TracersEnabled = v end })
-        sec:AddToggle({ Name = "Skeleton ESP", SaveKey = "esp_skeleton",
-            Callback = function(v) espState.SkeletonEnabled = v
-                if v then for p in pairs(tracked) do pcall(buildSkel, p) end end end })
-        sec:AddToggle({ Name = "Held Item ESP", SaveKey = "esp_helditem",
-            Callback = function(v) espState.HeldItemEnabled = v end })
-
-        win._espState = espState
-        return sec
-    end
 
     -- Store refs
     win._main = main
