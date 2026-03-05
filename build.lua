@@ -1,13 +1,13 @@
 --[[
-    UILib - Custom Roblox Exploit UI Library
-    Version: 0.2
+    UILib - Fatality-Style Roblox UI Library
+    Version: 0.3 — Fatality Clone
     
     Spring-driven animations via spr (Fractality)
-    No TweenService — everything is physics-based.
     
     Usage:
-        local Library = loadstring(readfile("UILib/build.lua"))()
-        local Window = Library:CreateWindow("My Hub")
+        local Library = loadstring(readfile("build.lua"))()
+        local Window = Library:CreateWindow({ Name = "FATALITY", Expire = "never" })
+        local Combat = Window:AddMenu({ Name = "RAGE", Icon = "skull" })
 ]]
 
 local Library = {}
@@ -21,13 +21,14 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
+local TextService = game:GetService("TextService")
+local Client = Players.LocalPlayer
 
 -- =====================================================
--- SPRING LIBRARY (spr by Fractality)
+-- SPRING LIBRARY
 -- =====================================================
 local spr = loadstring(game:HttpGet("https://raw.githubusercontent.com/Fraktality/spr/master/spr.lua"))()
 
--- Spring presets (damping, frequency)
 Library.Springs = {
     Smooth   = { 1,    6  },
     Snappy   = { 0.8,  8  },
@@ -38,48 +39,110 @@ Library.Springs = {
     Popup    = { 0.7,  7  },
 }
 
-function Library:Spring(instance, preset, props)
+function Library:Spring(inst, preset, props)
     local p = self.Springs[preset] or self.Springs.Smooth
-    spr.target(instance, p[1], p[2], props)
-end
-
-function Library:SpringCustom(instance, damping, freq, props)
-    spr.target(instance, damping, freq, props)
-end
-
-function Library:StopSpring(instance, prop)
-    spr.stop(instance, prop)
+    spr.target(inst, p[1], p[2], props)
 end
 
 -- =====================================================
--- THEME
+-- CONFIG SAVE / LOAD
 -- =====================================================
-Library.Theme = {
-    Background     = Color3.fromRGB(18, 18, 22),
-    Surface        = Color3.fromRGB(25, 25, 32),
-    SurfaceHover   = Color3.fromRGB(32, 32, 42),
-    Border         = Color3.fromRGB(40, 40, 52),
-    Accent         = Color3.fromRGB(88, 101, 242),
-    AccentHover    = Color3.fromRGB(105, 117, 255),
-    AccentGlow     = Color3.fromRGB(200, 80, 60),   -- orange-red ring like reference
-    Text           = Color3.fromRGB(220, 221, 225),
-    TextDim        = Color3.fromRGB(140, 142, 150),
-    TextMuted      = Color3.fromRGB(90, 92, 100),
-    Premium        = Color3.fromRGB(250, 168, 26),   -- gold for premium
-    Success        = Color3.fromRGB(67, 181, 129),
-    Warning        = Color3.fromRGB(250, 168, 26),
-    Error          = Color3.fromRGB(237, 66, 69),
-    CornerRadius   = UDim.new(0, 8),
-    WindowCorner   = UDim.new(0, 6),
+Library._configItems = {}  -- { key = { type, get, set } }
+Library._configName = nil
+Library._autoSave = false
+Library._autoSaveDelay = 2
+Library._dirty = false
+
+local CONFIG_FOLDER = "Eps1lonScript"
+
+function Library:_ensureFolder()
+    if not isfolder(CONFIG_FOLDER) then
+        makefolder(CONFIG_FOLDER)
+    end
+end
+
+function Library:_getConfigPath()
+    if not self._configName then return nil end
+    return CONFIG_FOLDER .. "/" .. self._configName .. ".json"
+end
+
+function Library:RegisterConfig(key, cType, getter, setter)
+    self._configItems[key] = { type = cType, get = getter, set = setter }
+end
+
+function Library:SaveConfig()
+    local path = self:_getConfigPath()
+    if not path then return end
+    self:_ensureFolder()
+    local data = {}
+    for key, item in pairs(self._configItems) do
+        local ok, val = pcall(item.get)
+        if ok then
+            data[key] = { type = item.type, value = val }
+        end
+    end
+    local json = HttpService:JSONEncode(data)
+    writefile(path, json)
+end
+
+function Library:LoadConfig()
+    local path = self:_getConfigPath()
+    if not path then return end
+    if not isfile(path) then return end
+    local ok, json = pcall(readfile, path)
+    if not ok then return end
+    local ok2, data = pcall(function() return HttpService:JSONDecode(json) end)
+    if not ok2 or type(data) ~= "table" then return end
+    for key, entry in pairs(data) do
+        local item = self._configItems[key]
+        if item and entry.value ~= nil then
+            pcall(item.set, entry.value)
+        end
+    end
+end
+
+function Library:_markDirty()
+    if not self._autoSave then return end
+    self._dirty = true
+end
+
+-- Auto-save loop
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if Library._autoSave and Library._dirty then
+            Library._dirty = false
+            pcall(function() Library:SaveConfig() end)
+        end
+    end
+end)
+
+
+-- =====================================================
+-- COLORS (Fatality-style)
+-- =====================================================
+Library.Colors = {
+    Black        = Color3.fromRGB(16, 16, 16),
+    Main         = Color3.fromRGB(255, 106, 133),     -- pink accent
+    Background   = Color3.fromRGB(19, 19, 19),
+    Header       = Color3.fromRGB(21, 21, 21),
+    Line         = Color3.fromRGB(29, 29, 29),
+    TabBg        = Color3.fromRGB(30, 30, 30),
+    TabBgActive  = Color3.fromRGB(38, 38, 38),
+    Text         = Color3.fromRGB(229, 229, 229),
+    TextDim      = Color3.fromRGB(150, 150, 150),
+    TextMuted    = Color3.fromRGB(100, 100, 100),
 }
 
 Library.Config = {
-    WindowWidth    = 620,
-    WindowHeight   = 480,
-    TitleBarHeight = 60,
-    Font           = Enum.Font.GothamSemibold,
-    FontLight      = Enum.Font.Gotham,
-    ToggleKey      = Enum.KeyCode.RightControl,
+    WindowWidth    = 750,
+    WindowHeight   = 500,
+    HeaderHeight   = 40,
+    BottomHeight   = 25,
+    Font           = Enum.Font.GothamBold,
+    FontMedium     = Enum.Font.GothamMedium,
+    FontSemiBold   = Enum.Font.GothamSemibold,
+    ToggleKey      = Enum.KeyCode.Insert,
 }
 
 -- =====================================================
@@ -102,211 +165,783 @@ local function protectGui(gui)
     end
 end
 
--- Get player avatar thumbnail URL
-local function getAvatarUrl(userId)
-    local ok, url = pcall(function()
-        return Players:GetUserThumbnailAsync(
-            userId,
-            Enum.ThumbnailType.HeadShot,
-            Enum.ThumbnailSize.Size100x100
-        )
-    end)
-    return ok and url or ""
+local function randomStr(len)
+    len = len or 12
+    local s = ""
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1, len do
+        local r = math.random(1, #chars)
+        s = s .. string.sub(chars, r, r)
+    end
+    return s
 end
 
 -- =====================================================
--- COMPONENT: WINDOW
+-- WINDOW
 -- =====================================================
-function Library:CreateWindow(title)
-    local theme = self.Theme
+function Library:CreateWindow(opts)
+    opts = opts or {}
+    local name = opts.Name or "FATALITY"
+    local expire = opts.Expire or "never"
+    local keybind = opts.Keybind or self.Config.ToggleKey
+    local configName = opts.ConfigName or nil
+    local colors = self.Colors
     local config = self.Config
-    local lp = Players.LocalPlayer
 
-    local win = {}
-    win.Title = title or "UI Library"
-    win.Visible = true
-    win.Dragging = false
-    win.Pages = {}
+    -- Set config name for save/load
+    self._configName = configName
+    self._configItems = {}
+
+    local win = {
+        Menus = {},
+        ActiveMenu = nil,
+        Visible = true,
+    }
 
     -- ScreenGui
     local sg = Instance.new("ScreenGui")
-    sg.Name = "UILib_" .. math.random(100000, 999999)
-    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.Name = randomStr()
     sg.ResetOnSpawn = false
-    sg.DisplayOrder = 999
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Global
+
+    -- Kill blue selection borders globally
+    pcall(function()
+        game:GetService("GuiService").AutoSelectGuiEnabled = false
+        game:GetService("GuiService").GuiNavigationEnabled = false
+    end)
+
     protectGui(sg)
     sg.Parent = getHiddenParent()
-    win.ScreenGui = sg
-
-    -- ==============================
-    -- DROP SHADOW
-    -- ==============================
-    local shadowFrame = Instance.new("Frame", sg)
-    shadowFrame.Name = "Shadow"
-    shadowFrame.Size = UDim2.fromOffset(config.WindowWidth + 24, config.WindowHeight + 24)
-    shadowFrame.Position = UDim2.new(0.5, -math.floor((config.WindowWidth + 24) / 2), 0.5, -math.floor((config.WindowHeight + 24) / 2))
-    shadowFrame.BackgroundTransparency = 1
-    shadowFrame.ZIndex = 0
-
-    local shadowImg = Instance.new("ImageLabel", shadowFrame)
-    shadowImg.Size = UDim2.new(1, 0, 1, 0)
-    shadowImg.BackgroundTransparency = 1
-    shadowImg.Image = "rbxassetid://5554236805"
-    shadowImg.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    shadowImg.ImageTransparency = 1
-    shadowImg.ScaleType = Enum.ScaleType.Slice
-    shadowImg.SliceCenter = Rect.new(23, 23, 277, 277)
-    shadowImg.ZIndex = 0
 
     -- ==============================
     -- MAIN FRAME
     -- ==============================
     local main = Instance.new("Frame", sg)
-    main.Name = "Window"
-    main.Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
-    main.Position = UDim2.new(0.5, -math.floor(config.WindowWidth / 2), 0.5, -math.floor(config.WindowHeight / 2))
-    main.BackgroundColor3 = theme.Background
+    main.Name = randomStr()
+    main.Active = true
+    main.AnchorPoint = Vector2.new(0.5, 0)
+    main.BackgroundColor3 = colors.Background
     main.BorderSizePixel = 0
-    main.ClipsDescendants = true
-    main.ZIndex = 1
+    main.Position = UDim2.new(0.5, 0, 0.2, 0)
+    main.Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
+    main.ClipsDescendants = false
 
-    -- Start at full size (no open animation)
+    -- Blank selection image to kill blue borders on all children
+    local blankSel = Instance.new("Frame")
+    blankSel.BackgroundTransparency = 1
+    blankSel.BorderSizePixel = 0
+    blankSel.Size = UDim2.new(0, 0, 0, 0)
+    blankSel.Selectable = false
+    main.SelectionImageObject = blankSel
 
-    Instance.new("UICorner", main).CornerRadius = theme.WindowCorner
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 5)
 
-    local stroke = Instance.new("UIStroke", main)
-    stroke.Color = theme.Border
-    stroke.Transparency = 1
-    stroke.Thickness = 1
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    -- Drop shadow
+    local dropShadow = Instance.new("ImageLabel", main)
+    dropShadow.Name = randomStr()
+    dropShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+    dropShadow.BackgroundTransparency = 1
+    dropShadow.BorderSizePixel = 0
+    dropShadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+    dropShadow.Size = UDim2.new(1, 47, 1, 47)
+    dropShadow.ZIndex = -1
+    dropShadow.Image = "rbxassetid://6014261993"
+    dropShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    dropShadow.ImageTransparency = 0.75
+    dropShadow.ScaleType = Enum.ScaleType.Slice
+    dropShadow.SliceCenter = Rect.new(49, 49, 450, 450)
 
-    -- ==============================
-    -- TITLE BAR (taller, has avatar)
-    -- ==============================
-    local titleBar = Instance.new("Frame", main)
-    titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, config.TitleBarHeight)
-    titleBar.BackgroundTransparency = 1
-    titleBar.ZIndex = 5
-
-    -- Left side: Title text
-    local titleText = Instance.new("TextLabel", titleBar)
-    titleText.Name = "Title"
-    titleText.Size = UDim2.new(0.5, 0, 0, 18)
-    titleText.Position = UDim2.fromOffset(16, 20)
-    titleText.BackgroundTransparency = 1
-    titleText.Text = win.Title
-    titleText.TextColor3 = theme.Text
-    titleText.TextSize = 15
-    titleText.Font = config.Font
-    titleText.TextXAlignment = Enum.TextXAlignment.Left
-    titleText.TextTransparency = 1
-    titleText.ZIndex = 5
-
-    -- Avatar sizing (needed for positioning below)
-    local avatarSize = 38
-    local avatarRingSize = avatarSize + 4
-
-    -- Premium text under username on the right side
-    local premiumText = Instance.new("TextLabel", titleBar)
-    premiumText.Name = "Premium"
-    premiumText.Size = UDim2.new(0, 120, 0, 14)
-    premiumText.Position = UDim2.new(1, -avatarRingSize - 14 - 8 - 120, 0, 36)
-    premiumText.BackgroundTransparency = 1
-    premiumText.Text = "Premium"
-    premiumText.TextColor3 = theme.Text
-    premiumText.TextSize = 11
-    premiumText.Font = config.FontLight
-    premiumText.TextXAlignment = Enum.TextXAlignment.Right
-    premiumText.TextTransparency = 1
-    premiumText.ZIndex = 5
+    -- Inner clip frame (clips content to rounded corners, hitbox panel lives outside)
+    local clipFrame = Instance.new("Frame", main)
+    clipFrame.Name = "ClipFrame"
+    clipFrame.BackgroundTransparency = 1
+    clipFrame.BorderSizePixel = 0
+    clipFrame.Size = UDim2.new(1, 0, 1, 0)
+    clipFrame.ClipsDescendants = true
+    clipFrame.ZIndex = 1
+    Instance.new("UICorner", clipFrame).CornerRadius = UDim.new(0, 5)
 
     -- ==============================
-    -- RIGHT SIDE: Avatar + Username
+    -- HEADER BAR (40px)
     -- ==============================
+    local header = Instance.new("Frame", clipFrame)
+    header.Name = randomStr()
+    header.Active = true
+    header.BackgroundColor3 = colors.Header
+    header.BorderSizePixel = 0
+    header.Size = UDim2.new(1, 0, 0, config.HeaderHeight)
+    header.ZIndex = 2
 
-    -- Avatar ring (accent-colored border)
-    local avatarRing = Instance.new("Frame", titleBar)
-    avatarRing.Name = "AvatarRing"
-    avatarRing.Size = UDim2.fromOffset(avatarRingSize, avatarRingSize)
-    avatarRing.Position = UDim2.new(1, -avatarRingSize - 14, 0.5, -math.floor(avatarRingSize / 2))
-    avatarRing.BackgroundColor3 = theme.AccentGlow
-    avatarRing.BorderSizePixel = 0
-    avatarRing.ZIndex = 6
-    avatarRing.BackgroundTransparency = 1
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 5)
 
-    Instance.new("UICorner", avatarRing).CornerRadius = UDim.new(1, 0) -- full circle
+    -- Header line (1px separator at bottom)
+    local headerLine = Instance.new("Frame", header)
+    headerLine.Name = randomStr()
+    headerLine.AnchorPoint = Vector2.new(0, 1)
+    headerLine.BackgroundColor3 = colors.Line
+    headerLine.BorderSizePixel = 0
+    headerLine.Position = UDim2.new(0, 0, 1, 0)
+    headerLine.Size = UDim2.new(1, 0, 0, 1)
+    headerLine.ZIndex = 3
 
-    -- Avatar image (inside ring, no border)
-    local avatarImg = Instance.new("ImageLabel", avatarRing)
-    avatarImg.Name = "AvatarImage"
-    avatarImg.Size = UDim2.fromOffset(avatarSize, avatarSize)
-    avatarImg.Position = UDim2.fromOffset(2, 2)
-    avatarImg.BackgroundTransparency = 1
-    avatarImg.BorderSizePixel = 0
-    avatarImg.ZIndex = 7
-    avatarImg.ImageTransparency = 1
+    -- Header shadow gradient
+    local headerShadow = Instance.new("Frame", header)
+    headerShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    headerShadow.BorderSizePixel = 0
+    headerShadow.Size = UDim2.new(1, 0, 1, 10)
+    headerShadow.ZIndex = 1
+    Instance.new("UICorner", headerShadow).CornerRadius = UDim.new(0, 5)
+    local shadowGrad = Instance.new("UIGradient", headerShadow)
+    shadowGrad.Rotation = 90
+    shadowGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(1, 1),
+    })
 
-    Instance.new("UICorner", avatarImg).CornerRadius = UDim.new(1, 0) -- full circle
+    -- Title text
+    local headerText = Instance.new("TextLabel", header)
+    headerText.Name = randomStr()
+    headerText.AnchorPoint = Vector2.new(0.5, 0.5)
+    headerText.BackgroundTransparency = 1
+    headerText.BorderSizePixel = 0
+    headerText.Position = UDim2.new(0, 57, 0.5, 0)
+    headerText.Size = UDim2.new(0, 115, 1, 0)
+    headerText.ZIndex = 4
+    headerText.Font = config.Font
+    headerText.Text = name
+    headerText.TextColor3 = colors.Text
+    headerText.TextSize = 21
+    headerText.TextXAlignment = Enum.TextXAlignment.Center
+    headerText.TextStrokeColor3 = Color3.fromRGB(205, 67, 218)
+    headerText.TextStrokeTransparency = 0.64
 
-    -- Load avatar async
-    task.spawn(function()
-        local url = getAvatarUrl(lp.UserId)
-        if url and url ~= "" then
-            avatarImg.Image = url
-            -- Spring fade in
-            self:Spring(avatarImg, "Smooth", { ImageTransparency = 0 })
+    -- ==============================
+    -- TAB CONTAINER (scrolling)
+    -- ==============================
+    local menuBtnCont = Instance.new("Frame", header)
+    menuBtnCont.Name = randomStr()
+    menuBtnCont.AnchorPoint = Vector2.new(0, 0.5)
+    menuBtnCont.BackgroundTransparency = 1
+    menuBtnCont.BorderSizePixel = 0
+    menuBtnCont.ClipsDescendants = true
+    menuBtnCont.Position = UDim2.new(0, 115, 0.5, 0)
+    menuBtnCont.Size = UDim2.new(1, -275, 0.75, 0)
+    menuBtnCont.ZIndex = 4
+    menuBtnCont.Active = true  -- sinks mouse input
+
+    local tbc = Instance.new("Frame", menuBtnCont)
+    tbc.Name = randomStr()
+    tbc.Active = true
+    tbc.AnchorPoint = Vector2.new(0, 0.5)
+    tbc.BackgroundTransparency = 1
+    tbc.BorderSizePixel = 0
+    tbc.Position = UDim2.new(0, 0, 0.5, 0)
+    tbc.Size = UDim2.new(0, 5000, 1, 0)  -- wide enough for all tabs
+    tbc.ZIndex = 4
+
+    local tabListLayout = Instance.new("UIListLayout", tbc)
+    tabListLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tabListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    tabListLayout.Padding = UDim.new(0, 4)
+
+    -- Horizontal scroll for tabs
+    local tabScrollOffset = 0
+    local TAB_SCROLL_STEP = 40
+    menuBtnCont.InputChanged:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
+        local contentW = tabListLayout.AbsoluteContentSize.X + 4
+        local visibleW = menuBtnCont.AbsoluteSize.X
+        local maxScroll = math.max(0, contentW - visibleW)
+        tabScrollOffset = math.clamp(tabScrollOffset - input.Position.Z * TAB_SCROLL_STEP, 0, maxScroll)
+        tbc.Position = UDim2.new(0, -tabScrollOffset, 0.5, 0)
+    end)
+
+    -- ==============================
+    -- USER PROFILE (right side of header)
+    -- ==============================
+    local userProfile = Instance.new("Frame", header)
+    userProfile.Name = randomStr()
+    userProfile.AnchorPoint = Vector2.new(1, 0.5)
+    userProfile.BackgroundTransparency = 1
+    userProfile.BorderSizePixel = 0
+    userProfile.Position = UDim2.new(1, -5, 0.5, 0)
+    userProfile.Size = UDim2.new(0, 150, 0.75, 0)
+    userProfile.ZIndex = 4
+
+    -- Avatar
+    local userIcon = Instance.new("ImageLabel", userProfile)
+    userIcon.Name = randomStr()
+    userIcon.AnchorPoint = Vector2.new(1, 0.5)
+    userIcon.BackgroundTransparency = 1
+    userIcon.BorderSizePixel = 0
+    userIcon.Position = UDim2.new(1, -10, 0.5, 0)
+    userIcon.Size = UDim2.new(0.8, 0, 0.8, 0)
+    userIcon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+    userIcon.ZIndex = 5
+    userIcon.Image = Players:GetUserThumbnailAsync(Client.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size180x180)
+
+    Instance.new("UICorner", userIcon).CornerRadius = UDim.new(1, 0)
+
+    local avatarStroke = Instance.new("UIStroke", userIcon)
+    avatarStroke.Thickness = 2.5
+    avatarStroke.Transparency = 0.9
+
+    -- Username
+    local userName = Instance.new("TextLabel", userProfile)
+    userName.Name = randomStr()
+    userName.AnchorPoint = Vector2.new(1, 0)
+    userName.BackgroundTransparency = 1
+    userName.BorderSizePixel = 0
+    userName.Position = UDim2.new(1, -40, 0, 3)
+    userName.Size = UDim2.new(0, 200, 0, 15)
+    userName.ZIndex = 4
+    userName.Font = config.FontMedium
+    userName.Text = Client.DisplayName
+    userName.TextColor3 = Color3.fromRGB(255, 255, 255)
+    userName.TextSize = 13
+    userName.TextStrokeTransparency = 0.7
+    userName.TextXAlignment = Enum.TextXAlignment.Right
+
+    -- Expire / Premium text
+    local expireDays = Instance.new("TextLabel", userProfile)
+    expireDays.Name = randomStr()
+    expireDays.AnchorPoint = Vector2.new(1, 0)
+    expireDays.BackgroundTransparency = 1
+    expireDays.BorderSizePixel = 0
+    expireDays.Position = UDim2.new(1, -40, 0, 16)
+    expireDays.Size = UDim2.new(0, 200, 0, 15)
+    expireDays.ZIndex = 4
+    expireDays.Font = config.FontMedium
+    expireDays.RichText = true
+    expireDays.Text = string.format('<font transparency="0.5">expires:</font> <font color="#f53174">%s</font>', expire)
+    expireDays.TextColor3 = Color3.fromRGB(255, 255, 255)
+    expireDays.TextSize = 12
+    expireDays.TextStrokeTransparency = 0.7
+    expireDays.TextXAlignment = Enum.TextXAlignment.Right
+
+    -- ==============================
+    -- MENU CONTENT AREA
+    -- ==============================
+    local menuFrame = Instance.new("Frame", clipFrame)
+    menuFrame.Name = randomStr()
+    menuFrame.BackgroundTransparency = 1
+    menuFrame.BorderSizePixel = 0
+    menuFrame.Position = UDim2.new(0, 0, 0, config.HeaderHeight + 10)
+    menuFrame.Size = UDim2.new(1, 0, 1, -(config.HeaderHeight + 10 + config.BottomHeight + 7))
+    menuFrame.ZIndex = 1
+    menuFrame.ClipsDescendants = true
+
+    -- ==============================
+    -- BOTTOM BAR (25px)
+    -- ==============================
+    local bottom = Instance.new("Frame", clipFrame)
+    bottom.Name = randomStr()
+    bottom.Active = true
+    bottom.AnchorPoint = Vector2.new(0, 1)
+    bottom.BackgroundColor3 = colors.Header
+    bottom.BorderSizePixel = 0
+    bottom.Position = UDim2.new(0, 0, 1, 0)
+    bottom.Size = UDim2.new(1, 0, 0, config.BottomHeight)
+    bottom.ZIndex = 2
+
+    Instance.new("UICorner", bottom).CornerRadius = UDim.new(0, 4)
+
+    -- Bottom top line
+    local bottomLine = Instance.new("Frame", bottom)
+    bottomLine.BackgroundColor3 = colors.Line
+    bottomLine.BorderSizePixel = 0
+    bottomLine.Size = UDim2.new(1, 0, 0, 1)
+    bottomLine.ZIndex = 3
+
+    -- Bottom shadow (upward gradient)
+    local bottomShadow = Instance.new("Frame", bottom)
+    bottomShadow.AnchorPoint = Vector2.new(0, 1)
+    bottomShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bottomShadow.BackgroundTransparency = 0.5
+    bottomShadow.BorderSizePixel = 0
+    bottomShadow.Position = UDim2.new(0, 0, 1, 0)
+    bottomShadow.Size = UDim2.new(1, 0, 1, 5)
+    local bottomGrad = Instance.new("UIGradient", bottomShadow)
+    bottomGrad.Rotation = -90
+    bottomGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    Instance.new("UICorner", bottomShadow).CornerRadius = UDim.new(0, 5)
+
+    -- ==============================
+    -- SETTINGS GEAR BUTTON
+    -- ==============================
+    local gearBtn = Instance.new("ImageButton", bottom)
+    gearBtn.Name = "SettingsGear"
+    gearBtn.AnchorPoint = Vector2.new(1, 0.5)
+    gearBtn.Position = UDim2.new(1, -8, 0.5, 0)
+    gearBtn.Size = UDim2.new(0, 16, 0, 16)
+    gearBtn.BackgroundTransparency = 1
+    gearBtn.BorderSizePixel = 0
+    gearBtn.Image = "rbxassetid://128549102277434"
+    gearBtn.ImageColor3 = colors.TextDim
+    gearBtn.ZIndex = 4
+    gearBtn.AutoButtonColor = false
+
+    gearBtn.MouseEnter:Connect(function()
+        Library:Spring(gearBtn, "Smooth", { ImageColor3 = colors.Main })
+    end)
+    gearBtn.MouseLeave:Connect(function()
+        Library:Spring(gearBtn, "Smooth", { ImageColor3 = colors.TextDim })
+    end)
+
+    -- ==============================
+    -- SETTINGS FLOATING PANEL
+    -- ==============================
+    local settingsPanel = Instance.new("Frame", clipFrame)
+    settingsPanel.Name = "SettingsPanel"
+    settingsPanel.AnchorPoint = Vector2.new(1, 1)
+    settingsPanel.Position = UDim2.new(1, -8, 1, -(config.BottomHeight + 6))
+    settingsPanel.Size = UDim2.new(0, 180, 0, 0)
+    settingsPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    settingsPanel.BorderSizePixel = 0
+    settingsPanel.ClipsDescendants = true
+    settingsPanel.Visible = false
+    settingsPanel.ZIndex = 100
+    Instance.new("UICorner", settingsPanel).CornerRadius = UDim.new(0, 5)
+    local spStroke = Instance.new("UIStroke", settingsPanel)
+    spStroke.Color = colors.Line
+    spStroke.Transparency = 0.3
+
+    -- Settings header
+    local spHeader = Instance.new("TextLabel", settingsPanel)
+    spHeader.BackgroundTransparency = 1
+    spHeader.Position = UDim2.new(0, 10, 0, 0)
+    spHeader.Size = UDim2.new(1, -20, 0, 28)
+    spHeader.Font = config.Font
+    spHeader.Text = "SETTINGS"
+    spHeader.TextColor3 = Color3.fromRGB(255, 255, 255)
+    spHeader.TextSize = 12
+    spHeader.TextXAlignment = Enum.TextXAlignment.Left
+    spHeader.ZIndex = 101
+
+    -- Separator
+    local spSep = Instance.new("Frame", settingsPanel)
+    spSep.Position = UDim2.new(0, 8, 0, 28)
+    spSep.Size = UDim2.new(1, -16, 0, 1)
+    spSep.BackgroundColor3 = colors.Line
+    spSep.BorderSizePixel = 0
+    spSep.ZIndex = 101
+
+    -- Auto-save row
+    local autoSaveRow = Instance.new("Frame", settingsPanel)
+    autoSaveRow.Position = UDim2.new(0, 10, 0, 34)
+    autoSaveRow.Size = UDim2.new(1, -20, 0, 20)
+    autoSaveRow.BackgroundTransparency = 1
+    autoSaveRow.ZIndex = 101
+
+    local asLabel = Instance.new("TextLabel", autoSaveRow)
+    asLabel.BackgroundTransparency = 1
+    asLabel.Size = UDim2.new(0.6, 0, 1, 0)
+    asLabel.Font = config.FontMedium
+    asLabel.Text = "Auto-save"
+    asLabel.TextColor3 = colors.Text
+    asLabel.TextSize = 11
+    asLabel.TextXAlignment = Enum.TextXAlignment.Left
+    asLabel.ZIndex = 101
+
+    local asChkFrame = Instance.new("Frame", autoSaveRow)
+    asChkFrame.AnchorPoint = Vector2.new(1, 0.5)
+    asChkFrame.Position = UDim2.new(1, 0, 0.5, 0)
+    asChkFrame.Size = UDim2.new(0, 12, 0, 12)
+    asChkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    asChkFrame.BorderSizePixel = 0
+    asChkFrame.ZIndex = 101
+    Instance.new("UICorner", asChkFrame).CornerRadius = UDim.new(0, 3)
+    local asChkStroke = Instance.new("UIStroke", asChkFrame)
+    asChkStroke.Color = colors.Line
+    asChkStroke.Transparency = 0.5
+
+    local asCheckIcon = Instance.new("ImageLabel", asChkFrame)
+    asCheckIcon.BackgroundTransparency = 1
+    asCheckIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+    asCheckIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    asCheckIcon.Size = UDim2.new(0, 10, 0, 10)
+    asCheckIcon.Image = "rbxassetid://122354904349171"
+    asCheckIcon.ImageColor3 = colors.Main
+    asCheckIcon.ImageTransparency = 1
+    asCheckIcon.ZIndex = 102
+
+    local asBtn = Instance.new("TextButton", autoSaveRow)
+    asBtn.BackgroundTransparency = 1
+    asBtn.Size = UDim2.new(1, 0, 1, 0)
+    asBtn.Text = ""
+    asBtn.ZIndex = 103
+    asBtn.AutoButtonColor = false
+    asBtn.Selectable = false
+    asBtn.BorderSizePixel = 0
+
+    asBtn.Activated:Connect(function()
+        Library._autoSave = not Library._autoSave
+        if Library._autoSave then
+            Library:Spring(asCheckIcon, "Smooth", { ImageTransparency = 0 })
+            Library:Spring(asChkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+            Library:Spring(asChkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+            -- Save immediately when turning on
+            pcall(function() Library:SaveConfig() end)
+        else
+            Library:Spring(asCheckIcon, "Smooth", { ImageTransparency = 1 })
+            Library:Spring(asChkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+            Library:Spring(asChkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
         end
     end)
 
-    -- Username text (to the left of avatar, higher)
-    local usernameText = Instance.new("TextLabel", titleBar)
-    usernameText.Name = "Username"
-    usernameText.Size = UDim2.new(0, 120, 0, 16)
-    usernameText.Position = UDim2.new(1, -avatarRingSize - 14 - 8 - 120, 0, 18)
-    usernameText.BackgroundTransparency = 1
-    usernameText.Text = lp.DisplayName or lp.Name
-    usernameText.TextColor3 = theme.TextDim
-    usernameText.TextSize = 13
-    usernameText.Font = config.FontLight
-    usernameText.TextXAlignment = Enum.TextXAlignment.Right
-    usernameText.TextTransparency = 1
-    usernameText.ZIndex = 5
+    -- Save button
+    local saveBtn = Instance.new("TextButton", settingsPanel)
+    saveBtn.Position = UDim2.new(0, 10, 0, 60)
+    saveBtn.Size = UDim2.new(0.45, -12, 0, 22)
+    saveBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    saveBtn.BorderSizePixel = 0
+    saveBtn.Font = config.FontMedium
+    saveBtn.Text = "Save"
+    saveBtn.TextColor3 = colors.Text
+    saveBtn.TextSize = 11
+    saveBtn.ZIndex = 101
+    saveBtn.AutoButtonColor = false
+    saveBtn.Selectable = false
+    Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 3)
 
-    -- Separator line below title bar
-    local sep = Instance.new("Frame", main)
-    sep.Name = "TitleSep"
-    sep.Size = UDim2.new(1, 0, 0, 1)
-    sep.Position = UDim2.fromOffset(0, config.TitleBarHeight)
-    sep.BackgroundColor3 = theme.Border
-    sep.BackgroundTransparency = 1
-    sep.BorderSizePixel = 0
-    sep.ZIndex = 2
+    saveBtn.MouseEnter:Connect(function()
+        Library:Spring(saveBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
+    end)
+    saveBtn.MouseLeave:Connect(function()
+        Library:Spring(saveBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+    end)
+    saveBtn.Activated:Connect(function()
+        pcall(function() Library:SaveConfig() end)
+        Library:Spring(saveBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+        task.delay(0.3, function() Library:Spring(saveBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
+    end)
+
+    -- Load button
+    local loadBtn = Instance.new("TextButton", settingsPanel)
+    loadBtn.Position = UDim2.new(0.5, 2, 0, 60)
+    loadBtn.Size = UDim2.new(0.45, -12, 0, 22)
+    loadBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    loadBtn.BorderSizePixel = 0
+    loadBtn.Font = config.FontMedium
+    loadBtn.Text = "Load"
+    loadBtn.TextColor3 = colors.Text
+    loadBtn.TextSize = 11
+    loadBtn.ZIndex = 101
+    loadBtn.AutoButtonColor = false
+    loadBtn.Selectable = false
+    Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 3)
+
+    loadBtn.MouseEnter:Connect(function()
+        Library:Spring(loadBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
+    end)
+    loadBtn.MouseLeave:Connect(function()
+        Library:Spring(loadBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+    end)
+    loadBtn.Activated:Connect(function()
+        pcall(function() Library:LoadConfig() end)
+        Library:Spring(loadBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+        task.delay(0.3, function() Library:Spring(loadBtn, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
+    end)
+
+    -- Toggle settings panel
+    local settingsOpen = false
+    local SETTINGS_HEIGHT = 92
+
+    gearBtn.Activated:Connect(function()
+        settingsOpen = not settingsOpen
+        if settingsOpen then
+            settingsPanel.Visible = true
+            settingsPanel.Size = UDim2.new(0, 180, 0, 0)
+            Library:Spring(settingsPanel, "Popup", { Size = UDim2.new(0, 180, 0, SETTINGS_HEIGHT) })
+        else
+            Library:Spring(settingsPanel, "Smooth", { Size = UDim2.new(0, 180, 0, 0) })
+            task.delay(0.2, function()
+                if not settingsOpen then settingsPanel.Visible = false end
+            end)
+        end
+    end)
+
+    -- Close settings on outside click
+    UserInputService.InputBegan:Connect(function(input)
+        if settingsOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            local mx, my = input.Position.X, input.Position.Y
+            task.defer(function()
+                if settingsOpen then
+                    local pp, ps = settingsPanel.AbsolutePosition, settingsPanel.AbsoluteSize
+                    local gp, gs = gearBtn.AbsolutePosition, gearBtn.AbsoluteSize
+                    local inP = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                    local inG = mx >= gp.X and mx <= gp.X + gs.X and my >= gp.Y and my <= gp.Y + gs.Y
+                    if not inP and not inG then
+                        settingsOpen = false
+                        Library:Spring(settingsPanel, "Smooth", { Size = UDim2.new(0, 180, 0, 0) })
+                        task.delay(0.2, function()
+                            if not settingsOpen then settingsPanel.Visible = false end
+                        end)
+                    end
+                end
+            end)
+        end
+    end)
 
     -- ==============================
-    -- CONTENT AREA
+    -- SEARCH REGISTRY
     -- ==============================
-    local content = Instance.new("Frame", main)
-    content.Name = "Content"
-    content.Size = UDim2.new(1, 0, 1, -config.TitleBarHeight)
-    content.Position = UDim2.fromOffset(0, config.TitleBarHeight)
-    content.BackgroundTransparency = 1
-    content.ZIndex = 2
-    win.Content = content
+    win._searchItems = {} -- { { name, menuName, secName, menuRef } }
 
     -- ==============================
-    -- DRAGGING (spring-based)
+    -- SEARCH ICON (bottom-left)
+    -- ==============================
+    local searchBtn = Instance.new("ImageButton", bottom)
+    searchBtn.Name = "SearchBtn"
+    searchBtn.AnchorPoint = Vector2.new(0, 0.5)
+    searchBtn.Position = UDim2.new(0, 8, 0.5, 0)
+    searchBtn.Size = UDim2.new(0, 16, 0, 16)
+    searchBtn.BackgroundTransparency = 1
+    searchBtn.BorderSizePixel = 0
+    searchBtn.Image = "rbxassetid://105694268950175"
+    searchBtn.ImageColor3 = colors.TextDim
+    searchBtn.ZIndex = 4
+    searchBtn.AutoButtonColor = false
+
+    searchBtn.MouseEnter:Connect(function()
+        Library:Spring(searchBtn, "Smooth", { ImageColor3 = colors.Main })
+    end)
+    searchBtn.MouseLeave:Connect(function()
+        Library:Spring(searchBtn, "Smooth", { ImageColor3 = colors.TextDim })
+    end)
+
+    -- ==============================
+    -- SEARCH FLOATING PANEL
+    -- ==============================
+    local searchPanel = Instance.new("Frame", clipFrame)
+    searchPanel.Name = "SearchPanel"
+    searchPanel.AnchorPoint = Vector2.new(0, 1)
+    searchPanel.Position = UDim2.new(0, 8, 1, -(config.BottomHeight + 6))
+    searchPanel.Size = UDim2.new(0, 240, 0, 0)
+    searchPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    searchPanel.BorderSizePixel = 0
+    searchPanel.ClipsDescendants = true
+    searchPanel.Visible = false
+    searchPanel.ZIndex = 100
+    Instance.new("UICorner", searchPanel).CornerRadius = UDim.new(0, 5)
+    local srStroke = Instance.new("UIStroke", searchPanel)
+    srStroke.Color = colors.Line
+    srStroke.Transparency = 0.3
+
+    -- Search input row
+    local searchInputFrame = Instance.new("Frame", searchPanel)
+    searchInputFrame.Position = UDim2.new(0, 8, 0, 6)
+    searchInputFrame.Size = UDim2.new(1, -16, 0, 28)
+    searchInputFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    searchInputFrame.BorderSizePixel = 0
+    searchInputFrame.ZIndex = 101
+    Instance.new("UICorner", searchInputFrame).CornerRadius = UDim.new(0, 2)
+    local sifStroke = Instance.new("UIStroke", searchInputFrame)
+    sifStroke.Color = colors.Line
+    sifStroke.Transparency = 0.5
+
+    local searchBox = Instance.new("TextBox", searchInputFrame)
+    searchBox.BackgroundTransparency = 1
+    searchBox.Position = UDim2.new(0, 8, 0, 0)
+    searchBox.Size = UDim2.new(1, -16, 1, 0)
+    searchBox.Font = config.FontMedium
+    searchBox.PlaceholderText = "Search..."
+    searchBox.PlaceholderColor3 = colors.TextDim
+    searchBox.Text = ""
+    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.TextSize = 13
+    searchBox.TextXAlignment = Enum.TextXAlignment.Left
+    searchBox.ClearTextOnFocus = false
+    searchBox.ZIndex = 102
+
+    -- Results scroll area
+    local resultsFrame = Instance.new("Frame", searchPanel)
+    resultsFrame.Position = UDim2.new(0, 4, 0, 40)
+    resultsFrame.Size = UDim2.new(1, -8, 1, -44)
+    resultsFrame.BackgroundTransparency = 1
+    resultsFrame.BorderSizePixel = 0
+    resultsFrame.ClipsDescendants = true
+    resultsFrame.ZIndex = 101
+
+    -- Inner container for scroll
+    local resultsInner = Instance.new("Frame", resultsFrame)
+    resultsInner.Name = "ResultsInner"
+    resultsInner.BackgroundTransparency = 1
+    resultsInner.BorderSizePixel = 0
+    resultsInner.Position = UDim2.new(0, 0, 0, 0)
+    resultsInner.Size = UDim2.new(1, 0, 0, 5000)
+    resultsInner.ZIndex = 101
+
+    local resultsLayout = Instance.new("UIListLayout", resultsInner)
+    resultsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    resultsLayout.Padding = UDim.new(0, 2)
+
+    -- Search scroll state
+    local searchScrollOffset = 0
+    local SEARCH_SCROLL_STEP = 30
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
+        local mp = game:GetService("UserInputService"):GetMouseLocation()
+        local ap, as = resultsFrame.AbsolutePosition, resultsFrame.AbsoluteSize
+        if mp.X < ap.X or mp.X > ap.X + as.X or mp.Y < ap.Y or mp.Y > ap.Y + as.Y then return end
+        local contentH = resultsLayout.AbsoluteContentSize.Y + 4
+        local visibleH = resultsFrame.AbsoluteSize.Y
+        local maxScroll = math.max(0, contentH - visibleH)
+        searchScrollOffset = math.clamp(searchScrollOffset - input.Position.Z * SEARCH_SCROLL_STEP, 0, maxScroll)
+        resultsInner.Position = UDim2.new(0, 0, 0, -searchScrollOffset)
+    end)
+
+    local SEARCH_PANEL_HEIGHT = 250
+    local searchOpen = false
+    local resultButtons = {}
+
+    local function clearResults()
+        for _, rb in ipairs(resultButtons) do
+            rb:Destroy()
+        end
+        resultButtons = {}
+    end
+
+    local function doSearch(query)
+        clearResults()
+        searchScrollOffset = 0
+        resultsInner.Position = UDim2.new(0, 0, 0, 0)
+        query = string.lower(query)
+
+        local idx = 0
+        for _, item in ipairs(win._searchItems) do
+            local haystack = string.lower(item.name .. " " .. item.secName .. " " .. item.menuName)
+            if query == "" or string.find(haystack, query, 1, true) then
+                idx = idx + 1
+                if idx > 30 then break end -- cap results
+
+                local rb = Instance.new("TextButton", resultsInner)
+                rb.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                rb.BackgroundTransparency = 1
+                rb.BorderSizePixel = 0
+                rb.Size = UDim2.new(1, 0, 0, 36)
+                rb.Text = ""
+                rb.ZIndex = 102
+                rb.LayoutOrder = idx
+                rb.AutoButtonColor = false
+                rb.Selectable = false
+                Instance.new("UICorner", rb).CornerRadius = UDim.new(0, 3)
+
+                -- Component name
+                local nameLabel = Instance.new("TextLabel", rb)
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.Position = UDim2.new(0, 8, 0, 2)
+                nameLabel.Size = UDim2.new(1, -16, 0, 16)
+                nameLabel.Font = config.FontMedium
+                nameLabel.Text = item.name
+                nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                nameLabel.TextSize = 11
+                nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                nameLabel.ZIndex = 103
+
+                -- Path
+                local pathLabel = Instance.new("TextLabel", rb)
+                pathLabel.BackgroundTransparency = 1
+                pathLabel.Position = UDim2.new(0, 8, 0, 18)
+                pathLabel.Size = UDim2.new(1, -16, 0, 14)
+                pathLabel.Font = config.Font
+                pathLabel.Text = item.menuName .. "  >  " .. item.secName .. "  >  " .. item.name
+                pathLabel.TextColor3 = colors.TextDim
+                pathLabel.TextSize = 9
+                pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+                pathLabel.ZIndex = 103
+
+                rb.MouseEnter:Connect(function()
+                    Library:Spring(rb, "Smooth", { BackgroundTransparency = 0 })
+                end)
+                rb.MouseLeave:Connect(function()
+                    Library:Spring(rb, "Smooth", { BackgroundTransparency = 1 })
+                end)
+
+                rb.Activated:Connect(function()
+                    -- Navigate to that tab
+                    if item.menuRef and item.menuRef._select then
+                        if win.ActiveMenu and win.ActiveMenu ~= item.menuRef then
+                            win.ActiveMenu._select(false)
+                        end
+                        win.ActiveMenu = item.menuRef
+                        item.menuRef._select(true)
+                    end
+                    -- Close search
+                    searchOpen = false
+                    Library:Spring(searchPanel, "Smooth", { Size = UDim2.new(0, 240, 0, 0) })
+                    task.delay(0.2, function()
+                        if not searchOpen then searchPanel.Visible = false end
+                    end)
+                end)
+
+                table.insert(resultButtons, rb)
+            end
+        end
+    end
+
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        doSearch(searchBox.Text)
+    end)
+
+    -- Toggle search panel
+    searchBtn.Activated:Connect(function()
+        searchOpen = not searchOpen
+        if searchOpen then
+            searchPanel.Visible = true
+            searchPanel.Size = UDim2.new(0, 240, 0, 0)
+            Library:Spring(searchPanel, "Smooth", { Size = UDim2.new(0, 240, 0, SEARCH_PANEL_HEIGHT) })
+            doSearch(searchBox.Text) -- show all items by default
+            task.delay(0.15, function()
+                searchBox:CaptureFocus()
+            end)
+        else
+            Library:Spring(searchPanel, "Smooth", { Size = UDim2.new(0, 240, 0, 0) })
+            task.delay(0.2, function()
+                if not searchOpen then searchPanel.Visible = false end
+            end)
+        end
+    end)
+
+    -- Close search on outside click
+    UserInputService.InputBegan:Connect(function(input)
+        if searchOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            local mx, my = input.Position.X, input.Position.Y
+            task.defer(function()
+                if searchOpen then
+                    local pp, ps = searchPanel.AbsolutePosition, searchPanel.AbsoluteSize
+                    local bp, bs = searchBtn.AbsolutePosition, searchBtn.AbsoluteSize
+                    local inP = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                    local inB = mx >= bp.X and mx <= bp.X + bs.X and my >= bp.Y and my <= bp.Y + bs.Y
+                    if not inP and not inB then
+                        searchOpen = false
+                        Library:Spring(searchPanel, "Smooth", { Size = UDim2.new(0, 240, 0, 0) })
+                        task.delay(0.2, function()
+                            if not searchOpen then searchPanel.Visible = false end
+                        end)
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- ==============================
+    -- DRAGGING
     -- ==============================
     local dragInput, dragStart, startPos
 
-    titleBar.InputBegan:Connect(function(input)
+    header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             win.Dragging = true
             dragStart = input.Position
             startPos = main.Position
             spr.stop(main, "Position")
-            spr.stop(shadowFrame, "Position")
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     win.Dragging = false
@@ -315,7 +950,7 @@ function Library:CreateWindow(title)
         end
     end)
 
-    titleBar.InputChanged:Connect(function(input)
+    header.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
@@ -330,54 +965,2579 @@ function Library:CreateWindow(title)
                 startPos.Y.Scale, startPos.Y.Offset + delta.Y
             )
             self:Spring(main, "Drag", { Position = target })
-            self:Spring(shadowFrame, "Drag", {
-                Position = UDim2.new(target.X.Scale, target.X.Offset - 12, target.Y.Scale, target.Y.Offset - 12)
-            })
         end
     end)
 
     -- ==============================
-    -- TOGGLE (Right Ctrl)
+    -- TOGGLE (Insert key)
     -- ==============================
-    local function showAll()
-        self:Spring(titleText, "Smooth", { TextTransparency = 0 })
-        self:Spring(premiumText, "Smooth", { TextTransparency = 0 })
-        self:Spring(usernameText, "Smooth", { TextTransparency = 0 })
-        self:Spring(avatarRing, "Smooth", { BackgroundTransparency = 0 })
-        self:Spring(sep, "Smooth", { BackgroundTransparency = 0.6 })
-        self:Spring(stroke, "Smooth", { Transparency = 0.5 })
-        self:Spring(shadowImg, "Gentle", { ImageTransparency = 0.45 })
-    end
-
-    local function hideAll()
-        self:Spring(titleText, "Quick", { TextTransparency = 1 })
-        self:Spring(premiumText, "Quick", { TextTransparency = 1 })
-        self:Spring(usernameText, "Quick", { TextTransparency = 1 })
-        self:Spring(avatarRing, "Quick", { BackgroundTransparency = 1 })
-        self:Spring(sep, "Quick", { BackgroundTransparency = 1 })
-        self:Spring(stroke, "Quick", { Transparency = 1 })
-        self:Spring(shadowImg, "Quick", { ImageTransparency = 1 })
-    end
-
     UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
-        if input.KeyCode == config.ToggleKey then
+        if input.KeyCode == keybind or (typeof(keybind) == "string" and input.KeyCode.Name == keybind) then
             win.Visible = not win.Visible
             main.Visible = win.Visible
-            shadowFrame.Visible = win.Visible
         end
     end)
 
-    -- No open animation — show everything immediately
-    task.defer(function()
-        showAll()
-    end)
+    -- ==============================
+    -- AddMenu (creates tab + page)
+    -- ==============================
+    function win:AddMenu(menuOpts)
+        menuOpts = menuOpts or {}
+        local menuName = menuOpts.Name or "TAB"
+        local menuIcon = menuOpts.Icon or "eye"
+        local numColumns = menuOpts.Columns or 3
+
+        local menu = { Sections = {}, _columns = {} }
+
+        -- Tab button (in header scroll)
+        local menuBtn = Instance.new("Frame", tbc)
+        menuBtn.Name = randomStr()
+        menuBtn.BackgroundColor3 = colors.TabBg
+        menuBtn.BackgroundTransparency = 1
+        menuBtn.BorderSizePixel = 0
+        menuBtn.Size = UDim2.new(0, 80, 0.85, 0)
+        menuBtn.ZIndex = 5
+
+        Instance.new("UICorner", menuBtn).CornerRadius = UDim.new(0, 3)
+
+        local btnStroke = Instance.new("UIStroke", menuBtn)
+        btnStroke.Transparency = 1
+
+        -- Tab label text (centered, no icon)
+        local menuLabel = Instance.new("TextLabel", menuBtn)
+        menuLabel.Name = randomStr()
+        menuLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+        menuLabel.BackgroundTransparency = 1
+        menuLabel.BorderSizePixel = 0
+        menuLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+        menuLabel.Size = UDim2.new(1, 0, 1, 0)
+        menuLabel.ZIndex = 5
+        menuLabel.Font = config.Font
+        menuLabel.Text = menuName
+        menuLabel.TextColor3 = colors.TextDim
+        menuLabel.TextSize = 13
+        menuLabel.TextStrokeTransparency = 1
+        menuLabel.TextTransparency = 0
+        menuLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+        -- Click area (overlaid TextButton)
+        local clickBtn = Instance.new("TextButton", menuBtn)
+        clickBtn.BackgroundTransparency = 1
+        clickBtn.Size = UDim2.new(1, 0, 1, 0)
+        clickBtn.ZIndex = 6
+        clickBtn.Text = ""
+        clickBtn.AutoButtonColor = false
+        clickBtn.Selectable = false
+
+        -- Page content frame (inside menuFrame)
+        local pageFrame = Instance.new("Frame", menuFrame)
+        pageFrame.Name = "Page_" .. menuName
+        pageFrame.BackgroundTransparency = 1
+        pageFrame.BorderSizePixel = 0
+        pageFrame.Size = UDim2.new(1, 0, 1, 0)
+        pageFrame.Visible = false
+        pageFrame.ZIndex = 2
+        pageFrame.ClipsDescendants = true
+
+        -- ==============================
+        -- CREATE COLUMNS inside page
+        -- ==============================
+        local columnPadding = 8
+        local colWidth = (1 / numColumns)
+
+        for i = 1, numColumns do
+            local col = Instance.new("Frame", pageFrame)
+            col.Name = "Column_" .. i
+            col.BackgroundTransparency = 1
+            col.BorderSizePixel = 0
+            col.Position = UDim2.new(colWidth * (i - 1), 4, 0, 4)
+            col.Size = UDim2.new(colWidth, -8, 1, -4)
+            col.ZIndex = 3
+            col.ClipsDescendants = true
+            col.Active = true  -- sinks mouse input so camera doesn't zoom
+
+            -- Inner container that moves on scroll
+            local inner = Instance.new("Frame", col)
+            inner.Name = "Inner"
+            inner.BackgroundTransparency = 1
+            inner.BorderSizePixel = 0
+            inner.Position = UDim2.new(0, 0, 0, 0)
+            inner.Size = UDim2.new(1, 0, 0, 5000)
+            inner.ZIndex = 3
+
+            local colLayout = Instance.new("UIListLayout", inner)
+            colLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            colLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            colLayout.Padding = UDim.new(0, 8)
+
+            -- Top padding so first section title isn't clipped
+            local colPad = Instance.new("UIPadding", inner)
+            colPad.PaddingTop = UDim.new(0, 4)
+
+            -- Mouse wheel scroll (frame-level to consume input)
+            local scrollOffset = 0
+            local SCROLL_STEP = 30
+
+            col.InputChanged:Connect(function(input)
+                if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
+                local contentH = colLayout.AbsoluteContentSize.Y + 8
+                local visibleH = col.AbsoluteSize.Y
+                local maxScroll = math.max(0, contentH - visibleH)
+                scrollOffset = math.clamp(scrollOffset - input.Position.Z * SCROLL_STEP, 0, maxScroll)
+                inner.Position = UDim2.new(0, 0, 0, -scrollOffset)
+            end)
+
+            menu._columns[i] = inner -- sections parent to inner
+        end
+
+        menu._btn = menuBtn
+        menu._label = menuLabel
+        menu._page = pageFrame
+        menu._stroke = btnStroke
+
+        -- Select/deselect
+        local function selectMenu(selected)
+            if selected then
+                Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 0 })
+                Library:Spring(btnStroke, "Smooth", { Transparency = 0.85 })
+                Library:Spring(menuLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                pageFrame.Visible = true
+            else
+                Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 1 })
+                Library:Spring(btnStroke, "Smooth", { Transparency = 1 })
+                Library:Spring(menuLabel, "Smooth", { TextColor3 = colors.TextDim })
+                pageFrame.Visible = false
+            end
+        end
+
+        menu._select = selectMenu
+
+        -- Click handler
+        clickBtn.Activated:Connect(function()
+            if win.ActiveMenu and win.ActiveMenu ~= menu then
+                win.ActiveMenu._select(false)
+            end
+            win.ActiveMenu = menu
+            selectMenu(true)
+        end)
+
+        -- Hover
+        clickBtn.MouseEnter:Connect(function()
+            if win.ActiveMenu ~= menu then
+                Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 0.5 })
+            end
+        end)
+        clickBtn.MouseLeave:Connect(function()
+            if win.ActiveMenu ~= menu then
+                Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 1 })
+            end
+        end)
+
+        table.insert(win.Menus, menu)
+
+        -- Auto-select first menu
+        if #win.Menus == 1 then
+            win.ActiveMenu = menu
+            selectMenu(true)
+        end
+
+        -- ==============================
+        -- AddSection (auto-height box in a column)
+        -- ==============================
+        function menu:AddSection(sectionOpts)
+            sectionOpts = sectionOpts or {}
+            local secName = sectionOpts.Name or "SECTION"
+            local colNum = math.clamp(sectionOpts.Column or 1, 1, numColumns)
+
+            local targetCol = menu._columns[colNum]
+            local section = {}
+
+            -- Section container (The dark panel)
+            local secFrame = Instance.new("Frame", targetCol)
+            secFrame.Name = "SectionBox_" .. secName
+            secFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+            secFrame.BorderSizePixel = 0
+            secFrame.Size = UDim2.new(1, 0, 0, 30)
+            secFrame.AutomaticSize = Enum.AutomaticSize.Y
+            secFrame.ClipsDescendants = false
+            secFrame.ZIndex = 4
+
+            Instance.new("UICorner", secFrame).CornerRadius = UDim.new(0, 4)
+
+            -- Section title (physically sits overlapping the top edge)
+            local secTitle = Instance.new("TextLabel", secFrame)
+            secTitle.Name = "SectionTitle"
+            secTitle.BackgroundTransparency = 1
+            secTitle.Position = UDim2.new(0, 8, 0, -6) -- Overlaps top edge (70% inside, 30% outside)
+            secTitle.Size = UDim2.new(1, -16, 0, 14)
+            secTitle.Font = config.Font
+            secTitle.Text = secName
+            secTitle.TextColor3 = colors.Text
+            secTitle.TextSize = 10
+            secTitle.TextXAlignment = Enum.TextXAlignment.Left
+            secTitle.ZIndex = 5
+
+            -- Inner container for elements (so UIListLayout doesn't affect title position)
+            local contentContainer = Instance.new("Frame", secFrame)
+            contentContainer.Name = "Content"
+            contentContainer.BackgroundTransparency = 1
+            contentContainer.BorderSizePixel = 0
+            contentContainer.Size = UDim2.new(1, 0, 0, 30)
+            contentContainer.AutomaticSize = Enum.AutomaticSize.Y
+            contentContainer.ZIndex = 4
+
+            -- Section padding (inside the content container)
+            local secPad = Instance.new("UIPadding", contentContainer)
+            secPad.PaddingTop = UDim.new(0, 10) -- space below the title
+            secPad.PaddingBottom = UDim.new(0, 8)
+            secPad.PaddingLeft = UDim.new(0, 10)
+            secPad.PaddingRight = UDim.new(0, 10)
+
+            -- Section inner layout (elements inline)
+            local secLayout = Instance.new("UIListLayout", contentContainer)
+            secLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            secLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+            secLayout.Padding = UDim.new(0, 5)
+
+            section.Frame = secFrame
+            section.Container = contentContainer
+            section._layout = secLayout
+            section._title = secTitle
+            table.insert(menu.Sections, section)
+
+            -- ==============================
+            -- AddToggle (checkbox style)
+            -- ==============================
+            function section:AddToggle(toggleOpts)
+                toggleOpts = toggleOpts or {}
+                local tName = toggleOpts.Name or "Toggle"
+                local tDefault = toggleOpts.Default or false
+                local tCallback = toggleOpts.Callback or function() end
+
+                local toggle = { Value = tDefault }
+
+                -- Toggle row
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "Toggle_" .. tName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+
+                -- Toggle label (left side)
+                local label = Instance.new("TextLabel", row)
+                label.Name = "Label"
+                label.BackgroundTransparency = 1
+                label.Position = UDim2.new(0, 0, 0, 0)
+                label.Size = UDim2.new(1, -22, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = tName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Checkbox container (right side)
+                local checkFrame = Instance.new("Frame", row)
+                checkFrame.Name = "Check"
+                checkFrame.AnchorPoint = Vector2.new(1, 0.5)
+                checkFrame.Position = UDim2.new(1, 0, 0.5, 0)
+                checkFrame.Size = UDim2.new(0, 18, 0, 18)
+                checkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                checkFrame.BorderSizePixel = 0
+                checkFrame.ZIndex = 5
+
+                Instance.new("UICorner", checkFrame).CornerRadius = UDim.new(0, 3)
+
+                local checkStroke = Instance.new("UIStroke", checkFrame)
+                checkStroke.Color = colors.Line
+                checkStroke.Transparency = 0.5
+
+                -- Check icon
+                local checkIcon = Instance.new("ImageLabel", checkFrame)
+                checkIcon.BackgroundTransparency = 1
+                checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+                checkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+                checkIcon.Size = UDim2.new(0, 12, 0, 12)
+                checkIcon.Image = "rbxassetid://122354904349171"
+                checkIcon.ImageColor3 = colors.Main
+                checkIcon.ImageTransparency = tDefault and 0 or 1
+                checkIcon.ZIndex = 6
+
+                -- Click button
+                local clickBtn = Instance.new("TextButton", row)
+                clickBtn.BackgroundTransparency = 1
+                clickBtn.Size = UDim2.new(1, 0, 1, 0)
+                clickBtn.ZIndex = 7
+                clickBtn.Text = ""
+                clickBtn.AutoButtonColor = false
+                clickBtn.Selectable = false
+
+                -- Lazy sub-container (only created when AddDropdown/AddSlider is called)
+                local subContainer = nil
+                local function ensureSubContainer()
+                    if subContainer then return subContainer end
+                    subContainer = Instance.new("Frame", contentContainer)
+                    subContainer.Name = "ToggleSub_" .. tName
+                    subContainer.BackgroundTransparency = 1
+                    subContainer.BorderSizePixel = 0
+                    subContainer.Size = UDim2.new(1, 0, 0, 0)
+                    subContainer.AutomaticSize = Enum.AutomaticSize.Y
+                    subContainer.ClipsDescendants = false
+                    subContainer.ZIndex = 5
+                    subContainer.Visible = toggle.Value
+
+                    local subLayout = Instance.new("UIListLayout", subContainer)
+                    subLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                    subLayout.Padding = UDim.new(0, 4)
+
+                    local subPad = Instance.new("UIPadding", subContainer)
+                    subPad.PaddingLeft = UDim.new(0, 12)
+                    subPad.PaddingTop = UDim.new(0, 2)
+                    subPad.PaddingBottom = UDim.new(0, 2)
+                    return subContainer
+                end
+
+                local function updateVisual()
+                    if toggle.Value then
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
+                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                        Library:Spring(checkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                        if subContainer then subContainer.Visible = true end
+                    else
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
+                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        Library:Spring(checkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                        if subContainer then subContainer.Visible = false end
+                    end
+                end
+
+                clickBtn.Activated:Connect(function()
+                    toggle.Value = not toggle.Value
+                    updateVisual()
+                    tCallback(toggle.Value)
+                    Library:_markDirty()
+                end)
+
+                -- Hover
+                clickBtn.MouseEnter:Connect(function()
+                    Library:Spring(label, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                end)
+                clickBtn.MouseLeave:Connect(function()
+                    Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
+                end)
+
+                -- Init visual
+                updateVisual()
+
+                -- ==============================
+                -- Toggle:AddDropdown (chained)
+                -- ==============================
+                function toggle:AddDropdown(dropOpts)
+                    dropOpts = dropOpts or {}
+                    local dName = dropOpts.Name or "Dropdown"
+                    local dOptions = dropOpts.Options or {"Option 1", "Option 2"}
+                    local dDefault = dropOpts.Default or dOptions[1]
+                    local dCallback = dropOpts.Callback or function() end
+
+                    local dropdown = { Value = dDefault }
+
+                    -- Dropdown row (inside sub-container)
+                    local dRow = Instance.new("Frame", ensureSubContainer())
+                    dRow.Name = "SubDrop_" .. dName
+                    dRow.BackgroundTransparency = 1
+                    dRow.BorderSizePixel = 0
+                    dRow.Size = UDim2.new(1, 0, 0, 20)
+                    dRow.ZIndex = 5
+                    dRow.ClipsDescendants = false
+
+                    -- Label
+                    local dLabel = Instance.new("TextLabel", dRow)
+                    dLabel.BackgroundTransparency = 1
+                    dLabel.Size = UDim2.new(0.4, 0, 1, 0)
+                    dLabel.Font = config.FontMedium
+                    dLabel.Text = dName
+                    dLabel.TextColor3 = colors.TextDim
+                    dLabel.TextSize = 11
+                    dLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    dLabel.ZIndex = 5
+
+                    -- Select button
+                    local selBtn = Instance.new("TextButton", dRow)
+                    selBtn.AnchorPoint = Vector2.new(1, 0.5)
+                    selBtn.Position = UDim2.new(1, 0, 0.5, 0)
+                    selBtn.Size = UDim2.new(0.55, 0, 0, 16)
+                    selBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                    selBtn.BorderSizePixel = 0
+                    selBtn.Text = ""
+                    selBtn.ZIndex = 5
+                    selBtn.AutoButtonColor = false
+                    selBtn.Selectable = false
+                    selBtn.ClipsDescendants = false
+
+                    Instance.new("UICorner", selBtn).CornerRadius = UDim.new(0, 3)
+                    local selStroke = Instance.new("UIStroke", selBtn)
+                    selStroke.Color = colors.Line
+                    selStroke.Transparency = 0.5
+
+                    local selVal = Instance.new("TextLabel", selBtn)
+                    selVal.BackgroundTransparency = 1
+                    selVal.Position = UDim2.new(0, 6, 0, 0)
+                    selVal.Size = UDim2.new(1, -20, 1, 0)
+                    selVal.Font = config.FontMedium
+                    selVal.Text = dDefault
+                    selVal.TextColor3 = colors.Text
+                    selVal.TextSize = 10
+                    selVal.TextXAlignment = Enum.TextXAlignment.Left
+                    selVal.ZIndex = 6
+
+                    local selArrow = Instance.new("TextLabel", selBtn)
+                    selArrow.BackgroundTransparency = 1
+                    selArrow.AnchorPoint = Vector2.new(1, 0.5)
+                    selArrow.Position = UDim2.new(1, -4, 0.5, 0)
+                    selArrow.Size = UDim2.new(0, 12, 0, 12)
+                    selArrow.Font = config.Font
+                    selArrow.Text = "▼"
+                    selArrow.TextColor3 = colors.TextDim
+                    selArrow.TextSize = 7
+                    selArrow.ZIndex = 6
+
+                    local fullH = #dOptions * 22 + 6
+                    local dPanel = Instance.new("Frame", selBtn)
+                    dPanel.Position = UDim2.new(0, 0, 1, 2)
+                    dPanel.Size = UDim2.new(1, 0, 0, 0)
+                    dPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+                    dPanel.BorderSizePixel = 0
+                    dPanel.Visible = false
+                    dPanel.ZIndex = 50
+                    dPanel.ClipsDescendants = true
+                    Instance.new("UICorner", dPanel).CornerRadius = UDim.new(0, 3)
+                    local dpStroke = Instance.new("UIStroke", dPanel)
+                    dpStroke.Color = colors.Line
+                    dpStroke.Transparency = 0.5
+                    local dpLayout = Instance.new("UIListLayout", dPanel)
+                    dpLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                    local dpPad = Instance.new("UIPadding", dPanel)
+                    dpPad.PaddingTop = UDim.new(0, 3)
+                    dpPad.PaddingBottom = UDim.new(0, 3)
+
+                    local optBtns = {}
+                    for idx, opt in ipairs(dOptions) do
+                        local ob = Instance.new("TextButton", dPanel)
+                        ob.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                        ob.BackgroundTransparency = 1
+                        ob.BorderSizePixel = 0
+                        ob.Size = UDim2.new(1, 0, 0, 22)
+                        ob.Text = ""
+                        ob.ZIndex = 51
+                        ob.LayoutOrder = idx
+                        ob.AutoButtonColor = false
+                        ob.Selectable = false
+
+                        local ol = Instance.new("TextLabel", ob)
+                        ol.BackgroundTransparency = 1
+                        ol.Position = UDim2.new(0, 6, 0, 0)
+                        ol.Size = UDim2.new(1, -12, 1, 0)
+                        ol.Font = config.FontMedium
+                        ol.Text = opt
+                        ol.TextColor3 = (opt == dDefault) and colors.Main or colors.Text
+                        ol.TextSize = 10
+                        ol.TextXAlignment = Enum.TextXAlignment.Left
+                        ol.ZIndex = 52
+
+                        ob.MouseEnter:Connect(function()
+                            Library:Spring(ob, "Smooth", { BackgroundTransparency = 0.5 })
+                            if dropdown.Value ~= opt then
+                                Library:Spring(ol, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                            end
+                        end)
+                        ob.MouseLeave:Connect(function()
+                            Library:Spring(ob, "Smooth", { BackgroundTransparency = 1 })
+                            if dropdown.Value ~= opt then
+                                Library:Spring(ol, "Smooth", { TextColor3 = colors.Text })
+                            end
+                        end)
+                        ob.Activated:Connect(function()
+                            dropdown.Value = opt
+                            selVal.Text = opt
+                            isOpen = false
+                            Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                            task.delay(0.15, function() dPanel.Visible = false end)
+                            selArrow.Text = "▼"
+                            for _, b in ipairs(optBtns) do
+                                local l = b:FindFirstChild("TextLabel") or b:FindFirstChildOfClass("TextLabel")
+                                if l then l.TextColor3 = (l.Text == opt) and colors.Main or colors.Text end
+                            end
+                            dCallback(opt)
+                        end)
+                        table.insert(optBtns, ob)
+                    end
+
+                    local isOpen = false
+                    selBtn.Activated:Connect(function()
+                        isOpen = not isOpen
+                        if isOpen then
+                            dPanel.Visible = true
+                            dPanel.Size = UDim2.new(1, 0, 0, 0)
+                            Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullH) })
+                            selArrow.Text = "▲"
+                        else
+                            Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                            task.delay(0.15, function() dPanel.Visible = false end)
+                            selArrow.Text = "▼"
+                        end
+                    end)
+
+                    game:GetService("UserInputService").InputBegan:Connect(function(input)
+                        if isOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                            local mx, my = input.Position.X, input.Position.Y
+                            task.defer(function()
+                                if isOpen then
+                                    local pp, ps = dPanel.AbsolutePosition, dPanel.AbsoluteSize
+                                    local bp, bs = selBtn.AbsolutePosition, selBtn.AbsoluteSize
+                                    local inP = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                                    local inB = mx >= bp.X and mx <= bp.X + bs.X and my >= bp.Y and my <= bp.Y + bs.Y
+                                    if not inP and not inB then
+                                        isOpen = false
+                                        Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                                        task.delay(0.15, function() dPanel.Visible = false end)
+                                        selArrow.Text = "▼"
+                                    end
+                                end
+                            end)
+                        end
+                    end)
+
+                    return dropdown
+                end
+
+                -- ==============================
+                -- Toggle:AddSlider (chained)
+                -- ==============================
+                function toggle:AddSlider(sliderOpts)
+                    sliderOpts = sliderOpts or {}
+                    local sName = sliderOpts.Name or "Slider"
+                    local sMin = sliderOpts.Min or 0
+                    local sMax = sliderOpts.Max or 100
+                    local sDefault = math.clamp(sliderOpts.Default or sMin, sMin, sMax)
+                    local sSuffix = sliderOpts.Suffix or "%"
+                    local sCallback = sliderOpts.Callback or function() end
+
+                    local slider = { Value = sDefault }
+
+                    local sRow = Instance.new("Frame", ensureSubContainer())
+                    sRow.Name = "SubSlider_" .. sName
+                    sRow.BackgroundTransparency = 1
+                    sRow.BorderSizePixel = 0
+                    sRow.Size = UDim2.new(1, 0, 0, 20)
+                    sRow.ZIndex = 5
+
+                    local sLabel = Instance.new("TextLabel", sRow)
+                    sLabel.BackgroundTransparency = 1
+                    sLabel.Size = UDim2.new(0.4, 0, 1, 0)
+                    sLabel.Font = config.FontMedium
+                    sLabel.Text = sName
+                    sLabel.TextColor3 = colors.TextDim
+                    sLabel.TextSize = 11
+                    sLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    sLabel.ZIndex = 5
+
+                    local barBg = Instance.new("Frame", sRow)
+                    barBg.AnchorPoint = Vector2.new(1, 0.5)
+                    barBg.Position = UDim2.new(1, 0, 0.5, 0)
+                    barBg.Size = UDim2.new(0.55, 0, 0, 14)
+                    barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                    barBg.BorderSizePixel = 0
+                    barBg.ClipsDescendants = true
+                    barBg.ZIndex = 5
+                    Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 3)
+
+                    local fill = Instance.new("Frame", barBg)
+                    fill.BackgroundColor3 = colors.Main
+                    fill.BorderSizePixel = 0
+                    fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
+                    fill.ZIndex = 6
+                    Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
+
+                    local sValLabel = Instance.new("TextLabel", barBg)
+                    sValLabel.BackgroundTransparency = 1
+                    sValLabel.Size = UDim2.new(1, 0, 1, 0)
+                    sValLabel.Font = config.Font
+                    sValLabel.Text = tostring(sDefault) .. sSuffix
+                    sValLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    sValLabel.TextSize = 11
+                    sValLabel.ZIndex = 7
+
+                    local dragging = false
+                    local function updateSlider(inputX)
+                        local bx, bw = barBg.AbsolutePosition.X, barBg.AbsoluteSize.X
+                        local relX = math.clamp((inputX - bx) / bw, 0, 1)
+                        local val = math.floor(sMin + (sMax - sMin) * relX + 0.5)
+                        slider.Value = val
+                        Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
+                        sValLabel.Text = tostring(val) .. sSuffix
+                        sCallback(val)
+                    end
+
+                    local dragBtn = Instance.new("TextButton", barBg)
+                    dragBtn.BackgroundTransparency = 1
+                    dragBtn.Size = UDim2.new(1, 0, 1, 0)
+                    dragBtn.ZIndex = 8
+                    dragBtn.Text = ""
+                    dragBtn.AutoButtonColor = false
+                    dragBtn.Selectable = false
+                    dragBtn.BorderSizePixel = 0
+
+                    dragBtn.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                            dragging = true
+                            updateSlider(input.Position.X)
+                        end
+                    end)
+                    dragBtn.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                            dragging = false
+                        end
+                    end)
+                    game:GetService("UserInputService").InputChanged:Connect(function(input)
+                        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                            updateSlider(input.Position.X)
+                        end
+                    end)
+
+                    return slider
+                end
+
+                -- Register for config save/load
+                Library:RegisterConfig(secName .. "." .. tName, "toggle",
+                    function() return toggle.Value end,
+                    function(val)
+                        toggle.Value = val
+                        updateVisual()
+                    end
+                )
+                table.insert(win._searchItems, { name = tName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return toggle
+            end
+
+            -- ==============================
+            -- AddSlider (draggable bar)
+            -- ==============================
+            function section:AddSlider(sliderOpts)
+                sliderOpts = sliderOpts or {}
+                local sName = sliderOpts.Name or "Slider"
+                local sMin = sliderOpts.Min or 0
+                local sMax = sliderOpts.Max or 100
+                local sDefault = math.clamp(sliderOpts.Default or sMin, sMin, sMax)
+                local sSuffix = sliderOpts.Suffix or "%"
+                local sCallback = sliderOpts.Callback or function() end
+
+                local slider = { Value = sDefault }
+
+                -- Slider row
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "Slider_" .. sName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+
+                -- Slider label (left side)
+                local label = Instance.new("TextLabel", row)
+                label.Name = "Label"
+                label.BackgroundTransparency = 1
+                label.Position = UDim2.new(0, 0, 0, 0)
+                label.Size = UDim2.new(0.4, 0, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = sName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Slider bar background (right side)
+                local barBg = Instance.new("Frame", row)
+                barBg.Name = "BarBg"
+                barBg.AnchorPoint = Vector2.new(1, 0.5)
+                barBg.Position = UDim2.new(1, 0, 0.5, 0)
+                barBg.Size = UDim2.new(0.55, 0, 0, 16)
+                barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                barBg.BorderSizePixel = 0
+                barBg.ClipsDescendants = true
+                barBg.ZIndex = 5
+
+                Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 3)
+
+                -- Fill bar (pink)
+                local fill = Instance.new("Frame", barBg)
+                fill.Name = "Fill"
+                fill.BackgroundColor3 = colors.Main
+                fill.BorderSizePixel = 0
+                fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
+                fill.ZIndex = 6
+
+                Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
+
+                -- Value text (inside bar, centered)
+                local valLabel = Instance.new("TextLabel", barBg)
+                valLabel.Name = "Value"
+                valLabel.BackgroundTransparency = 1
+                valLabel.Size = UDim2.new(1, 0, 1, 0)
+                valLabel.Font = config.Font
+                valLabel.Text = tostring(sDefault) .. sSuffix
+                valLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                valLabel.TextSize = 12
+                valLabel.ZIndex = 7
+
+                -- Drag interaction
+                local dragging = false
+
+                local function updateSlider(inputX)
+                    local barAbsPos = barBg.AbsolutePosition.X
+                    local barAbsSize = barBg.AbsoluteSize.X
+                    local relX = math.clamp((inputX - barAbsPos) / barAbsSize, 0, 1)
+                    local rawVal = sMin + (sMax - sMin) * relX
+                    local val = math.floor(rawVal + 0.5)
+                    slider.Value = val
+                    Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
+                    valLabel.Text = tostring(val) .. sSuffix
+                    sCallback(val)
+                end
+
+                local dragBtn = Instance.new("TextButton", barBg)
+                dragBtn.BackgroundTransparency = 1
+                dragBtn.Size = UDim2.new(1, 0, 1, 0)
+                dragBtn.ZIndex = 8
+                dragBtn.Text = ""
+                dragBtn.AutoButtonColor = false
+                dragBtn.Selectable = false
+
+                dragBtn.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        dragging = true
+                        updateSlider(input.Position.X)
+                    end
+                end)
+
+                dragBtn.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        dragging = false
+                    end
+                end)
+
+                game:GetService("UserInputService").InputChanged:Connect(function(input)
+                    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                        updateSlider(input.Position.X)
+                    end
+                end)
+
+                -- Register for config save/load
+                Library:RegisterConfig(secName .. "." .. sName, "slider",
+                    function() return slider.Value end,
+                    function(val)
+                        val = math.clamp(val, sMin, sMax)
+                        slider.Value = val
+                        local relX = (val - sMin) / (sMax - sMin)
+                        fill.Size = UDim2.new(relX, 0, 1, 0)
+                        sValLabel.Text = tostring(val) .. sSuffix
+                    end
+                )
+                table.insert(win._searchItems, { name = sName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return slider
+            end
+
+            -- ==============================
+            -- AddDropdown (select menu)
+            -- ==============================
+            function section:AddDropdown(dropOpts)
+                dropOpts = dropOpts or {}
+                local dName = dropOpts.Name or "Dropdown"
+                local dOptions = dropOpts.Options or {"Option 1", "Option 2"}
+                local dDefault = dropOpts.Default or dOptions[1]
+                local dCallback = dropOpts.Callback or function() end
+
+                local dropdown = { Value = dDefault }
+
+                -- Dropdown row
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "Dropdown_" .. dName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+                row.ClipsDescendants = false
+
+                -- Dropdown label (left side)
+                local label = Instance.new("TextLabel", row)
+                label.Name = "Label"
+                label.BackgroundTransparency = 1
+                label.Position = UDim2.new(0, 0, 0, 0)
+                label.Size = UDim2.new(0.4, 0, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = dName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Selected value button (right side)
+                local selectBtn = Instance.new("TextButton", row)
+                selectBtn.Name = "SelectBtn"
+                selectBtn.AnchorPoint = Vector2.new(1, 0.5)
+                selectBtn.Position = UDim2.new(1, 0, 0.5, 0)
+                selectBtn.Size = UDim2.new(0.55, 0, 0, 18)
+                selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                selectBtn.BorderSizePixel = 0
+                selectBtn.Font = config.FontMedium
+                selectBtn.Text = ""
+                selectBtn.TextColor3 = colors.Text
+                selectBtn.TextSize = 11
+                selectBtn.ZIndex = 5
+                selectBtn.ClipsDescendants = false
+                selectBtn.AutoButtonColor = false
+                selectBtn.Selectable = false
+
+                Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0, 3)
+
+                local selectStroke = Instance.new("UIStroke", selectBtn)
+                selectStroke.Color = colors.Line
+                selectStroke.Transparency = 0.5
+
+                -- Value text (left-aligned inside button)
+                local valText = Instance.new("TextLabel", selectBtn)
+                valText.Name = "SelectedValue"
+                valText.BackgroundTransparency = 1
+                valText.Position = UDim2.new(0, 8, 0, 0)
+                valText.Size = UDim2.new(1, -26, 1, 0)
+                valText.Font = config.FontMedium
+                valText.Text = dDefault
+                valText.TextColor3 = colors.Text
+                valText.TextSize = 11
+                valText.TextXAlignment = Enum.TextXAlignment.Left
+                valText.ZIndex = 6
+
+                -- Arrow indicator (right side of button)
+                local arrow = Instance.new("TextLabel", selectBtn)
+                arrow.Name = "Arrow"
+                arrow.BackgroundTransparency = 1
+                arrow.AnchorPoint = Vector2.new(1, 0.5)
+                arrow.Position = UDim2.new(1, -6, 0.5, 0)
+                arrow.Size = UDim2.new(0, 14, 0, 14)
+                arrow.Font = config.Font
+                arrow.Text = "▼"
+                arrow.TextColor3 = colors.TextDim
+                arrow.TextSize = 8
+                arrow.ZIndex = 6
+
+                -- Dropdown panel (hidden by default, appears below)
+                local fullHeight = #dOptions * 24 + 6
+                local dropPanel = Instance.new("Frame", selectBtn)
+                dropPanel.Name = "DropPanel"
+                dropPanel.Position = UDim2.new(0, 0, 1, 2)
+                dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                dropPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+                dropPanel.BorderSizePixel = 0
+                dropPanel.Visible = false
+                dropPanel.ZIndex = 50
+                dropPanel.ClipsDescendants = true
+
+                Instance.new("UICorner", dropPanel).CornerRadius = UDim.new(0, 3)
+
+                local panelStroke = Instance.new("UIStroke", dropPanel)
+                panelStroke.Color = colors.Line
+                panelStroke.Transparency = 0.5
+
+                local panelLayout = Instance.new("UIListLayout", dropPanel)
+                panelLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                panelLayout.Padding = UDim.new(0, 0)
+
+                local panelPad = Instance.new("UIPadding", dropPanel)
+                panelPad.PaddingTop = UDim.new(0, 3)
+                panelPad.PaddingBottom = UDim.new(0, 3)
+
+                -- Create option buttons
+                local optionButtons = {}
+                for idx, opt in ipairs(dOptions) do
+                    local optBtn = Instance.new("TextButton", dropPanel)
+                    optBtn.Name = "Opt_" .. opt
+                    optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                    optBtn.BackgroundTransparency = 1
+                    optBtn.BorderSizePixel = 0
+                    optBtn.Size = UDim2.new(1, 0, 0, 24)
+                    optBtn.Font = config.FontMedium
+                    optBtn.Text = ""
+                    optBtn.TextSize = 11
+                    optBtn.ZIndex = 51
+                    optBtn.LayoutOrder = idx
+                    optBtn.AutoButtonColor = false
+                    optBtn.Selectable = false
+
+                    -- Option label (left-aligned with padding)
+                    local optLabel = Instance.new("TextLabel", optBtn)
+                    optLabel.Name = "OptLabel"
+                    optLabel.BackgroundTransparency = 1
+                    optLabel.Position = UDim2.new(0, 8, 0, 0)
+                    optLabel.Size = UDim2.new(1, -16, 1, 0)
+                    optLabel.Font = config.FontMedium
+                    optLabel.Text = opt
+                    optLabel.TextColor3 = (opt == dDefault) and colors.Main or colors.Text
+                    optLabel.TextSize = 11
+                    optLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    optLabel.ZIndex = 52
+
+                    optBtn.MouseEnter:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 0.5 })
+                        if dropdown.Value ~= opt then
+                            Library:Spring(optLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                        end
+                    end)
+                    optBtn.MouseLeave:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
+                        if dropdown.Value ~= opt then
+                            Library:Spring(optLabel, "Smooth", { TextColor3 = colors.Text })
+                        end
+                    end)
+
+                    optBtn.Activated:Connect(function()
+                        dropdown.Value = opt
+                        valText.Text = opt
+                        isOpen = false
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.15, function() dropPanel.Visible = false end)
+                        arrow.Text = "▼"
+
+                        -- Update colors
+                        for _, ob in ipairs(optionButtons) do
+                            local lbl = ob:FindFirstChild("OptLabel")
+                            if lbl then
+                                lbl.TextColor3 = (lbl.Text == opt) and colors.Main or colors.Text
+                            end
+                        end
+
+                        dCallback(opt)
+                    end)
+
+                    table.insert(optionButtons, optBtn)
+                end
+
+                -- Toggle dropdown with animation
+                local isOpen = false
+                selectBtn.Activated:Connect(function()
+                    isOpen = not isOpen
+                    if isOpen then
+                        dropPanel.Visible = true
+                        dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                        arrow.Text = "▲"
+                    else
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.15, function() dropPanel.Visible = false end)
+                        arrow.Text = "▼"
+                    end
+                end)
+
+                -- Close when clicking elsewhere
+                game:GetService("UserInputService").InputBegan:Connect(function(input)
+                    if isOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                        local mx, my = input.Position.X, input.Position.Y
+                        task.defer(function()
+                            if isOpen then
+                                local panelPos = dropPanel.AbsolutePosition
+                                local panelSize = dropPanel.AbsoluteSize
+                                local btnPos = selectBtn.AbsolutePosition
+                                local btnSize = selectBtn.AbsoluteSize
+
+                                local inPanel = mx >= panelPos.X and mx <= panelPos.X + panelSize.X
+                                    and my >= panelPos.Y and my <= panelPos.Y + panelSize.Y
+                                local inBtn = mx >= btnPos.X and mx <= btnPos.X + btnSize.X
+                                    and my >= btnPos.Y and my <= btnPos.Y + btnSize.Y
+
+                                if not inPanel and not inBtn then
+                                    isOpen = false
+                                    Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                                    task.delay(0.15, function() dropPanel.Visible = false end)
+                                    arrow.Text = "▼"
+                                end
+                            end
+                        end)
+                    end
+                end)
+
+                -- Register for config save/load
+                Library:RegisterConfig(secName .. "." .. dName, "dropdown",
+                    function() return dropdown.Value end,
+                    function(val)
+                        dropdown.Value = val
+                        valText.Text = val
+                        for _, b in ipairs(optionButtons) do
+                            local l = b:FindFirstChildOfClass("TextLabel")
+                            if l then l.TextColor3 = (l.Text == val) and colors.Main or colors.Text end
+                        end
+                    end
+                )
+                table.insert(win._searchItems, { name = dName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return dropdown
+            end
+
+            -- ==============================
+            -- AddMultiDropdown (multi-select)
+            -- ==============================
+            function section:AddMultiDropdown(dropOpts)
+                dropOpts = dropOpts or {}
+                local dName = dropOpts.Name or "Multi Select"
+                local dOptions = dropOpts.Options or {"Option 1", "Option 2"}
+                local dDefaults = dropOpts.Default or {}
+                local dCallback = dropOpts.Callback or function() end
+
+                -- Build selected set
+                local selectedSet = {}
+                for _, v in ipairs(dDefaults) do selectedSet[v] = true end
+
+                local multi = { Values = selectedSet }
+
+                local function getDisplayText()
+                    local sel = {}
+                    for _, opt in ipairs(dOptions) do
+                        if selectedSet[opt] then table.insert(sel, opt) end
+                    end
+                    if #sel == 0 then return "None" end
+                    local txt = table.concat(sel, ", ")
+                    if #txt > 20 then txt = string.sub(txt, 1, 18) .. ".." end
+                    return txt
+                end
+
+                -- Row
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "MultiDrop_" .. dName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+                row.ClipsDescendants = false
+
+                local label = Instance.new("TextLabel", row)
+                label.BackgroundTransparency = 1
+                label.Size = UDim2.new(0.4, 0, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = dName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Select button
+                local selectBtn = Instance.new("TextButton", row)
+                selectBtn.AnchorPoint = Vector2.new(1, 0.5)
+                selectBtn.Position = UDim2.new(1, 0, 0.5, 0)
+                selectBtn.Size = UDim2.new(0.55, 0, 0, 18)
+                selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                selectBtn.BorderSizePixel = 0
+                selectBtn.Text = ""
+                selectBtn.ZIndex = 5
+                selectBtn.AutoButtonColor = false
+                selectBtn.Selectable = false
+                selectBtn.ClipsDescendants = false
+                Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0, 3)
+                local selStroke = Instance.new("UIStroke", selectBtn)
+                selStroke.Color = colors.Line
+                selStroke.Transparency = 0.5
+
+                local valText = Instance.new("TextLabel", selectBtn)
+                valText.BackgroundTransparency = 1
+                valText.Position = UDim2.new(0, 8, 0, 0)
+                valText.Size = UDim2.new(1, -26, 1, 0)
+                valText.Font = config.FontMedium
+                valText.Text = getDisplayText()
+                valText.TextColor3 = colors.Text
+                valText.TextSize = 11
+                valText.TextXAlignment = Enum.TextXAlignment.Left
+                valText.ZIndex = 6
+
+                local arrow = Instance.new("TextLabel", selectBtn)
+                arrow.BackgroundTransparency = 1
+                arrow.AnchorPoint = Vector2.new(1, 0.5)
+                arrow.Position = UDim2.new(1, -6, 0.5, 0)
+                arrow.Size = UDim2.new(0, 14, 0, 14)
+                arrow.Font = config.Font
+                arrow.Text = "▼"
+                arrow.TextColor3 = colors.TextDim
+                arrow.TextSize = 8
+                arrow.ZIndex = 6
+
+                -- Panel
+                local fullHeight = #dOptions * 24 + 6
+                local dropPanel = Instance.new("Frame", selectBtn)
+                dropPanel.Position = UDim2.new(0, 0, 1, 2)
+                dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                dropPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+                dropPanel.BorderSizePixel = 0
+                dropPanel.Visible = false
+                dropPanel.ZIndex = 50
+                dropPanel.ClipsDescendants = true
+                Instance.new("UICorner", dropPanel).CornerRadius = UDim.new(0, 3)
+                local pStroke = Instance.new("UIStroke", dropPanel)
+                pStroke.Color = colors.Line
+                pStroke.Transparency = 0.5
+                local pLayout = Instance.new("UIListLayout", dropPanel)
+                pLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                local pPad = Instance.new("UIPadding", dropPanel)
+                pPad.PaddingTop = UDim.new(0, 3)
+                pPad.PaddingBottom = UDim.new(0, 3)
+
+                -- Option rows with checkboxes
+                local optVisuals = {} -- { optName = { chk, cl1, cl2, chkStroke, optLabel } }
+                for idx, opt in ipairs(dOptions) do
+                    local optBtn = Instance.new("TextButton", dropPanel)
+                    optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                    optBtn.BackgroundTransparency = 1
+                    optBtn.BorderSizePixel = 0
+                    optBtn.Size = UDim2.new(1, 0, 0, 24)
+                    optBtn.Text = ""
+                    optBtn.ZIndex = 51
+                    optBtn.LayoutOrder = idx
+                    optBtn.AutoButtonColor = false
+                    optBtn.Selectable = false
+
+                    -- Mini checkbox
+                    local chk = Instance.new("Frame", optBtn)
+                    chk.AnchorPoint = Vector2.new(0, 0.5)
+                    chk.Position = UDim2.new(0, 8, 0.5, 0)
+                    chk.Size = UDim2.new(0, 10, 0, 10)
+                    chk.BackgroundColor3 = selectedSet[opt] and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                    chk.BorderSizePixel = 0
+                    chk.ZIndex = 52
+                    Instance.new("UICorner", chk).CornerRadius = UDim.new(0, 2)
+                    local chkStroke = Instance.new("UIStroke", chk)
+                    chkStroke.Color = selectedSet[opt] and colors.Main or colors.Line
+                    chkStroke.Transparency = selectedSet[opt] and 0.3 or 0.5
+
+                    -- Check icon (mini version)
+                    local chkIcon = Instance.new("ImageLabel", chk)
+                    chkIcon.BackgroundTransparency = 1
+                    chkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+                    chkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+                    chkIcon.Size = UDim2.new(0, 8, 0, 8)
+                    chkIcon.Image = "rbxassetid://122354904349171"
+                    chkIcon.ImageColor3 = colors.Main
+                    chkIcon.ImageTransparency = selectedSet[opt] and 0 or 1
+                    chkIcon.ZIndex = 53
+
+                    -- Option label
+                    local optLabel = Instance.new("TextLabel", optBtn)
+                    optLabel.BackgroundTransparency = 1
+                    optLabel.Position = UDim2.new(0, 24, 0, 0)
+                    optLabel.Size = UDim2.new(1, -30, 1, 0)
+                    optLabel.Font = config.FontMedium
+                    optLabel.Text = opt
+                    optLabel.TextColor3 = selectedSet[opt] and colors.Main or colors.Text
+                    optLabel.TextSize = 11
+                    optLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    optLabel.ZIndex = 52
+
+                    optBtn.MouseEnter:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 0.5 })
+                    end)
+                    optBtn.MouseLeave:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
+                    end)
+
+                    optBtn.Activated:Connect(function()
+                        selectedSet[opt] = not selectedSet[opt]
+                        chkIcon.ImageTransparency = selectedSet[opt] and 0 or 1
+                        if selectedSet[opt] then
+                            Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                            Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                            optLabel.TextColor3 = colors.Main
+                        else
+                            Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                            Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                            optLabel.TextColor3 = colors.Text
+                        end
+                        valText.Text = getDisplayText()
+                        multi.Values = selectedSet
+                        dCallback(selectedSet)
+                        if multi._onChange then multi._onChange() end
+                    end)
+                    optVisuals[opt] = { chk = chk, chkIcon = chkIcon, chkStroke = chkStroke, optLabel = optLabel }
+                end
+
+                -- Toggle panel
+                local isOpen = false
+                selectBtn.Activated:Connect(function()
+                    isOpen = not isOpen
+                    if isOpen then
+                        dropPanel.Visible = true
+                        dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                        arrow.Text = "▲"
+                    else
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.15, function() dropPanel.Visible = false end)
+                        arrow.Text = "▼"
+                    end
+                end)
+
+                -- Close on outside click
+                game:GetService("UserInputService").InputBegan:Connect(function(input)
+                    if isOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                        local mx, my = input.Position.X, input.Position.Y
+                        task.defer(function()
+                            if isOpen then
+                                local pp, ps = dropPanel.AbsolutePosition, dropPanel.AbsoluteSize
+                                local bp, bs = selectBtn.AbsolutePosition, selectBtn.AbsoluteSize
+                                local inP = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                                local inB = mx >= bp.X and mx <= bp.X + bs.X and my >= bp.Y and my <= bp.Y + bs.Y
+                                if not inP and not inB then
+                                    isOpen = false
+                                    Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                                    task.delay(0.15, function() dropPanel.Visible = false end)
+                                    arrow.Text = "▼"
+                                end
+                            end
+                        end)
+                    end
+                end)
+
+                -- Register for config save/load
+                Library:RegisterConfig(secName .. "." .. dName, "multi",
+                    function() return multi.Values end,
+                    function(val)
+                        if type(val) ~= "table" then return end
+                        for k in pairs(selectedSet) do selectedSet[k] = nil end
+                        for k, v in pairs(val) do selectedSet[k] = v end
+                        multi.Values = selectedSet
+                        valText.Text = getDisplayText()
+                    end
+                )
+                table.insert(win._searchItems, { name = dName, menuName = menuName, secName = secName, menuRef = menu })
+
+                function multi:Refresh()
+                    valText.Text = getDisplayText()
+                    for optName, vis in pairs(optVisuals) do
+                        local sel = selectedSet[optName]
+                        vis.chkIcon.ImageTransparency = sel and 0 or 1
+                        vis.chk.BackgroundColor3 = sel and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                        vis.chkStroke.Color = sel and colors.Main or colors.Line
+                        vis.chkStroke.Transparency = sel and 0.3 or 0.5
+                        vis.optLabel.TextColor3 = sel and colors.Main or colors.Text
+                    end
+                end
+
+                return multi
+            end
+
+            -- ==============================
+            -- AddSliderToggle (slider + checkbox)
+            -- ==============================
+            function section:AddSliderToggle(opts)
+                opts = opts or {}
+                local sName = opts.Name or "Slider"
+                local sMin = opts.Min or 0
+                local sMax = opts.Max or 100
+                local sDefault = math.clamp(opts.Default or sMin, sMin, sMax)
+                local sSuffix = opts.Suffix or "%"
+                local sEnabled = opts.Enabled ~= false
+                local sCallback = opts.Callback or function() end
+                local sToggleCallback = opts.OnToggle or function() end
+
+                local st = { Value = sDefault, Enabled = sEnabled }
+
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "SliderToggle_" .. sName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+
+                -- Label (left)
+                local label = Instance.new("TextLabel", row)
+                label.BackgroundTransparency = 1
+                label.Size = UDim2.new(0.3, 0, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = sName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Checkbox (far right)
+                local chkFrame = Instance.new("Frame", row)
+                chkFrame.AnchorPoint = Vector2.new(1, 0.5)
+                chkFrame.Position = UDim2.new(1, 0, 0.5, 0)
+                chkFrame.Size = UDim2.new(0, 18, 0, 18)
+                chkFrame.BackgroundColor3 = sEnabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                chkFrame.BorderSizePixel = 0
+                chkFrame.ZIndex = 5
+                Instance.new("UICorner", chkFrame).CornerRadius = UDim.new(0, 3)
+                local chkStroke = Instance.new("UIStroke", chkFrame)
+                chkStroke.Color = sEnabled and colors.Main or colors.Line
+                chkStroke.Transparency = sEnabled and 0.3 or 0.5
+
+                local checkIcon = Instance.new("ImageLabel", chkFrame)
+                checkIcon.BackgroundTransparency = 1
+                checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+                checkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+                checkIcon.Size = UDim2.new(0, 12, 0, 12)
+                checkIcon.Image = "rbxassetid://122354904349171"
+                checkIcon.ImageColor3 = colors.Main
+                checkIcon.ImageTransparency = sEnabled and 0 or 1
+                checkIcon.ZIndex = 6
+
+                local chkBtn = Instance.new("TextButton", chkFrame)
+                chkBtn.BackgroundTransparency = 1
+                chkBtn.Size = UDim2.new(1, 0, 1, 0)
+                chkBtn.ZIndex = 7
+                chkBtn.Text = ""
+                chkBtn.AutoButtonColor = false
+                chkBtn.Selectable = false
+                chkBtn.BorderSizePixel = 0
+
+                chkBtn.Activated:Connect(function()
+                    st.Enabled = not st.Enabled
+                    if st.Enabled then
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                    else
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                    end
+                    sToggleCallback(st.Enabled)
+                end)
+
+                -- Slider bar (between label and checkbox)
+                local barBg = Instance.new("Frame", row)
+                barBg.AnchorPoint = Vector2.new(1, 0.5)
+                barBg.Position = UDim2.new(1, -20, 0.5, 0)
+                barBg.Size = UDim2.new(0.45, 0, 0, 16)
+                barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                barBg.BorderSizePixel = 0
+                barBg.ClipsDescendants = true
+                barBg.ZIndex = 5
+                Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 3)
+
+                local fill = Instance.new("Frame", barBg)
+                fill.BackgroundColor3 = colors.Main
+                fill.BorderSizePixel = 0
+                fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
+                fill.ZIndex = 6
+                Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
+
+                local valLabel = Instance.new("TextLabel", barBg)
+                valLabel.BackgroundTransparency = 1
+                valLabel.Size = UDim2.new(1, 0, 1, 0)
+                valLabel.Font = config.Font
+                valLabel.Text = tostring(sDefault) .. sSuffix
+                valLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                valLabel.TextSize = 12
+                valLabel.ZIndex = 7
+
+                local dragging = false
+                local function updateSlider(inputX)
+                    local bx, bw = barBg.AbsolutePosition.X, barBg.AbsoluteSize.X
+                    local relX = math.clamp((inputX - bx) / bw, 0, 1)
+                    local val = math.floor(sMin + (sMax - sMin) * relX + 0.5)
+                    st.Value = val
+                    Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
+                    valLabel.Text = tostring(val) .. sSuffix
+                    sCallback(val)
+                end
+
+                local dragBtn = Instance.new("TextButton", barBg)
+                dragBtn.BackgroundTransparency = 1
+                dragBtn.Size = UDim2.new(1, 0, 1, 0)
+                dragBtn.ZIndex = 8
+                dragBtn.Text = ""
+                dragBtn.AutoButtonColor = false
+                dragBtn.Selectable = false
+                dragBtn.BorderSizePixel = 0
+
+                dragBtn.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        dragging = true
+                        updateSlider(input.Position.X)
+                    end
+                end)
+                dragBtn.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        dragging = false
+                    end
+                end)
+                game:GetService("UserInputService").InputChanged:Connect(function(input)
+                    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                        updateSlider(input.Position.X)
+                    end
+                end)
+
+                -- Register for config save/load
+                Library:RegisterConfig(secName .. "." .. sName, "slidertoggle",
+                    function() return { value = st.Value, enabled = st.Enabled } end,
+                    function(val)
+                        if type(val) ~= "table" then return end
+                        if val.value ~= nil then
+                            local v = math.clamp(val.value, sMin, sMax)
+                            st.Value = v
+                            local relX = (v - sMin) / (sMax - sMin)
+                            fill.Size = UDim2.new(relX, 0, 1, 0)
+                            valLabel.Text = tostring(v) .. sSuffix
+                        end
+                        if val.enabled ~= nil then
+                            st.Enabled = val.enabled
+                            cl1.BackgroundTransparency = val.enabled and 0 or 1
+                            cl2.BackgroundTransparency = val.enabled and 0 or 1
+                            chkFrame.BackgroundColor3 = val.enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                            chkStroke.Color = val.enabled and colors.Main or colors.Line
+                            chkStroke.Transparency = val.enabled and 0.3 or 0.5
+                        end
+                    end
+                )
+                table.insert(win._searchItems, { name = sName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return st
+            end
+
+            -- ==============================
+            -- AddDropdownToggle (dropdown + checkbox)
+            -- ==============================
+            function section:AddDropdownToggle(opts)
+                opts = opts or {}
+                local dName = opts.Name or "Dropdown"
+                local dOptions = opts.Options or {"Option 1", "Option 2"}
+                local dDefault = opts.Default or dOptions[1]
+                local dEnabled = opts.Enabled ~= false
+                local dCallback = opts.Callback or function() end
+                local dToggleCallback = opts.OnToggle or function() end
+
+                local dt = { Value = dDefault, Enabled = dEnabled }
+
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "DropToggle_" .. dName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+                row.ClipsDescendants = false
+
+                -- Label (left)
+                local label = Instance.new("TextLabel", row)
+                label.BackgroundTransparency = 1
+                label.Size = UDim2.new(0.3, 0, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = dName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Checkbox (far right)
+                local chkFrame = Instance.new("Frame", row)
+                chkFrame.AnchorPoint = Vector2.new(1, 0.5)
+                chkFrame.Position = UDim2.new(1, 0, 0.5, 0)
+                chkFrame.Size = UDim2.new(0, 18, 0, 18)
+                chkFrame.BackgroundColor3 = dEnabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                chkFrame.BorderSizePixel = 0
+                chkFrame.ZIndex = 5
+                Instance.new("UICorner", chkFrame).CornerRadius = UDim.new(0, 3)
+                local chkStroke = Instance.new("UIStroke", chkFrame)
+                chkStroke.Color = dEnabled and colors.Main or colors.Line
+                chkStroke.Transparency = dEnabled and 0.3 or 0.5
+
+                local checkIcon = Instance.new("ImageLabel", chkFrame)
+                checkIcon.BackgroundTransparency = 1
+                checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+                checkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+                checkIcon.Size = UDim2.new(0, 12, 0, 12)
+                checkIcon.Image = "rbxassetid://122354904349171"
+                checkIcon.ImageColor3 = colors.Main
+                checkIcon.ImageTransparency = dEnabled and 0 or 1
+                checkIcon.ZIndex = 6
+
+                local chkBtn = Instance.new("TextButton", chkFrame)
+                chkBtn.BackgroundTransparency = 1
+                chkBtn.Size = UDim2.new(1, 0, 1, 0)
+                chkBtn.ZIndex = 7
+                chkBtn.Text = ""
+                chkBtn.AutoButtonColor = false
+                chkBtn.Selectable = false
+                chkBtn.BorderSizePixel = 0
+
+                chkBtn.Activated:Connect(function()
+                    dt.Enabled = not dt.Enabled
+                    if dt.Enabled then
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                    else
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                    end
+                    dToggleCallback(dt.Enabled)
+                end)
+
+                -- Dropdown button (between label and checkbox)
+                local selectBtn = Instance.new("TextButton", row)
+                selectBtn.AnchorPoint = Vector2.new(1, 0.5)
+                selectBtn.Position = UDim2.new(1, -20, 0.5, 0)
+                selectBtn.Size = UDim2.new(0.45, 0, 0, 18)
+                selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                selectBtn.BorderSizePixel = 0
+                selectBtn.Text = ""
+                selectBtn.ZIndex = 5
+                selectBtn.AutoButtonColor = false
+                selectBtn.Selectable = false
+                selectBtn.ClipsDescendants = false
+                Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0, 3)
+                local selStroke = Instance.new("UIStroke", selectBtn)
+                selStroke.Color = colors.Line
+                selStroke.Transparency = 0.5
+
+                local valText = Instance.new("TextLabel", selectBtn)
+                valText.BackgroundTransparency = 1
+                valText.Position = UDim2.new(0, 8, 0, 0)
+                valText.Size = UDim2.new(1, -26, 1, 0)
+                valText.Font = config.FontMedium
+                valText.Text = dDefault
+                valText.TextColor3 = colors.Text
+                valText.TextSize = 11
+                valText.TextXAlignment = Enum.TextXAlignment.Left
+                valText.ZIndex = 6
+
+                local arrow = Instance.new("TextLabel", selectBtn)
+                arrow.BackgroundTransparency = 1
+                arrow.AnchorPoint = Vector2.new(1, 0.5)
+                arrow.Position = UDim2.new(1, -6, 0.5, 0)
+                arrow.Size = UDim2.new(0, 14, 0, 14)
+                arrow.Font = config.Font
+                arrow.Text = "▼"
+                arrow.TextColor3 = colors.TextDim
+                arrow.TextSize = 8
+                arrow.ZIndex = 6
+
+                -- Panel
+                local fullHeight = #dOptions * 24 + 6
+                local dropPanel = Instance.new("Frame", selectBtn)
+                dropPanel.Position = UDim2.new(0, 0, 1, 2)
+                dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                dropPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+                dropPanel.BorderSizePixel = 0
+                dropPanel.Visible = false
+                dropPanel.ZIndex = 50
+                dropPanel.ClipsDescendants = true
+                Instance.new("UICorner", dropPanel).CornerRadius = UDim.new(0, 3)
+                local pStroke = Instance.new("UIStroke", dropPanel)
+                pStroke.Color = colors.Line
+                pStroke.Transparency = 0.5
+                local pLayout = Instance.new("UIListLayout", dropPanel)
+                pLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                local pPad = Instance.new("UIPadding", dropPanel)
+                pPad.PaddingTop = UDim.new(0, 3)
+                pPad.PaddingBottom = UDim.new(0, 3)
+
+                local optionButtons = {}
+                for idx, opt in ipairs(dOptions) do
+                    local optBtn = Instance.new("TextButton", dropPanel)
+                    optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                    optBtn.BackgroundTransparency = 1
+                    optBtn.BorderSizePixel = 0
+                    optBtn.Size = UDim2.new(1, 0, 0, 24)
+                    optBtn.Text = ""
+                    optBtn.ZIndex = 51
+                    optBtn.LayoutOrder = idx
+                    optBtn.AutoButtonColor = false
+                    optBtn.Selectable = false
+
+                    local optLabel = Instance.new("TextLabel", optBtn)
+                    optLabel.BackgroundTransparency = 1
+                    optLabel.Position = UDim2.new(0, 8, 0, 0)
+                    optLabel.Size = UDim2.new(1, -16, 1, 0)
+                    optLabel.Font = config.FontMedium
+                    optLabel.Text = opt
+                    optLabel.TextColor3 = (opt == dDefault) and colors.Main or colors.Text
+                    optLabel.TextSize = 11
+                    optLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    optLabel.ZIndex = 52
+
+                    optBtn.MouseEnter:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 0.5 })
+                        if dt.Value ~= opt then
+                            Library:Spring(optLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                        end
+                    end)
+                    optBtn.MouseLeave:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
+                        if dt.Value ~= opt then
+                            Library:Spring(optLabel, "Smooth", { TextColor3 = colors.Text })
+                        end
+                    end)
+                    optBtn.Activated:Connect(function()
+                        dt.Value = opt
+                        valText.Text = opt
+                        isOpen = false
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.15, function() dropPanel.Visible = false end)
+                        arrow.Text = "▼"
+                        for _, b in ipairs(optionButtons) do
+                            local l = b:FindFirstChildOfClass("TextLabel")
+                            if l then l.TextColor3 = (l.Text == opt) and colors.Main or colors.Text end
+                        end
+                        dCallback(opt)
+                    end)
+                    table.insert(optionButtons, optBtn)
+                end
+
+                local isOpen = false
+                selectBtn.Activated:Connect(function()
+                    isOpen = not isOpen
+                    if isOpen then
+                        dropPanel.Visible = true
+                        dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                        arrow.Text = "▲"
+                    else
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.15, function() dropPanel.Visible = false end)
+                        arrow.Text = "▼"
+                    end
+                end)
+
+                game:GetService("UserInputService").InputBegan:Connect(function(input)
+                    if isOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                        local mx, my = input.Position.X, input.Position.Y
+                        task.defer(function()
+                            if isOpen then
+                                local pp, ps = dropPanel.AbsolutePosition, dropPanel.AbsoluteSize
+                                local bp, bs = selectBtn.AbsolutePosition, selectBtn.AbsoluteSize
+                                local inP = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                                local inB = mx >= bp.X and mx <= bp.X + bs.X and my >= bp.Y and my <= bp.Y + bs.Y
+                                if not inP and not inB then
+                                    isOpen = false
+                                    Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                                    task.delay(0.15, function() dropPanel.Visible = false end)
+                                    arrow.Text = "▼"
+                                end
+                            end
+                        end)
+                    end
+                end)
+
+                -- Register for config save/load
+                Library:RegisterConfig(secName .. "." .. dName, "dropdowntoggle",
+                    function() return { value = dt.Value, enabled = dt.Enabled } end,
+                    function(val)
+                        if type(val) ~= "table" then return end
+                        if val.value ~= nil then
+                            dt.Value = val.value
+                            valText.Text = val.value
+                            for _, b in ipairs(optionButtons) do
+                                local l = b:FindFirstChildOfClass("TextLabel")
+                                if l then l.TextColor3 = (l.Text == val.value) and colors.Main or colors.Text end
+                            end
+                        end
+                        if val.enabled ~= nil then
+                            dt.Enabled = val.enabled
+                            cl1.BackgroundTransparency = val.enabled and 0 or 1
+                            cl2.BackgroundTransparency = val.enabled and 0 or 1
+                            chkFrame.BackgroundColor3 = val.enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                            chkStroke.Color = val.enabled and colors.Main or colors.Line
+                            chkStroke.Transparency = val.enabled and 0.3 or 0.5
+                        end
+                    end
+                )
+                table.insert(win._searchItems, { name = dName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return dt
+            end
+
+            -- ==============================
+            -- AddDropdown (standalone single-select, no toggle)
+            -- ==============================
+            function section:AddDropdown(dropOpts)
+                dropOpts = dropOpts or {}
+                local dName = dropOpts.Name or "Dropdown"
+                local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
+                local dDefault = dropOpts.Default or dOptions[1]
+                local dCallback = dropOpts.Callback or function() end
+                local dSaveKey = dropOpts.SaveKey
+
+                local dropdown = { Value = dDefault }
+
+                -- Row
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "Drop_" .. dName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+                row.ClipsDescendants = false
+
+                -- Label
+                local label = Instance.new("TextLabel", row)
+                label.BackgroundTransparency = 1
+                label.Size = UDim2.new(0.35, 0, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = dName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Select button
+                local selectBtn = Instance.new("TextButton", row)
+                selectBtn.AnchorPoint = Vector2.new(1, 0.5)
+                selectBtn.Position = UDim2.new(1, 0, 0.5, 0)
+                selectBtn.Size = UDim2.new(0.6, 0, 0, 18)
+                selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                selectBtn.BorderSizePixel = 0
+                selectBtn.Text = ""
+                selectBtn.ZIndex = 5
+                selectBtn.AutoButtonColor = false
+                selectBtn.Selectable = false
+                selectBtn.ClipsDescendants = false
+                Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0, 3)
+                local selStroke = Instance.new("UIStroke", selectBtn)
+                selStroke.Color = colors.Line
+                selStroke.Transparency = 0.5
+
+                local valText = Instance.new("TextLabel", selectBtn)
+                valText.BackgroundTransparency = 1
+                valText.Position = UDim2.new(0, 8, 0, 0)
+                valText.Size = UDim2.new(1, -26, 1, 0)
+                valText.Font = config.FontMedium
+                valText.Text = tostring(dDefault)
+                valText.TextColor3 = colors.Text
+                valText.TextSize = 11
+                valText.TextXAlignment = Enum.TextXAlignment.Left
+                valText.ZIndex = 6
+
+                local arrow = Instance.new("TextLabel", selectBtn)
+                arrow.BackgroundTransparency = 1
+                arrow.AnchorPoint = Vector2.new(1, 0.5)
+                arrow.Position = UDim2.new(1, -6, 0.5, 0)
+                arrow.Size = UDim2.new(0, 14, 0, 14)
+                arrow.Font = config.Font
+                arrow.Text = "▼"
+                arrow.TextColor3 = colors.TextDim
+                arrow.TextSize = 8
+                arrow.ZIndex = 6
+
+                -- Options panel
+                local fullHeight = #dOptions * 24 + 6
+                local dropPanel = Instance.new("Frame", selectBtn)
+                dropPanel.Position = UDim2.new(0, 0, 1, 2)
+                dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                dropPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+                dropPanel.BorderSizePixel = 0
+                dropPanel.Visible = false
+                dropPanel.ZIndex = 50
+                dropPanel.ClipsDescendants = true
+                Instance.new("UICorner", dropPanel).CornerRadius = UDim.new(0, 3)
+                local pStroke = Instance.new("UIStroke", dropPanel)
+                pStroke.Color = colors.Line
+                pStroke.Transparency = 0.5
+                local pLayout = Instance.new("UIListLayout", dropPanel)
+                pLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                local pPad = Instance.new("UIPadding", dropPanel)
+                pPad.PaddingTop = UDim.new(0, 3)
+                pPad.PaddingBottom = UDim.new(0, 3)
+
+                local optionButtons = {}
+                for idx, opt in ipairs(dOptions) do
+                    local optBtn = Instance.new("TextButton", dropPanel)
+                    optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                    optBtn.BackgroundTransparency = 1
+                    optBtn.BorderSizePixel = 0
+                    optBtn.Size = UDim2.new(1, 0, 0, 24)
+                    optBtn.Text = ""
+                    optBtn.ZIndex = 51
+                    optBtn.LayoutOrder = idx
+                    optBtn.AutoButtonColor = false
+                    optBtn.Selectable = false
+
+                    local optLabel = Instance.new("TextLabel", optBtn)
+                    optLabel.BackgroundTransparency = 1
+                    optLabel.Position = UDim2.new(0, 8, 0, 0)
+                    optLabel.Size = UDim2.new(1, -16, 1, 0)
+                    optLabel.Font = config.FontMedium
+                    optLabel.Text = opt
+                    optLabel.TextColor3 = (tostring(opt) == tostring(dDefault)) and colors.Main or colors.Text
+                    optLabel.TextSize = 11
+                    optLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    optLabel.ZIndex = 52
+
+                    optBtn.MouseEnter:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 0.5 })
+                        if dropdown.Value ~= opt then
+                            Library:Spring(optLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                        end
+                    end)
+                    optBtn.MouseLeave:Connect(function()
+                        Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
+                        if dropdown.Value ~= opt then
+                            Library:Spring(optLabel, "Smooth", { TextColor3 = colors.Text })
+                        end
+                    end)
+                    optBtn.Activated:Connect(function()
+                        dropdown.Value = opt
+                        valText.Text = tostring(opt)
+                        isOpen = false
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.15, function() dropPanel.Visible = false end)
+                        arrow.Text = "▼"
+                        for _, b in ipairs(optionButtons) do
+                            local l = b:FindFirstChildOfClass("TextLabel")
+                            if l then l.TextColor3 = (l.Text == tostring(opt)) and colors.Main or colors.Text end
+                        end
+                        dCallback(opt)
+                        Library:_markDirty()
+                    end)
+                    table.insert(optionButtons, optBtn)
+                end
+
+                local isOpen = false
+                selectBtn.Activated:Connect(function()
+                    isOpen = not isOpen
+                    if isOpen then
+                        dropPanel.Visible = true
+                        dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                        arrow.Text = "▲"
+                    else
+                        Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.15, function() dropPanel.Visible = false end)
+                        arrow.Text = "▼"
+                    end
+                end)
+
+                game:GetService("UserInputService").InputBegan:Connect(function(input)
+                    if isOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                        local mx, my = input.Position.X, input.Position.Y
+                        task.defer(function()
+                            if isOpen then
+                                local pp, ps = dropPanel.AbsolutePosition, dropPanel.AbsoluteSize
+                                local bp, bs = selectBtn.AbsolutePosition, selectBtn.AbsoluteSize
+                                local inP = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                                local inB = mx >= bp.X and mx <= bp.X + bs.X and my >= bp.Y and my <= bp.Y + bs.Y
+                                if not inP and not inB then
+                                    isOpen = false
+                                    Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+                                    task.delay(0.15, function() dropPanel.Visible = false end)
+                                    arrow.Text = "▼"
+                                end
+                            end
+                        end)
+                    end
+                end)
+
+                -- Config
+                if dSaveKey then
+                    Library:RegisterConfig(dSaveKey, "dropdown",
+                        function() return dropdown.Value end,
+                        function(val)
+                            dropdown.Value = val
+                            valText.Text = tostring(val)
+                            for _, b in ipairs(optionButtons) do
+                                local l = b:FindFirstChildOfClass("TextLabel")
+                                if l then l.TextColor3 = (l.Text == tostring(val)) and colors.Main or colors.Text end
+                            end
+                            dCallback(val)
+                        end
+                    )
+                end
+
+                table.insert(win._searchItems, { name = dName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return dropdown
+            end
+
+            -- ==============================
+            -- AddButton (clickable action button with icon)
+            -- ==============================
+            function section:AddButton(btnOpts)
+                btnOpts = btnOpts or {}
+                local bName = btnOpts.Name or "Button"
+                local bCallback = btnOpts.Callback or function() end
+
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "Button_" .. bName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+
+                -- Label
+                local label = Instance.new("TextLabel", row)
+                label.BackgroundTransparency = 1
+                label.Size = UDim2.new(1, -24, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = bName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Button box (right side)
+                local btnBox = Instance.new("TextButton", row)
+                btnBox.AnchorPoint = Vector2.new(1, 0.5)
+                btnBox.Position = UDim2.new(1, 0, 0.5, 0)
+                btnBox.Size = UDim2.new(0, 18, 0, 18)
+                btnBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                btnBox.BorderSizePixel = 0
+                btnBox.Text = ""
+                btnBox.ZIndex = 5
+                btnBox.AutoButtonColor = false
+                btnBox.Selectable = false
+                Instance.new("UICorner", btnBox).CornerRadius = UDim.new(0, 3)
+                local boxStroke = Instance.new("UIStroke", btnBox)
+                boxStroke.Color = colors.Line
+                boxStroke.Transparency = 0.5
+
+                -- Icon inside box
+                local icon = Instance.new("ImageLabel", btnBox)
+                icon.BackgroundTransparency = 1
+                icon.AnchorPoint = Vector2.new(0.5, 0.5)
+                icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+                icon.Size = UDim2.new(0, 12, 0, 12)
+                icon.Image = "rbxassetid://124717201027551"
+                icon.ImageColor3 = colors.TextDim
+                icon.ZIndex = 6
+
+                -- Hover
+                btnBox.MouseEnter:Connect(function()
+                    Library:Spring(boxStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                    Library:Spring(icon, "Smooth", { ImageColor3 = colors.Main })
+                end)
+                btnBox.MouseLeave:Connect(function()
+                    Library:Spring(boxStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                    Library:Spring(icon, "Smooth", { ImageColor3 = colors.TextDim })
+                end)
+
+                -- Click
+                btnBox.Activated:Connect(function()
+                    -- Flash effect
+                    Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Main })
+                    task.delay(0.2, function()
+                        Library:Spring(btnBox, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                    end)
+                    pcall(bCallback)
+                end)
+
+                table.insert(win._searchItems, { name = bName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return { Fire = bCallback }
+            end
+
+            -- ==============================
+            -- AddColorPicker (HSV color palette popup)
+            -- Adapted from 4lpaca-pin/Fatality
+            -- ==============================
+            function section:AddColorPicker(cpOpts)
+                cpOpts = cpOpts or {}
+                local cpName = cpOpts.Name or "Color"
+                local cpDefault = cpOpts.Default or Color3.fromRGB(255, 255, 255)
+                local cpCallback = cpOpts.Callback or function() end
+                local cpSaveKey = cpOpts.SaveKey
+
+                local cpicker = { Value = cpDefault }
+
+                -- Current HSV state
+                local hue, sat, val = cpDefault:ToHSV()
+
+                -- Row in section
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "ColorPicker_" .. cpName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+
+                local label = Instance.new("TextLabel", row)
+                label.BackgroundTransparency = 1
+                label.Size = UDim2.new(1, -24, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = cpName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Color preview box (clickable)
+                local colorBox = Instance.new("TextButton", row)
+                colorBox.AnchorPoint = Vector2.new(1, 0.5)
+                colorBox.Position = UDim2.new(1, 0, 0.5, 0)
+                colorBox.Size = UDim2.new(0, 18, 0, 18)
+                colorBox.BackgroundColor3 = cpDefault
+                colorBox.BorderSizePixel = 0
+                colorBox.Text = ""
+                colorBox.ZIndex = 5
+                colorBox.AutoButtonColor = false
+                colorBox.Selectable = false
+                Instance.new("UICorner", colorBox).CornerRadius = UDim.new(0, 3)
+                local boxStroke = Instance.new("UIStroke", colorBox)
+                boxStroke.Color = colors.Line
+                boxStroke.Transparency = 0.3
+
+                -- ====== POPUP PANEL (parented to window) ======
+                local cpPanel = Instance.new("Frame", clipFrame)
+                cpPanel.Name = "CP_" .. cpName
+                cpPanel.BackgroundColor3 = Color3.fromRGB(19, 19, 19)
+                cpPanel.BorderSizePixel = 0
+                cpPanel.Size = UDim2.new(0, 175, 0, 0) -- starts collapsed
+                cpPanel.Position = UDim2.new(0, 0, 0, 0)
+                cpPanel.ZIndex = 200
+                cpPanel.ClipsDescendants = true
+                cpPanel.Visible = false
+                cpPanel.Active = true
+                Instance.new("UICorner", cpPanel).CornerRadius = UDim.new(0, 4)
+                local cpStroke = Instance.new("UIStroke", cpPanel)
+                cpStroke.Color = Color3.fromRGB(40, 40, 40)
+                cpStroke.Transparency = 1
+
+                -- SV Box (saturation + value picker)
+                local svBox = Instance.new("ImageLabel", cpPanel)
+                svBox.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+                svBox.BorderSizePixel = 0
+                svBox.Position = UDim2.new(0, 7, 0, 7)
+                svBox.Size = UDim2.new(0, 135, 0, 135)
+                svBox.ZIndex = 201
+                svBox.Image = "http://www.roblox.com/asset/?id=112554223509763"
+                Instance.new("UICorner", svBox).CornerRadius = UDim.new(0, 2)
+                local svStroke = Instance.new("UIStroke", svBox)
+                svStroke.Color = Color3.fromRGB(29, 29, 29)
+
+                -- Crosshair on SV box
+                local crosshair = Instance.new("ImageLabel", svBox)
+                crosshair.BackgroundTransparency = 1
+                crosshair.AnchorPoint = Vector2.new(0.5, 0.5)
+                crosshair.Position = UDim2.new(sat, 0, 1 - val, 0)
+                crosshair.Size = UDim2.new(0, 12, 0, 12)
+                crosshair.ZIndex = 205
+                crosshair.Image = "rbxassetid://4805639000"
+
+                -- Hue rainbow bar (vertical)
+                local hueBar = Instance.new("Frame", cpPanel)
+                hueBar.AnchorPoint = Vector2.new(1, 0)
+                hueBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                hueBar.BorderSizePixel = 0
+                hueBar.Position = UDim2.new(1, -7, 0, 7)
+                hueBar.Size = UDim2.new(0, 20, 0, 135)
+                hueBar.ZIndex = 206
+                Instance.new("UICorner", hueBar).CornerRadius = UDim.new(0, 3)
+
+                local hueGrad = Instance.new("UIGradient", hueBar)
+                hueGrad.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
+                    ColorSequenceKeypoint.new(0.10, Color3.fromRGB(255, 153, 0)),
+                    ColorSequenceKeypoint.new(0.20, Color3.fromRGB(203, 255, 0)),
+                    ColorSequenceKeypoint.new(0.30, Color3.fromRGB(50, 255, 0)),
+                    ColorSequenceKeypoint.new(0.40, Color3.fromRGB(0, 255, 102)),
+                    ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 255, 255)),
+                    ColorSequenceKeypoint.new(0.60, Color3.fromRGB(0, 101, 255)),
+                    ColorSequenceKeypoint.new(0.70, Color3.fromRGB(50, 0, 255)),
+                    ColorSequenceKeypoint.new(0.80, Color3.fromRGB(204, 0, 255)),
+                    ColorSequenceKeypoint.new(0.90, Color3.fromRGB(255, 0, 153)),
+                    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 0))
+                }
+                hueGrad.Rotation = 90
+
+                -- Hue slider indicator
+                local hueSlide = Instance.new("Frame", hueBar)
+                hueSlide.AnchorPoint = Vector2.new(0.5, 0)
+                hueSlide.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                hueSlide.BorderSizePixel = 0
+                hueSlide.Position = UDim2.new(0.5, 0, hue, 0)
+                hueSlide.Size = UDim2.new(1, 5, 0, 2)
+                hueSlide.ZIndex = 207
+                local hsStroke = Instance.new("UIStroke", hueSlide)
+                hsStroke.Color = Color3.fromRGB(29, 29, 29)
+                hsStroke.Transparency = 0.75
+
+                -- Hex code display
+                local hexFrame = Instance.new("Frame", cpPanel)
+                hexFrame.AnchorPoint = Vector2.new(0.5, 0)
+                hexFrame.Position = UDim2.new(0.5, 0, 0, 149)
+                hexFrame.Size = UDim2.new(1, -15, 0, 18)
+                hexFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+                hexFrame.BackgroundTransparency = 0.4
+                hexFrame.BorderSizePixel = 0
+                hexFrame.ZIndex = 206
+                Instance.new("UICorner", hexFrame).CornerRadius = UDim.new(0, 4)
+
+                local hexText = Instance.new("TextLabel", hexFrame)
+                hexText.BackgroundTransparency = 1
+                hexText.Position = UDim2.new(0, 6, 0, 0)
+                hexText.Size = UDim2.new(1, -12, 1, 0)
+                hexText.Font = config.FontMedium
+                hexText.Text = "#" .. cpDefault:ToHex()
+                hexText.TextColor3 = Color3.fromRGB(255, 255, 255)
+                hexText.TextTransparency = 0.45
+                hexText.TextSize = 11
+                hexText.TextXAlignment = Enum.TextXAlignment.Left
+                hexText.ZIndex = 209
+
+                -- Update function
+                local function applyColor()
+                    local c = Color3.fromHSV(hue, sat, val)
+                    cpicker.Value = c
+                    colorBox.BackgroundColor3 = c
+                    svBox.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+                    hexText.Text = "#" .. c:ToHex()
+                    crosshair.Position = UDim2.new(sat, 0, 1 - val, 0)
+                    hueSlide.Position = UDim2.new(0.5, 0, hue, 0)
+                    pcall(cpCallback, c)
+                end
+
+                -- Panel open/close
+                local cpOpen = false
+                local UIS = game:GetService("UserInputService")
+                local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
+
+                local function openPanel()
+                    cpOpen = true
+                    local bp = colorBox.AbsolutePosition
+                    cpPanel.Position = UDim2.fromOffset(
+                        math.clamp(bp.X - 80, 10, clipFrame.AbsoluteSize.X - 185),
+                        math.clamp(bp.Y + 20 - clipFrame.AbsolutePosition.Y, 10, clipFrame.AbsoluteSize.Y - 185)
+                    )
+                    cpPanel.Visible = true
+                    cpPanel.Size = UDim2.new(0, 175, 0, 0)
+                    Library:Spring(cpPanel, "Smooth", { Size = UDim2.new(0, 175, 0, 175) })
+                    Library:Spring(cpStroke, "Smooth", { Transparency = 0 })
+                end
+
+                local function closePanel()
+                    cpOpen = false
+                    Library:Spring(cpPanel, "Smooth", { Size = UDim2.new(0, 175, 0, 0) })
+                    Library:Spring(cpStroke, "Smooth", { Transparency = 1 })
+                    task.delay(0.2, function()
+                        if not cpOpen then cpPanel.Visible = false end
+                    end)
+                end
+
+                colorBox.Activated:Connect(function()
+                    if cpOpen then closePanel() else openPanel() end
+                end)
+
+                -- Click outside to close
+                UIS.InputBegan:Connect(function(input)
+                    if not cpOpen then return end
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        task.defer(function()
+                            if not cpOpen then return end
+                            local pp, ps = cpPanel.AbsolutePosition, cpPanel.AbsoluteSize
+                            local mx, my = input.Position.X, input.Position.Y
+                            local inPanel = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                            local bp, bs = colorBox.AbsolutePosition, colorBox.AbsoluteSize
+                            local inBox = mx >= bp.X and mx <= bp.X + bs.X and my >= bp.Y and my <= bp.Y + bs.Y
+                            if not inPanel and not inBox then closePanel() end
+                        end)
+                    end
+                end)
+
+                -- SV box drag
+                svBox.InputBegan:Connect(function(input)
+                    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                    local dragging = true
+                    local conn
+                    conn = game:GetService("RunService").Heartbeat:Connect(function()
+                        if not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                            dragging = false
+                            if conn then conn:Disconnect() end
+                            return
+                        end
+                        local px, py = svBox.AbsolutePosition.X, svBox.AbsolutePosition.Y
+                        local sx, sy = svBox.AbsoluteSize.X, svBox.AbsoluteSize.Y
+                        sat = math.clamp((Mouse.X - px) / sx, 0, 1)
+                        val = 1 - math.clamp((Mouse.Y - py) / sy, 0, 1)
+                        applyColor()
+                    end)
+                end)
+
+                -- Hue bar drag
+                hueBar.InputBegan:Connect(function(input)
+                    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                    local conn
+                    conn = game:GetService("RunService").Heartbeat:Connect(function()
+                        if not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                            if conn then conn:Disconnect() end
+                            return
+                        end
+                        local py = hueBar.AbsolutePosition.Y
+                        local sy = hueBar.AbsoluteSize.Y
+                        hue = math.clamp((Mouse.Y - py) / sy, 0, 1)
+                        applyColor()
+                    end)
+                end)
+
+                -- Config save/load
+                if cpSaveKey then
+                    Library:RegisterConfig(cpSaveKey, "colorpicker",
+                        function()
+                            local c = cpicker.Value
+                            return { R = math.floor(c.R * 255), G = math.floor(c.G * 255), B = math.floor(c.B * 255) }
+                        end,
+                        function(v)
+                            if type(v) ~= "table" then return end
+                            local c = Color3.fromRGB(v.R or 255, v.G or 255, v.B or 255)
+                            hue, sat, val = c:ToHSV()
+                            applyColor()
+                        end
+                    )
+                end
+
+                table.insert(win._searchItems, { name = cpName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return cpicker
+            end
+
+            -- ==============================
+            -- AddHitboxPreview (interactive body part selector)
+            -- ==============================
+            function section:AddHitboxPreview(opts)
+                opts = opts or {}
+                local hName = opts.Name or "Hitbox Preview"
+                local hParts = opts.Parts or {"Head", "Chest", "Stomach", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+                local hDefault = {}
+                if opts.Default then
+                    for _, p in ipairs(opts.Default) do hDefault[p] = true end
+                end
+                local hCallback = opts.Callback or function() end
+                local hLinked = opts.LinkedDropdown or nil -- ref to a multi-dropdown object
+
+                local hitbox = { Selected = hDefault, Visible = false }
+
+                -- Toggle row in section
+                local row = Instance.new("Frame", contentContainer)
+                row.Name = "HitboxPreview_" .. hName
+                row.BackgroundTransparency = 1
+                row.BorderSizePixel = 0
+                row.Size = UDim2.new(1, 0, 0, 22)
+                row.ZIndex = 5
+
+                local label = Instance.new("TextLabel", row)
+                label.BackgroundTransparency = 1
+                label.Size = UDim2.new(1, -20, 1, 0)
+                label.Font = config.FontMedium
+                label.Text = hName
+                label.TextColor3 = colors.Text
+                label.TextSize = 12
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.ZIndex = 5
+
+                -- Checkbox (right side)
+                local chkFrame = Instance.new("Frame", row)
+                chkFrame.AnchorPoint = Vector2.new(1, 0.5)
+                chkFrame.Position = UDim2.new(1, 0, 0.5, 0)
+                chkFrame.Size = UDim2.new(0, 18, 0, 18)
+                chkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                chkFrame.BorderSizePixel = 0
+                chkFrame.ZIndex = 5
+                Instance.new("UICorner", chkFrame).CornerRadius = UDim.new(0, 3)
+                local chkStroke = Instance.new("UIStroke", chkFrame)
+                chkStroke.Color = colors.Line
+                chkStroke.Transparency = 0.5
+
+                local cl1 = Instance.new("ImageLabel", chkFrame)
+                cl1.BackgroundTransparency = 1
+                cl1.AnchorPoint = Vector2.new(0.5, 0.5)
+                cl1.Position = UDim2.new(0.5, 0, 0.5, 0)
+                cl1.Size = UDim2.new(0, 10, 0, 10)
+                cl1.Image = "rbxassetid://122354904349171"
+                cl1.ImageColor3 = colors.Main
+                cl1.ImageTransparency = 1
+                cl1.ZIndex = 6
+                local cl2 = cl1 -- alias for existing references
+
+                local clickBtn = Instance.new("TextButton", row)
+                clickBtn.BackgroundTransparency = 1
+                clickBtn.Size = UDim2.new(1, 0, 1, 0)
+                clickBtn.ZIndex = 7
+                clickBtn.Text = ""
+                clickBtn.AutoButtonColor = false
+                clickBtn.Selectable = false
+                clickBtn.BorderSizePixel = 0
+
+                -- ==============================
+                -- FLOATING HITBOX PANEL (child of main, outside clipFrame)
+                -- ==============================
+                local panelW = 150
+                local panelH = config.WindowHeight - 60
+                local hPanel = Instance.new("Frame", main)
+                hPanel.Name = "HitboxPanel"
+                hPanel.AnchorPoint = Vector2.new(0, 0.5)
+                hPanel.Position = UDim2.new(1, 4, 0.5, 0)
+                hPanel.Size = UDim2.fromOffset(panelW, panelH)
+                hPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                hPanel.BorderSizePixel = 0
+                hPanel.Visible = false
+                hPanel.ZIndex = 90
+                Instance.new("UICorner", hPanel).CornerRadius = UDim.new(0, 5)
+                local hpStroke = Instance.new("UIStroke", hPanel)
+                hpStroke.Color = colors.Line
+                hpStroke.Transparency = 0.3
+
+                -- ==============================
+                -- MANUALLY BUILT CHARACTER SILHOUETTE
+                -- ==============================
+                local bodyColor = Color3.fromRGB(45, 45, 45)
+                local outlineColor = Color3.fromRGB(55, 55, 55)
+
+                -- Character container (centered in panel)
+                local charFrame = Instance.new("Frame", hPanel)
+                charFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+                charFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+                charFrame.Size = UDim2.new(0, 90, 0, 210)
+                charFrame.BackgroundTransparency = 1
+                charFrame.ZIndex = 91
+
+                -- Helper: create a body part frame (TextButton for clickability)
+                local function makeBodyPart(parent, posX, posY, sizeX, sizeY, cornerRadius)
+                    local f = Instance.new("TextButton", parent)
+                    f.AnchorPoint = Vector2.new(0.5, 0)
+                    f.Position = UDim2.fromOffset(posX, posY)
+                    f.Size = UDim2.fromOffset(sizeX, sizeY)
+                    f.BackgroundColor3 = bodyColor
+                    f.BorderSizePixel = 0
+                    f.ZIndex = 91
+                    f.Text = ""
+                    f.AutoButtonColor = false
+                    f.Selectable = false
+                    Instance.new("UICorner", f).CornerRadius = UDim.new(0, cornerRadius or 3)
+                    local s = Instance.new("UIStroke", f)
+                    s.Color = outlineColor
+                    s.Transparency = 0.4
+                    return f
+                end
+
+                -- Head (circle)
+                local headPart = makeBodyPart(charFrame, 45, 0, 28, 28, 14)
+
+                -- Neck
+                makeBodyPart(charFrame, 45, 28, 10, 8, 2)
+
+                -- Torso (chest area)
+                local torsoPart = makeBodyPart(charFrame, 45, 36, 44, 40, 4)
+
+                -- Stomach
+                local stomachPart = makeBodyPart(charFrame, 45, 76, 44, 32, 4)
+
+                -- Left Arm
+                local lArmPart = makeBodyPart(charFrame, 14, 36, 18, 72, 4)
+
+                -- Right Arm
+                local rArmPart = makeBodyPart(charFrame, 76, 36, 18, 72, 4)
+
+                -- Left Leg
+                local lLegPart = makeBodyPart(charFrame, 33, 108, 20, 70, 4)
+
+                -- Right Leg
+                local rLegPart = makeBodyPart(charFrame, 57, 108, 20, 70, 4)
+
+                -- Shoes
+                makeBodyPart(charFrame, 33, 175, 22, 14, 4)
+                makeBodyPart(charFrame, 57, 175, 22, 14, 4)
+
+                -- ==============================
+                -- BODY PART BUTTONS (+)
+                -- ==============================
+                -- Format: { name, body frame ref, offsetX, offsetY }
+                local partDefs = {
+                    { "Head",      headPart,    0, 0 },
+                    { "Chest",     torsoPart,   0, 0 },
+                    { "Stomach",   stomachPart, 0, 0 },
+                    { "Left Arm",  lArmPart,    0, 6 },
+                    { "Right Arm", rArmPart,    0, 6 },
+                    { "Left Leg",  lLegPart,    0, 10 },
+                    { "Right Leg", rLegPart,    0, 10 },
+                }
+
+                local partButtons = {}
+
+                local function updatePartVisual(partName, selected)
+                    local pbt = partButtons[partName]
+                    if not pbt then return end
+                    if selected then
+                        Library:Spring(pbt.bodyFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(80, 30, 40) })
+                        Library:Spring(pbt.btn, "Smooth", { BackgroundColor3 = colors.Main, BackgroundTransparency = 0 })
+                        Library:Spring(pbt.label, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                    else
+                        Library:Spring(pbt.bodyFrame, "Smooth", { BackgroundColor3 = bodyColor })
+                        Library:Spring(pbt.btn, "Smooth", { BackgroundColor3 = Color3.fromRGB(60, 60, 60), BackgroundTransparency = 0.3 })
+                        Library:Spring(pbt.label, "Smooth", { TextColor3 = colors.TextDim })
+                    end
+                end
+
+                local function syncToLinked()
+                    if not hLinked then return end
+                    if hLinked.Values then
+                        for k in pairs(hLinked.Values) do hLinked.Values[k] = nil end
+                        for k, v in pairs(hitbox.Selected) do
+                            if v then hLinked.Values[k] = true end
+                        end
+                        if hLinked.Refresh then hLinked:Refresh() end
+                    end
+                end
+
+                local function onPartToggle(partName)
+                    -- Sync FROM linked dropdown first to get current state
+                    if hLinked and hLinked.Values then
+                        for pName, _ in pairs(partButtons) do
+                            hitbox.Selected[pName] = hLinked.Values[pName] or false
+                        end
+                    end
+                    -- Now toggle
+                    hitbox.Selected[partName] = not hitbox.Selected[partName]
+                    -- Update ALL visuals
+                    for pName, _ in pairs(partButtons) do
+                        updatePartVisual(pName, hitbox.Selected[pName] or false)
+                    end
+                    syncToLinked()
+                    hCallback(hitbox.Selected)
+                    Library:_markDirty()
+                end
+
+                for _, pDef in ipairs(partDefs) do
+                    local pName = pDef[1]
+                    local bodyFrame = pDef[2]
+
+                    local allowed = false
+                    for _, p in ipairs(hParts) do
+                        if p == pName then allowed = true break end
+                    end
+                    if not allowed then continue end
+
+                    -- + indicator (Frame, not TextButton — clicks pass through to bodyFrame)
+                    local pBtn = Instance.new("Frame", bodyFrame)
+                    pBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+                    pBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
+                    pBtn.Size = UDim2.new(0, 18, 0, 18)
+                    pBtn.BackgroundColor3 = hitbox.Selected[pName] and colors.Main or Color3.fromRGB(60, 60, 60)
+                    pBtn.BackgroundTransparency = hitbox.Selected[pName] and 0 or 0.3
+                    pBtn.BorderSizePixel = 0
+                    pBtn.ZIndex = 93
+                    Instance.new("UICorner", pBtn).CornerRadius = UDim.new(1, 0)
+
+                    local pLabel = Instance.new("TextLabel", pBtn)
+                    pLabel.BackgroundTransparency = 1
+                    pLabel.Size = UDim2.new(1, 0, 1, 0)
+                    pLabel.Font = Enum.Font.GothamBold
+                    pLabel.Text = "+"
+                    pLabel.TextColor3 = hitbox.Selected[pName] and Color3.fromRGB(255, 255, 255) or colors.TextDim
+                    pLabel.TextSize = 14
+                    pLabel.ZIndex = 94
+
+                    partButtons[pName] = { btn = pBtn, label = pLabel, bodyFrame = bodyFrame }
+
+                    -- Highlight the body part if default selected
+                    if hitbox.Selected[pName] then
+                        bodyFrame.BackgroundColor3 = Color3.fromRGB(80, 30, 40)
+                    end
+
+                    -- Click anywhere on body part (bodyFrame is a TextButton)
+                    bodyFrame.Activated:Connect(function()
+                        onPartToggle(pName)
+                    end)
+
+                    -- Hover on body part frame
+                    bodyFrame.MouseEnter:Connect(function()
+                        if not hitbox.Selected[pName] then
+                            Library:Spring(bodyFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(55, 55, 55) })
+                        end
+                        Library:Spring(pBtn, "Smooth", { BackgroundTransparency = 0 })
+                    end)
+                    bodyFrame.MouseLeave:Connect(function()
+                        local sel = hitbox.Selected[pName]
+                        Library:Spring(bodyFrame, "Smooth", { BackgroundColor3 = sel and Color3.fromRGB(80, 30, 40) or bodyColor })
+                        Library:Spring(pBtn, "Smooth", { BackgroundTransparency = sel and 0 or 0.3 })
+                    end)
+                end
+
+                -- Sync FROM linked dropdown
+                if hLinked then
+                    -- Initial sync
+                    task.defer(function()
+                        if hLinked.Values then
+                            for _, pDef in ipairs(partDefs) do
+                                local pName = pDef[1]
+                                hitbox.Selected[pName] = hLinked.Values[pName] or false
+                                updatePartVisual(pName, hitbox.Selected[pName])
+                            end
+                        end
+                    end)
+                    -- Live sync: dropdown notifies us on every change
+                    hLinked._onChange = function()
+                        if hLinked.Values then
+                            for pName, _ in pairs(partButtons) do
+                                hitbox.Selected[pName] = hLinked.Values[pName] or false
+                                updatePartVisual(pName, hitbox.Selected[pName])
+                            end
+                        end
+                    end
+                end
+
+                -- Method to update from external source
+                function hitbox:SetParts(selected)
+                    for k in pairs(hitbox.Selected) do hitbox.Selected[k] = nil end
+                    for k, v in pairs(selected) do hitbox.Selected[k] = v end
+                    for pName, _ in pairs(partButtons) do
+                        updatePartVisual(pName, hitbox.Selected[pName] or false)
+                    end
+                end
+
+                -- Toggle panel visibility
+                local function togglePanel()
+                    hitbox.Visible = not hitbox.Visible
+                    if hitbox.Visible then
+                        Library:Spring(cl1, "Smooth", { ImageTransparency = 0 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                        hPanel.Visible = true
+                        -- Sync from linked on show
+                        if hLinked and hLinked.Values then
+                            for pName, _ in pairs(partButtons) do
+                                hitbox.Selected[pName] = hLinked.Values[pName] or false
+                                updatePartVisual(pName, hitbox.Selected[pName])
+                            end
+                        end
+                    else
+                        Library:Spring(cl1, "Smooth", { ImageTransparency = 1 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                        hPanel.Visible = false
+                    end
+                end
+
+                clickBtn.Activated:Connect(togglePanel)
+
+                -- Register for search
+                table.insert(win._searchItems, { name = hName, menuName = menuName, secName = secName, menuRef = menu })
+
+                return hitbox
+            end
+
+            return section
+        end
+
+        return menu
+    end
 
     -- Store refs
     win._main = main
-    win._shadow = shadowFrame
-    win._library = self
-    win._spr = spr
+    win._sg = sg
+    win._library = Library
+
+    -- Auto-load config if ConfigName was provided
+    if configName then
+        task.defer(function()
+            task.wait(0.1) -- Wait for all components to register
+            pcall(function() Library:LoadConfig() end)
+        end)
+    end
 
     return win
 end
