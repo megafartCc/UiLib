@@ -172,21 +172,6 @@ function Library:CreateWindow(opts)
         }
     }
 
-    local resizeCursor = Instance.new("TextLabel", sg)
-    resizeCursor.Name = "ResizeCursor"
-    resizeCursor.AnchorPoint = Vector2.new(0.5, 0.5)
-    resizeCursor.BackgroundTransparency = 1
-    resizeCursor.BorderSizePixel = 0
-    resizeCursor.Size = UDim2.fromOffset(22, 22)
-    resizeCursor.Font = config.Font
-    resizeCursor.Text = utf8.char(8596)
-    resizeCursor.TextColor3 = Color3.fromRGB(255, 255, 255)
-    resizeCursor.TextSize = 18
-    resizeCursor.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    resizeCursor.TextStrokeTransparency = 0.2
-    resizeCursor.Visible = false
-    resizeCursor.ZIndex = 250
-
     -- ==============================
     -- HEADER BAR (40px)
     -- ==============================
@@ -897,36 +882,8 @@ function Library:CreateWindow(opts)
     local resizeBorder = config.ResizeBorder or 8
     local minWindowWidth = math.max(config.MinWindowWidth or 640, 520)
     local minWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
-    local resizeCursorOwnsMouseIcon = false
-    local resizeCursorRotation = {
-        left = 0,
-        right = 0,
-        top = 90,
-        bottom = 90,
-        topLeft = -45,
-        bottomRight = -45,
-        topRight = 45,
-        bottomLeft = 45,
-    }
 
-    setResizeCursor = function(direction, mousePosition)
-        if direction and win.Visible and main.Visible and UserInputService.MouseEnabled then
-            resizeCursor.Position = UDim2.fromOffset(mousePosition.X + 12, mousePosition.Y + 10)
-            resizeCursor.Rotation = resizeCursorRotation[direction] or 0
-            resizeCursor.Visible = true
-
-            if not resizeCursorOwnsMouseIcon then
-                UserInputService.MouseIconEnabled = false
-                resizeCursorOwnsMouseIcon = true
-            end
-            return
-        end
-
-        resizeCursor.Visible = false
-        if resizeCursorOwnsMouseIcon then
-            UserInputService.MouseIconEnabled = true
-            resizeCursorOwnsMouseIcon = false
-        end
+    setResizeCursor = function()
     end
 
     local function getResizeDirection(position)
