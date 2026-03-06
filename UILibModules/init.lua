@@ -6,7 +6,7 @@ return function(moduleRequire)
 
     moduleRequire("motion.lua")(Library, context)
     moduleRequire("config.lua")(Library, context)
-    moduleRequire("window.lua")(Library, context)
+    moduleRequire("window.lua")(Library, context, moduleRequire)
 
     return Library
 end
