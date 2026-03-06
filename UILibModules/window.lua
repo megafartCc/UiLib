@@ -52,6 +52,82 @@ function Library:CreateWindow(opts)
         return string.format("%s_%d", prefix or "Cleanup", cleanupKeySeed)
     end
 
+    local smoothScrollStates = {}
+
+    local function createSmoothScrollState(opts)
+        local state = {
+            current = opts.InitialOffset or 0,
+            target = opts.InitialOffset or 0,
+            speed = opts.Speed or 18,
+            epsilon = opts.Epsilon or 0.1,
+            getMaxOffset = opts.GetMaxOffset,
+            apply = opts.Apply,
+            _lastApplied = nil,
+        }
+
+        function state:_clamp()
+            local maxOffset = math.max(0, self.getMaxOffset())
+            self.target = math.clamp(self.target, 0, maxOffset)
+            self.current = math.clamp(self.current, 0, maxOffset)
+            return maxOffset
+        end
+
+        function state:SetTarget(offset, snap)
+            local maxOffset = math.max(0, self.getMaxOffset())
+            self.target = math.clamp(offset, 0, maxOffset)
+            if snap then
+                self.current = self.target
+            end
+
+            self.apply(self.current)
+            self._lastApplied = self.current
+        end
+
+        function state:ScrollBy(delta)
+            self:SetTarget(self.target + delta, false)
+        end
+
+        function state:Refresh(snap)
+            self:SetTarget(self.target, snap)
+        end
+
+        function state:Destroy()
+            smoothScrollStates[self] = nil
+        end
+
+        smoothScrollStates[state] = true
+        state:Refresh(true)
+
+        return state
+    end
+
+    trackGlobal(RunService.RenderStepped:Connect(function(dt)
+        for state in pairs(smoothScrollStates) do
+            state:_clamp()
+
+            if math.abs(state.target - state.current) <= state.epsilon then
+                if state.current ~= state.target then
+                    state.current = state.target
+                end
+
+                if state._lastApplied ~= state.current then
+                    state.apply(state.current)
+                    state._lastApplied = state.current
+                end
+            else
+                local alpha = 1 - math.exp(-state.speed * dt)
+                state.current += (state.target - state.current) * alpha
+
+                if math.abs(state.target - state.current) <= state.epsilon then
+                    state.current = state.target
+                end
+
+                state.apply(state.current)
+                state._lastApplied = state.current
+            end
+        end
+    end), "SmoothScrollTick")
+
     local popupManager = moduleRequire("popup_manager.lua")(Library, {
         nextCleanupKey = nextCleanupKey,
         trackGlobal = trackGlobal,
@@ -258,15 +334,23 @@ function Library:CreateWindow(opts)
     tabListLayout.Padding = UDim.new(0, 4)
 
     -- Horizontal scroll for tabs
-    local tabScrollOffset = 0
     local TAB_SCROLL_STEP = 40
+    local tabScrollState = createSmoothScrollState({
+        Speed = 16,
+        GetMaxOffset = function()
+            local contentW = tabListLayout.AbsoluteContentSize.X + 4
+            local visibleW = menuBtnCont.AbsoluteSize.X
+            return math.max(0, contentW - visibleW)
+        end,
+        Apply = function(offset)
+            tbc.Position = UDim2.new(0, -math.floor(offset + 0.5), 0.5, 0)
+        end,
+    })
+    track(tabScrollState, "Destroy", nextCleanupKey("TabScrollState"))
+
     menuBtnCont.InputChanged:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-        local contentW = tabListLayout.AbsoluteContentSize.X + 4
-        local visibleW = menuBtnCont.AbsoluteSize.X
-        local maxScroll = math.max(0, contentW - visibleW)
-        tabScrollOffset = math.clamp(tabScrollOffset - input.Position.Z * TAB_SCROLL_STEP, 0, maxScroll)
-        tbc.Position = UDim2.new(0, -tabScrollOffset, 0.5, 0)
+        tabScrollState:ScrollBy(-input.Position.Z * TAB_SCROLL_STEP)
     end)
 
     -- ==============================
@@ -772,18 +856,26 @@ function Library:CreateWindow(opts)
     resultsLayout.Padding = UDim.new(0, 2)
 
     -- Search scroll state
-    local searchScrollOffset = 0
     local SEARCH_SCROLL_STEP = 30
+    local searchScrollState = createSmoothScrollState({
+        Speed = 16,
+        GetMaxOffset = function()
+            local contentH = resultsLayout.AbsoluteContentSize.Y + 4
+            local visibleH = resultsFrame.AbsoluteSize.Y
+            return math.max(0, contentH - visibleH)
+        end,
+        Apply = function(offset)
+            resultsInner.Position = UDim2.new(0, 0, 0, -math.floor(offset + 0.5))
+        end,
+    })
+    track(searchScrollState, "Destroy", nextCleanupKey("SearchScrollState"))
+
     trackGlobal(UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
         local mp = UserInputService:GetMouseLocation()
         local ap, as = resultsFrame.AbsolutePosition, resultsFrame.AbsoluteSize
         if mp.X < ap.X or mp.X > ap.X + as.X or mp.Y < ap.Y or mp.Y > ap.Y + as.Y then return end
-        local contentH = resultsLayout.AbsoluteContentSize.Y + 4
-        local visibleH = resultsFrame.AbsoluteSize.Y
-        local maxScroll = math.max(0, contentH - visibleH)
-        searchScrollOffset = math.clamp(searchScrollOffset - input.Position.Z * SEARCH_SCROLL_STEP, 0, maxScroll)
-        resultsInner.Position = UDim2.new(0, 0, 0, -searchScrollOffset)
+        searchScrollState:ScrollBy(-input.Position.Z * SEARCH_SCROLL_STEP)
     end), "SearchScroll")
 
     local SEARCH_PANEL_HEIGHT = 250
@@ -800,8 +892,7 @@ function Library:CreateWindow(opts)
 
     local function doSearch(query)
         clearResults()
-        searchScrollOffset = 0
-        resultsInner.Position = UDim2.new(0, 0, 0, 0)
+        searchScrollState:SetTarget(0, true)
         query = string.lower(query)
 
         local idx = 0
@@ -1668,25 +1759,28 @@ function Library:CreateWindow(opts)
             colPad.PaddingTop = UDim.new(0, 4)
 
             -- Mouse wheel scroll (frame-level to consume input)
-            local scrollOffset = 0
             local BASE_SCROLL_STEP = 30
+            local scrollState = createSmoothScrollState({
+                Speed = 14,
+                GetMaxOffset = function()
+                    local contentH = colLayout.AbsoluteContentSize.Y + 8
+                    local visibleH = getVisibleColumnHeight()
+                    return math.max(0, contentH - visibleH)
+                end,
+                Apply = function(offset)
+                    inner.Position = UDim2.new(0, 0, 0, -math.floor(offset + 0.5))
+                end,
+            })
+            track(scrollState, "Destroy", nextCleanupKey("ColumnScrollState"))
 
             local function refreshScroll()
-                local contentH = colLayout.AbsoluteContentSize.Y + 8
-                local visibleH = getVisibleColumnHeight()
-                local maxScroll = math.max(0, contentH - visibleH)
-                scrollOffset = math.clamp(scrollOffset, 0, maxScroll)
-                inner.Position = UDim2.new(0, 0, 0, -scrollOffset)
+                scrollState:Refresh(false)
             end
 
             col.InputChanged:Connect(function(input)
                 if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-                local contentH = colLayout.AbsoluteContentSize.Y + 8
-                local visibleH = getVisibleColumnHeight()
-                local maxScroll = math.max(0, contentH - visibleH)
                 local scrollStep = BASE_SCROLL_STEP / math.max(currentContentScale, 0.01)
-                scrollOffset = math.clamp(scrollOffset - input.Position.Z * scrollStep, 0, maxScroll)
-                refreshScroll()
+                scrollState:ScrollBy(-input.Position.Z * scrollStep)
             end)
 
             table.insert(menu._columnScrollers, refreshScroll)
