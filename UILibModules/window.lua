@@ -36,6 +36,7 @@ function Library:CreateWindow(opts)
         _fusionScope = scope,
         _janitor = janitor,
     }
+    local startupReady = false
     local setResizeCursor
 
     local function track(taskObject, methodName, key)
@@ -239,6 +240,7 @@ function Library:CreateWindow(opts)
         Position = UDim2.new(0.5, 0, 0.2, 0),
         Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight),
         ClipsDescendants = false,
+        Visible = false,
         SelectionImageObject = blankSel,
         [FusionChildren] = {
             scope:New "UICorner" {
@@ -1289,12 +1291,17 @@ function Library:CreateWindow(opts)
 
     local function syncFloatingPanels()
         for panel, state in pairs(win._floatingPanels) do
-            panel.Visible = win.Visible and state.Active or false
+            panel.Visible = startupReady and win.Visible and state.Active or false
         end
     end
 
     local function smoothToggle()
         win.Visible = not win.Visible
+
+        if not startupReady then
+            syncFloatingPanels()
+            return
+        end
 
         if win.Visible then
             main.Visible = true
@@ -3392,7 +3399,7 @@ function Library:CreateWindow(opts)
                         
                         -- Set active state so the UI toggle will show it, and show it now if window is open
                         win._floatingPanels[hPanel] = { Active = true }
-                        if win.Visible then hPanel.Visible = true end
+                        if startupReady and win.Visible then hPanel.Visible = true end
                         
                         -- Sync from linked on show
                         syncFromLinked()
@@ -3464,13 +3471,35 @@ function Library:CreateWindow(opts)
     win._sg = sg
     win._library = Library
 
-    -- Auto-load config if ConfigName was provided
-    if configName then
-        task.defer(function()
-            task.wait(0.1) -- Wait for all components to register
-            pcall(function() Library:LoadConfig() end)
-        end)
-    end
+    task.defer(function()
+        RunService.Heartbeat:Wait()
+
+        if win._destroyed then
+            return
+        end
+
+        if configName then
+            pcall(function()
+                Library:LoadConfig()
+            end)
+        end
+
+        if win._destroyed then
+            return
+        end
+
+        refreshMenuScrolls()
+        startupReady = true
+
+        if win.Visible then
+            main.Visible = true
+            main.Size = fullWindowSize
+            clipFrame.Size = fullClipSize
+            updateResizeHover(UserInputService:GetMouseLocation())
+        end
+
+        syncFloatingPanels()
+    end)
 
     return win
 end
