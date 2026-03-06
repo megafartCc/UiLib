@@ -877,7 +877,7 @@ function Library:CreateWindow(opts)
     -- DRAGGING / RESIZING
     -- ==============================
     local dragInput, dragStart, startPos
-    local resizeInput, resizeStart, resizeBounds
+    local resizeStart, resizeBounds, resizeInputType, resizeEndInputType
     local resizeDirection, hoverResizeDirection
     local resizeBorder = config.ResizeBorder or 8
     local minWindowWidth = math.max(config.MinWindowWidth or 640, 520)
@@ -998,8 +998,9 @@ function Library:CreateWindow(opts)
         end
 
         resizeDirection = direction
-        resizeInput = input
         resizeStart = input.Position
+        resizeInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
+        resizeEndInputType = input.UserInputType
         resizeBounds = {
             left = main.AbsolutePosition.X,
             top = main.AbsolutePosition.Y,
@@ -1027,7 +1028,11 @@ function Library:CreateWindow(opts)
             return
         end
 
-        if input ~= resizeInput or not win.Resizing or not resizeBounds then
+        if not win.Resizing or not resizeBounds then
+            return
+        end
+
+        if resizeInputType and input.UserInputType ~= resizeInputType then
             return
         end
 
@@ -1068,13 +1073,14 @@ function Library:CreateWindow(opts)
     end), "WindowDragResize")
 
     trackGlobal(UserInputService.InputEnded:Connect(function(input)
-        if input ~= resizeInput then
+        if not win.Resizing or not resizeEndInputType or input.UserInputType ~= resizeEndInputType then
             return
         end
 
-        resizeInput = nil
         resizeStart = nil
         resizeBounds = nil
+        resizeInputType = nil
+        resizeEndInputType = nil
         resizeDirection = nil
         win.Resizing = false
         updateResizeHover(UserInputService:GetMouseLocation())
@@ -1106,9 +1112,10 @@ function Library:CreateWindow(opts)
             closeTransientPopups()
             hoverResizeDirection = nil
             resizeDirection = nil
-            resizeInput = nil
             resizeStart = nil
             resizeBounds = nil
+            resizeInputType = nil
+            resizeEndInputType = nil
             win.Resizing = false
             setResizeCursor(nil, Vector2.new(0, 0))
             main.Visible = false

@@ -1,5 +1,7 @@
 return function(Library, context)
     local UserInputService = context.UserInputService
+    local DROPDOWN_ARROW_CLOSED = utf8.char(9660)
+    local DROPDOWN_ARROW_OPEN = utf8.char(9650)
 
     local function resolveDropdownValue(options, rawValue, allowFallback)
         if type(options) ~= "table" or #options == 0 then
@@ -194,7 +196,7 @@ return function(Library, context)
         selArrow.Position = UDim2.new(1, -4, 0.5, 0)
         selArrow.Size = UDim2.new(0, 12, 0, 12)
         selArrow.Font = base.config.Font
-        selArrow.Text = "â–¼"
+        selArrow.Text = DROPDOWN_ARROW_CLOSED
         selArrow.TextColor3 = base.colors.TextDim
         selArrow.TextSize = 7
         selArrow.ZIndex = 6
@@ -273,7 +275,7 @@ return function(Library, context)
                 dropdown.Value = opt
                 selVal.Text = tostring(opt)
                 closeDropdown()
-                selArrow.Text = "â–¼"
+                selArrow.Text = DROPDOWN_ARROW_CLOSED
                 for _, button in ipairs(optBtns) do
                     local label = button:FindFirstChildOfClass("TextLabel")
                     if label then
@@ -293,10 +295,10 @@ return function(Library, context)
                 dPanel.Visible = true
                 dPanel.Size = UDim2.new(1, 0, 0, 0)
                 Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
-                selArrow.Text = "â–²"
+                selArrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()
-                selArrow.Text = "â–¼"
+                selArrow.Text = DROPDOWN_ARROW_CLOSED
             end
         end)
 
@@ -304,7 +306,7 @@ return function(Library, context)
             return isOpen
         end, dPanel, selBtn, function()
             closeDropdown()
-            selArrow.Text = "â–¼"
+            selArrow.Text = DROPDOWN_ARROW_CLOSED
         end, "ToggleDropdownOutside")
 
         return dropdown
@@ -372,7 +374,7 @@ return function(Library, context)
         arrow.Position = UDim2.new(1, -6, 0.5, 0)
         arrow.Size = UDim2.new(0, 14, 0, 14)
         arrow.Font = base.config.Font
-        arrow.Text = "â–¼"
+        arrow.Text = DROPDOWN_ARROW_CLOSED
         arrow.TextColor3 = base.colors.TextDim
         arrow.TextSize = 8
         arrow.ZIndex = 6
@@ -451,7 +453,7 @@ return function(Library, context)
                 dropdown.Value = opt
                 valText.Text = tostring(opt)
                 closeDropdown()
-                arrow.Text = "â–¼"
+                arrow.Text = DROPDOWN_ARROW_CLOSED
                 for _, button in ipairs(optionButtons) do
                     local labelRef = button:FindFirstChildOfClass("TextLabel")
                     if labelRef then
@@ -472,10 +474,10 @@ return function(Library, context)
                 dropPanel.Visible = true
                 dropPanel.Size = UDim2.new(1, 0, 0, 0)
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
-                arrow.Text = "â–²"
+                arrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()
-                arrow.Text = "â–¼"
+                arrow.Text = DROPDOWN_ARROW_CLOSED
             end
         end)
 
@@ -483,7 +485,7 @@ return function(Library, context)
             return isOpen
         end, dropPanel, selectBtn, function()
             closeDropdown()
-            arrow.Text = "â–¼"
+            arrow.Text = DROPDOWN_ARROW_CLOSED
         end, "StandaloneDropdownOutside")
 
         if dSaveKey then
@@ -594,7 +596,7 @@ return function(Library, context)
         arrow.Position = UDim2.new(1, -6, 0.5, 0)
         arrow.Size = UDim2.new(0, 14, 0, 14)
         arrow.Font = base.config.Font
-        arrow.Text = "â–¼"
+        arrow.Text = DROPDOWN_ARROW_CLOSED
         arrow.TextColor3 = base.colors.TextDim
         arrow.TextSize = 8
         arrow.ZIndex = 6
@@ -722,10 +724,10 @@ return function(Library, context)
                 dropPanel.Visible = true
                 dropPanel.Size = UDim2.new(1, 0, 0, 0)
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
-                arrow.Text = "â–²"
+                arrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()
-                arrow.Text = "â–¼"
+                arrow.Text = DROPDOWN_ARROW_CLOSED
             end
         end)
 
@@ -733,7 +735,7 @@ return function(Library, context)
             return isOpen
         end, dropPanel, selectBtn, function()
             closeDropdown()
-            arrow.Text = "â–¼"
+            arrow.Text = DROPDOWN_ARROW_CLOSED
         end, "MultiDropdownOutside")
 
         if dSaveKey then
@@ -891,7 +893,7 @@ return function(Library, context)
         arrow.Position = UDim2.new(1, -6, 0.5, 0)
         arrow.Size = UDim2.new(0, 14, 0, 14)
         arrow.Font = base.config.Font
-        arrow.Text = "â–¼"
+        arrow.Text = DROPDOWN_ARROW_CLOSED
         arrow.TextColor3 = base.colors.TextDim
         arrow.TextSize = 8
         arrow.ZIndex = 6
@@ -970,7 +972,7 @@ return function(Library, context)
                 dt.Value = opt
                 valText.Text = tostring(opt)
                 closeDropdown()
-                arrow.Text = "â–¼"
+                arrow.Text = DROPDOWN_ARROW_CLOSED
                 for _, button in ipairs(optionButtons) do
                     local labelRef = button:FindFirstChildOfClass("TextLabel")
                     if labelRef then
@@ -991,10 +993,10 @@ return function(Library, context)
                 dropPanel.Visible = true
                 dropPanel.Size = UDim2.new(1, 0, 0, 0)
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
-                arrow.Text = "â–²"
+                arrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()
-                arrow.Text = "â–¼"
+                arrow.Text = DROPDOWN_ARROW_CLOSED
             end
         end)
 
@@ -1002,7 +1004,7 @@ return function(Library, context)
             return isOpen
         end, dropPanel, selectBtn, function()
             closeDropdown()
-            arrow.Text = "â–¼"
+            arrow.Text = DROPDOWN_ARROW_CLOSED
         end, "DropdownToggleOutside")
 
         Library:RegisterConfig(base.secName .. "." .. dName, "dropdowntoggle",
