@@ -58,6 +58,7 @@ function Library:CreateWindow(opts)
         UserInputService = UserInputService,
         win = win,
     })
+    local controlBase = moduleRequire("controls_base.lua")(Library, context)
     local dropdownControls = moduleRequire("dropdowns.lua")(Library, context)
     local closeTransientPopups = popupManager.closeTransientPopups
     local registerTransientPopup = popupManager.registerTransientPopup
@@ -1724,6 +1725,7 @@ function Library:CreateWindow(opts)
 
             local targetCol = menu._columns[colNum]
             local section = {}
+            local sectionJanitor = Janitor.new()
 
             -- Section container (The dark panel)
             local secFrame = Instance.new("Frame", targetCol)
@@ -1776,7 +1778,57 @@ function Library:CreateWindow(opts)
             section.Container = contentContainer
             section._layout = secLayout
             section._title = secTitle
+            section._controls = {}
+            section._janitor = sectionJanitor
+            section._menu = menu
+            section._menuName = menuName
+            section._secName = secName
+            section._win = win
             table.insert(menu.Sections, section)
+            track(sectionJanitor, "Cleanup", nextCleanupKey("SectionJanitor"))
+
+            function section:TrackConnection(conn, key)
+                return self._janitor:Add(conn, "Disconnect", key)
+            end
+
+            function section:Destroy()
+                if self._destroyed then
+                    return
+                end
+
+                self._destroyed = true
+
+                for index = #self._controls, 1, -1 do
+                    local control = self._controls[index]
+                    if control and control.Destroy then
+                        control:Destroy()
+                    end
+                end
+
+                self._janitor:Cleanup()
+
+                for index = #win._searchItems, 1, -1 do
+                    local item = win._searchItems[index]
+                    if item and item.menuRef == menu and item.secName == secName then
+                        table.remove(win._searchItems, index)
+                    end
+                end
+
+                for index = #menu.Sections, 1, -1 do
+                    if menu.Sections[index] == self then
+                        table.remove(menu.Sections, index)
+                        break
+                    end
+                end
+
+                if secFrame.Parent then
+                    secFrame:Destroy()
+                end
+            end
+
+            local function sectionTrackGlobal(conn, key)
+                return section:TrackConnection(conn, key or nextCleanupKey("SectionConn"))
+            end
 
             local sectionDropdownBase = {
                 bindOutsideClose = popupManager.bindOutsideClose,
@@ -1784,12 +1836,16 @@ function Library:CreateWindow(opts)
                 colors = colors,
                 config = config,
                 contentContainer = contentContainer,
+                makeControl = function(control, opts)
+                    return controlBase.attachControlLifecycle(section, control, opts)
+                end,
                 menu = menu,
                 menuName = menuName,
                 nextCleanupKey = nextCleanupKey,
                 registerTransientPopup = registerTransientPopup,
                 secName = secName,
-                trackGlobal = trackGlobal,
+                section = section,
+                trackGlobal = sectionTrackGlobal,
                 win = win,
             }
 
@@ -1804,62 +1860,18 @@ function Library:CreateWindow(opts)
 
                 local toggle = { Value = tDefault }
 
-                -- Toggle row
-                local row = Instance.new("Frame", contentContainer)
-                row.Name = "Toggle_" .. tName
-                row.BackgroundTransparency = 1
-                row.BorderSizePixel = 0
-                row.Size = UDim2.new(1, 0, 0, 22)
-                row.ZIndex = 5
-
-                -- Toggle label (left side)
-                local label = Instance.new("TextLabel", row)
-                label.Name = "Label"
-                label.BackgroundTransparency = 1
-                label.Position = UDim2.new(0, 0, 0, 0)
-                label.Size = UDim2.new(1, -22, 1, 0)
-                label.Font = config.FontMedium
-                label.Text = tName
-                label.TextColor3 = colors.Text
-                label.TextSize = 12
-                label.TextXAlignment = Enum.TextXAlignment.Left
-                label.ZIndex = 5
-
-                -- Checkbox container (right side)
-                local checkFrame = Instance.new("Frame", row)
-                checkFrame.Name = "Check"
-                checkFrame.AnchorPoint = Vector2.new(1, 0.5)
-                checkFrame.Position = UDim2.new(1, 0, 0.5, 0)
-                checkFrame.Size = UDim2.new(0, 18, 0, 18)
-                checkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-                checkFrame.BorderSizePixel = 0
-                checkFrame.ZIndex = 5
-
-                Instance.new("UICorner", checkFrame).CornerRadius = UDim.new(0, 3)
-
-                local checkStroke = Instance.new("UIStroke", checkFrame)
-                checkStroke.Color = colors.Line
-                checkStroke.Transparency = 0.5
-
-                -- Check icon
-                local checkIcon = Instance.new("ImageLabel", checkFrame)
-                checkIcon.BackgroundTransparency = 1
-                checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-                checkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-                checkIcon.Size = UDim2.new(0, 12, 0, 12)
-                checkIcon.Image = "rbxassetid://122354904349171"
-                checkIcon.ImageColor3 = colors.Main
-                checkIcon.ImageTransparency = tDefault and 0 or 1
-                checkIcon.ZIndex = 6
-
-                -- Click button
-                local clickBtn = Instance.new("TextButton", row)
-                clickBtn.BackgroundTransparency = 1
-                clickBtn.Size = UDim2.new(1, 0, 1, 0)
-                clickBtn.ZIndex = 7
-                clickBtn.Text = ""
-                clickBtn.AutoButtonColor = false
-                clickBtn.Selectable = false
+                local row = controlBase.createRow(contentContainer, "Toggle_" .. tName)
+                local label = controlBase.createLabel(row, tName, {
+                    Font = config.FontMedium,
+                    Size = UDim2.new(1, -22, 1, 0),
+                    TextColor3 = colors.Text,
+                    TextSize = 12,
+                })
+                local checkFrame, checkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
+                    Name = "Check",
+                    ImageTransparency = tDefault and 0 or 1,
+                })
+                local clickBtn = controlBase.createOverlayButton(row)
 
                 -- Lazy sub-container (only created when AddDropdown/AddSlider is called)
                 local subContainer = nil
@@ -1883,6 +1895,11 @@ function Library:CreateWindow(opts)
                     subPad.PaddingLeft = UDim.new(0, 12)
                     subPad.PaddingTop = UDim.new(0, 2)
                     subPad.PaddingBottom = UDim.new(0, 2)
+
+                    if toggle.TrackInstance then
+                        toggle:TrackInstance(subContainer, "SubContainer")
+                    end
+
                     return subContainer
                 end
 
@@ -1900,20 +1917,53 @@ function Library:CreateWindow(opts)
                     end
                 end
 
-                clickBtn.Activated:Connect(function()
-                    toggle.Value = not toggle.Value
+                local function setToggleValue(nextValue, shouldMarkDirty)
+                    toggle.Value = nextValue and true or false
                     updateVisual()
-                    tCallback(toggle.Value)
-                    Library:_markDirty()
-                end)
+                    pcall(tCallback, toggle.Value)
+                    if shouldMarkDirty then
+                        Library:_markDirty()
+                    end
+                end
+
+                toggle = controlBase.attachControlLifecycle(section, toggle, {
+                    clickTargets = { clickBtn },
+                    getValue = function()
+                        return toggle.Value
+                    end,
+                    onDestroy = function()
+                        subContainer = nil
+                    end,
+                    refresh = updateVisual,
+                    root = row,
+                    searchName = tName,
+                    setValue = function(val)
+                        setToggleValue(val == true, true)
+                    end,
+                    updateDisabled = function(disabled)
+                        label.TextTransparency = disabled and 0.35 or 0
+                        clickBtn.Active = not disabled
+                    end,
+                })
+
+                toggle:TrackConnection(clickBtn.Activated:Connect(function()
+                    if toggle.Disabled then
+                        return
+                    end
+
+                    setToggleValue(not toggle.Value, true)
+                end), "ToggleClick")
 
                 -- Hover
-                clickBtn.MouseEnter:Connect(function()
+                toggle:TrackConnection(clickBtn.MouseEnter:Connect(function()
+                    if toggle.Disabled then
+                        return
+                    end
                     Library:Spring(label, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
-                end)
-                clickBtn.MouseLeave:Connect(function()
+                end), "ToggleHoverEnter")
+                toggle:TrackConnection(clickBtn.MouseLeave:Connect(function()
                     Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
-                end)
+                end), "ToggleHoverLeave")
 
                 -- Init visual
                 updateVisual()
@@ -1928,9 +1978,13 @@ function Library:CreateWindow(opts)
                         colors = colors,
                         config = config,
                         ensureSubContainer = ensureSubContainer,
+                        makeControl = function(control, opts)
+                            return controlBase.attachControlLifecycle(section, control, opts)
+                        end,
                         nextCleanupKey = nextCleanupKey,
                         registerTransientPopup = registerTransientPopup,
-                        trackGlobal = trackGlobal,
+                        section = section,
+                        trackGlobal = sectionTrackGlobal,
                     }, dropOpts)
                 end
 
@@ -2000,6 +2054,7 @@ function Library:CreateWindow(opts)
                         Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
                         sValLabel.Text = tostring(val) .. sSuffix
                         sCallback(val)
+                        Library:_markDirty()
                     end
 
                     local dragBtn = Instance.new("TextButton", barBg)
@@ -2022,7 +2077,7 @@ function Library:CreateWindow(opts)
                             dragging = false
                         end
                     end)
-                    trackGlobal(UserInputService.InputChanged:Connect(function(input)
+                    sectionTrackGlobal(UserInputService.InputChanged:Connect(function(input)
                         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                             updateSlider(input.Position.X)
                         end
@@ -2035,12 +2090,9 @@ function Library:CreateWindow(opts)
                 Library:RegisterConfig(secName .. "." .. tName, "toggle",
                     function() return toggle.Value end,
                     function(val)
-                        toggle.Value = val
-                        updateVisual()
-                        pcall(tCallback, val)
+                        setToggleValue(val == true, false)
                     end
                 )
-                table.insert(win._searchItems, { name = tName, menuName = menuName, secName = secName, menuRef = menu })
 
                 return toggle
             end
@@ -2059,26 +2111,13 @@ function Library:CreateWindow(opts)
 
                 local slider = { Value = sDefault }
 
-                -- Slider row
-                local row = Instance.new("Frame", contentContainer)
-                row.Name = "Slider_" .. sName
-                row.BackgroundTransparency = 1
-                row.BorderSizePixel = 0
-                row.Size = UDim2.new(1, 0, 0, 22)
-                row.ZIndex = 5
-
-                -- Slider label (left side)
-                local label = Instance.new("TextLabel", row)
-                label.Name = "Label"
-                label.BackgroundTransparency = 1
-                label.Position = UDim2.new(0, 0, 0, 0)
-                label.Size = UDim2.new(0.4, 0, 1, 0)
-                label.Font = config.FontMedium
-                label.Text = sName
-                label.TextColor3 = colors.Text
-                label.TextSize = 12
-                label.TextXAlignment = Enum.TextXAlignment.Left
-                label.ZIndex = 5
+                local row = controlBase.createRow(contentContainer, "Slider_" .. sName)
+                local label = controlBase.createLabel(row, sName, {
+                    Font = config.FontMedium,
+                    Size = UDim2.new(0.4, 0, 1, 0),
+                    TextColor3 = colors.Text,
+                    TextSize = 12,
+                })
 
                 -- Slider bar background (right side)
                 local barBg = Instance.new("Frame", row)
@@ -2126,7 +2165,20 @@ function Library:CreateWindow(opts)
                     slider.Value = val
                     Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
                     valLabel.Text = tostring(val) .. sSuffix
-                    sCallback(val)
+                    pcall(sCallback, val)
+                    Library:_markDirty()
+                end
+
+                local function setSliderValue(val, shouldMarkDirty)
+                    val = math.clamp(tonumber(val) or sMin, sMin, sMax)
+                    local relX = (val - sMin) / (sMax - sMin)
+                    slider.Value = math.floor(val + 0.5)
+                    Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
+                    valLabel.Text = tostring(slider.Value) .. sSuffix
+                    pcall(sCallback, slider.Value)
+                    if shouldMarkDirty then
+                        Library:_markDirty()
+                    end
                 end
 
                 local dragBtn = Instance.new("TextButton", barBg)
@@ -2137,21 +2189,43 @@ function Library:CreateWindow(opts)
                 dragBtn.AutoButtonColor = false
                 dragBtn.Selectable = false
 
-                dragBtn.InputBegan:Connect(function(input)
+                slider = controlBase.attachControlLifecycle(section, slider, {
+                    clickTargets = { dragBtn },
+                    getValue = function()
+                        return slider.Value
+                    end,
+                    refresh = function()
+                        setSliderValue(slider.Value, false)
+                    end,
+                    root = row,
+                    searchName = sName,
+                    setValue = function(val)
+                        setSliderValue(val, true)
+                    end,
+                    updateDisabled = function(disabled)
+                        label.TextTransparency = disabled and 0.35 or 0
+                        dragBtn.Active = not disabled
+                    end,
+                })
+
+                slider:TrackConnection(dragBtn.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         dragging = true
                         updateSlider(input.Position.X)
                     end
-                end)
+                end), "SliderInputBegan")
 
-                dragBtn.InputEnded:Connect(function(input)
+                slider:TrackConnection(dragBtn.InputEnded:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         dragging = false
                     end
-                end)
+                end), "SliderInputEnded")
 
-                trackGlobal(UserInputService.InputChanged:Connect(function(input)
+                slider:TrackConnection(UserInputService.InputChanged:Connect(function(input)
                     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                        if slider.Disabled then
+                            return
+                        end
                         updateSlider(input.Position.X)
                     end
                 end), nextCleanupKey("SliderDrag"))
@@ -2160,14 +2234,9 @@ function Library:CreateWindow(opts)
                 Library:RegisterConfig(secName .. "." .. sName, "slider",
                     function() return slider.Value end,
                     function(val)
-                        val = math.clamp(val, sMin, sMax)
-                        slider.Value = val
-                        local relX = (val - sMin) / (sMax - sMin)
-                        fill.Size = UDim2.new(relX, 0, 1, 0)
-                        valLabel.Text = tostring(val) .. sSuffix
+                        setSliderValue(val, false)
                     end
                 )
-                table.insert(win._searchItems, { name = sName, menuName = menuName, secName = secName, menuRef = menu })
 
                 return slider
             end
@@ -2295,6 +2364,7 @@ function Library:CreateWindow(opts)
                     Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
                     valLabel.Text = tostring(val) .. sSuffix
                     sCallback(val)
+                    Library:_markDirty()
                 end
 
                 local dragBtn = Instance.new("TextButton", barBg)
@@ -2317,7 +2387,7 @@ function Library:CreateWindow(opts)
                         dragging = false
                     end
                 end)
-                trackGlobal(UserInputService.InputChanged:Connect(function(input)
+                sectionTrackGlobal(UserInputService.InputChanged:Connect(function(input)
                     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                         updateSlider(input.Position.X)
                     end
@@ -2372,39 +2442,21 @@ function Library:CreateWindow(opts)
                 local bName = btnOpts.Name or "Button"
                 local bCallback = btnOpts.Callback or function() end
 
-                local row = Instance.new("Frame", contentContainer)
-                row.Name = "Button_" .. bName
-                row.BackgroundTransparency = 1
-                row.BorderSizePixel = 0
-                row.Size = UDim2.new(1, 0, 0, 22)
-                row.ZIndex = 5
-
-                -- Label
-                local label = Instance.new("TextLabel", row)
-                label.BackgroundTransparency = 1
-                label.Size = UDim2.new(1, -24, 1, 0)
-                label.Font = config.FontMedium
-                label.Text = bName
-                label.TextColor3 = colors.Text
-                label.TextSize = 12
-                label.TextXAlignment = Enum.TextXAlignment.Left
-                label.ZIndex = 5
+                local buttonControl = {}
+                local row = controlBase.createRow(contentContainer, "Button_" .. bName)
+                local label = controlBase.createLabel(row, bName, {
+                    Font = config.FontMedium,
+                    Size = UDim2.new(1, -24, 1, 0),
+                    TextColor3 = colors.Text,
+                    TextSize = 12,
+                })
 
                 -- Button box (right side)
-                local btnBox = Instance.new("TextButton", row)
-                btnBox.AnchorPoint = Vector2.new(1, 0.5)
-                btnBox.Position = UDim2.new(1, 0, 0.5, 0)
-                btnBox.Size = UDim2.new(0, 18, 0, 18)
-                btnBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-                btnBox.BorderSizePixel = 0
-                btnBox.Text = ""
-                btnBox.ZIndex = 5
-                btnBox.AutoButtonColor = false
-                btnBox.Selectable = false
-                Instance.new("UICorner", btnBox).CornerRadius = UDim.new(0, 3)
-                local boxStroke = Instance.new("UIStroke", btnBox)
-                boxStroke.Color = colors.Line
-                boxStroke.Transparency = 0.5
+                local btnBox, boxStroke = controlBase.createRightBox(row, {
+                    ClassName = "TextButton",
+                    StrokeColor = colors.Line,
+                    StrokeTransparency = 0.5,
+                })
 
                 -- Icon inside box
                 local icon = Instance.new("ImageLabel", btnBox)
@@ -2416,29 +2468,55 @@ function Library:CreateWindow(opts)
                 icon.ImageColor3 = colors.TextDim
                 icon.ZIndex = 6
 
-                -- Hover
-                btnBox.MouseEnter:Connect(function()
-                    Library:Spring(boxStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
-                    Library:Spring(icon, "Smooth", { ImageColor3 = colors.Main })
-                end)
-                btnBox.MouseLeave:Connect(function()
-                    Library:Spring(boxStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
-                    Library:Spring(icon, "Smooth", { ImageColor3 = colors.TextDim })
-                end)
-
-                -- Click
-                btnBox.Activated:Connect(function()
-                    -- Flash effect
+                local function flashButton()
                     Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Main })
                     task.delay(0.2, function()
-                        Library:Spring(btnBox, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        if btnBox.Parent then
+                            Library:Spring(btnBox, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        end
                     end)
+                end
+
+                buttonControl = controlBase.attachControlLifecycle(section, buttonControl, {
+                    clickTargets = { btnBox },
+                    root = row,
+                    searchName = bName,
+                    updateDisabled = function(disabled)
+                        label.TextTransparency = disabled and 0.35 or 0
+                        btnBox.Active = not disabled
+                        icon.ImageTransparency = disabled and 0.4 or 0
+                    end,
+                })
+
+                -- Hover
+                buttonControl:TrackConnection(btnBox.MouseEnter:Connect(function()
+                    if buttonControl.Disabled then
+                        return
+                    end
+                    Library:Spring(boxStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                    Library:Spring(icon, "Smooth", { ImageColor3 = colors.Main })
+                end), "ButtonHoverEnter")
+                buttonControl:TrackConnection(btnBox.MouseLeave:Connect(function()
+                    Library:Spring(boxStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                    Library:Spring(icon, "Smooth", { ImageColor3 = colors.TextDim })
+                end), "ButtonHoverLeave")
+
+                -- Click
+                buttonControl:TrackConnection(btnBox.Activated:Connect(function()
+                    if buttonControl.Disabled then
+                        return
+                    end
+
+                    flashButton()
                     pcall(bCallback)
-                end)
+                end), "ButtonActivated")
 
-                table.insert(win._searchItems, { name = bName, menuName = menuName, secName = secName, menuRef = menu })
+                function buttonControl:Fire()
+                    flashButton()
+                    return bCallback()
+                end
 
-                return { Fire = bCallback }
+                return buttonControl
             end
 
             -- ==============================

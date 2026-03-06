@@ -135,6 +135,25 @@ return function(Library, context)
         end), base.nextCleanupKey(keyPrefix))
     end
 
+    local function finalizeControl(base, control, opts)
+        opts = opts or {}
+
+        if base.makeControl then
+            return base.makeControl(control, opts)
+        end
+
+        if opts.searchName and base.win and base.win._searchItems then
+            table.insert(base.win._searchItems, {
+                name = opts.searchName,
+                menuName = base.menuName,
+                secName = base.secName,
+                menuRef = base.menu,
+            })
+        end
+
+        return control
+    end
+
     local function addToggleDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
         local dName = dropOpts.Name or "Dropdown"
@@ -225,6 +244,19 @@ return function(Library, context)
 
         local optBtns = {}
         local isOpen = false
+        local function applyDropdownValue(rawValue)
+            local resolved = resolveDropdownValue(dOptions, rawValue, true)
+            dropdown.Value = resolved
+            selVal.Text = tostring(resolved)
+            for _, button in ipairs(optBtns) do
+                local label = button:FindFirstChildOfClass("TextLabel")
+                if label then
+                    label.TextColor3 = (label.Text == tostring(resolved)) and base.colors.Main or base.colors.Text
+                end
+            end
+            return resolved
+        end
+
         local function closeDropdown()
             isOpen = false
             Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
@@ -272,23 +304,38 @@ return function(Library, context)
                 end
             end)
             optBtn.Activated:Connect(function()
-                dropdown.Value = opt
-                selVal.Text = tostring(opt)
+                local resolved = applyDropdownValue(opt)
                 closeDropdown()
                 selArrow.Text = DROPDOWN_ARROW_CLOSED
-                for _, button in ipairs(optBtns) do
-                    local label = button:FindFirstChildOfClass("TextLabel")
-                    if label then
-                        label.TextColor3 = (label.Text == tostring(opt)) and base.colors.Main or base.colors.Text
-                    end
-                end
-                dCallback(opt)
+                dCallback(resolved)
             end)
 
             table.insert(optBtns, optBtn)
         end
 
+        dropdown = finalizeControl(base, dropdown, {
+            clickTargets = { selBtn },
+            getValue = function()
+                return dropdown.Value
+            end,
+            refresh = function()
+                applyDropdownValue(dropdown.Value)
+            end,
+            root = dRow,
+            setValue = function(val)
+                local resolved = applyDropdownValue(val)
+                dCallback(resolved)
+            end,
+            updateDisabled = function(disabled)
+                dLabel.TextTransparency = disabled and 0.35 or 0
+                selBtn.Active = not disabled
+            end,
+        })
+
         selBtn.Activated:Connect(function()
+            if dropdown.Disabled then
+                return
+            end
             isOpen = not isOpen
             if isOpen then
                 closeTransientPopups(base, dPanel)
@@ -403,6 +450,19 @@ return function(Library, context)
 
         local optionButtons = {}
         local isOpen = false
+        local function applyDropdownValue(rawValue)
+            local resolved = resolveDropdownValue(dOptions, rawValue, true)
+            dropdown.Value = resolved
+            valText.Text = tostring(resolved)
+            for _, button in ipairs(optionButtons) do
+                local labelRef = button:FindFirstChildOfClass("TextLabel")
+                if labelRef then
+                    labelRef.TextColor3 = (labelRef.Text == tostring(resolved)) and base.colors.Main or base.colors.Text
+                end
+            end
+            return resolved
+        end
+
         local function closeDropdown()
             isOpen = false
             Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
@@ -450,24 +510,41 @@ return function(Library, context)
                 end
             end)
             optBtn.Activated:Connect(function()
-                dropdown.Value = opt
-                valText.Text = tostring(opt)
+                local resolved = applyDropdownValue(opt)
                 closeDropdown()
                 arrow.Text = DROPDOWN_ARROW_CLOSED
-                for _, button in ipairs(optionButtons) do
-                    local labelRef = button:FindFirstChildOfClass("TextLabel")
-                    if labelRef then
-                        labelRef.TextColor3 = (labelRef.Text == tostring(opt)) and base.colors.Main or base.colors.Text
-                    end
-                end
-                dCallback(opt)
+                dCallback(resolved)
                 Library:_markDirty()
             end)
 
             table.insert(optionButtons, optBtn)
         end
 
+        dropdown = finalizeControl(base, dropdown, {
+            clickTargets = { selectBtn },
+            getValue = function()
+                return dropdown.Value
+            end,
+            refresh = function()
+                applyDropdownValue(dropdown.Value)
+            end,
+            root = row,
+            searchName = dName,
+            setValue = function(val)
+                local resolved = applyDropdownValue(val)
+                dCallback(resolved)
+                Library:_markDirty()
+            end,
+            updateDisabled = function(disabled)
+                label.TextTransparency = disabled and 0.35 or 0
+                selectBtn.Active = not disabled
+            end,
+        })
+
         selectBtn.Activated:Connect(function()
+            if dropdown.Disabled then
+                return
+            end
             isOpen = not isOpen
             if isOpen then
                 closeTransientPopups(base, dropPanel)
@@ -492,26 +569,11 @@ return function(Library, context)
             Library:RegisterConfig(dSaveKey, "dropdown",
                 function() return dropdown.Value end,
                 function(val)
-                    local resolved = resolveDropdownValue(dOptions, val, true)
-                    dropdown.Value = resolved
-                    valText.Text = tostring(resolved)
-                    for _, button in ipairs(optionButtons) do
-                        local labelRef = button:FindFirstChildOfClass("TextLabel")
-                        if labelRef then
-                            labelRef.TextColor3 = (labelRef.Text == tostring(resolved)) and base.colors.Main or base.colors.Text
-                        end
-                    end
+                    local resolved = applyDropdownValue(val)
                     dCallback(resolved)
                 end
             )
         end
-
-        table.insert(base.win._searchItems, {
-            name = dName,
-            menuName = base.menuName,
-            secName = base.secName,
-            menuRef = base.menu,
-        })
 
         return dropdown
     end
@@ -624,6 +686,42 @@ return function(Library, context)
         pPad.PaddingBottom = UDim.new(0, 3)
 
         local optVisuals = {}
+        local function refreshMulti()
+            valText.Text = getDisplayText()
+            for optName, visuals in pairs(optVisuals) do
+                local selected = selectedSet[optName]
+                visuals.chkIcon.ImageTransparency = selected and 0 or 1
+                visuals.chk.BackgroundColor3 = selected and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                visuals.chkStroke.Color = selected and base.colors.Main or base.colors.Line
+                visuals.chkStroke.Transparency = selected and 0.3 or 0.5
+                visuals.optLabel.TextColor3 = selected and base.colors.Main or base.colors.Text
+            end
+        end
+
+        local function applySelectedValues(rawValue, shouldMarkDirty)
+            if type(rawValue) ~= "table" then
+                return
+            end
+
+            for key in pairs(selectedSet) do
+                selectedSet[key] = nil
+            end
+            for key, enabled in pairs(buildSelectedSet(dOptions, rawValue)) do
+                selectedSet[key] = enabled
+            end
+
+            multi.Values = selectedSet
+            refreshMulti()
+            fireMultiDropdownCallback(dCallback, selectedSet)
+            if multi._onChange then
+                multi._onChange()
+            end
+
+            if shouldMarkDirty then
+                Library:_markDirty()
+            end
+        end
+
         local isOpen = false
         local function closeDropdown()
             isOpen = false
@@ -718,6 +816,9 @@ return function(Library, context)
         end
 
         selectBtn.Activated:Connect(function()
+            if multi.Disabled then
+                return
+            end
             isOpen = not isOpen
             if isOpen then
                 closeTransientPopups(base, dropPanel)
@@ -742,43 +843,27 @@ return function(Library, context)
             Library:RegisterConfig(dSaveKey, "multi",
                 function() return getSelectedValues(dOptions, selectedSet) end,
                 function(val)
-                    if type(val) ~= "table" then
-                        return
-                    end
-                    for key in pairs(selectedSet) do
-                        selectedSet[key] = nil
-                    end
-                    for key, enabled in pairs(buildSelectedSet(dOptions, val)) do
-                        selectedSet[key] = enabled
-                    end
-                    multi.Values = selectedSet
-                    multi:Refresh()
-                    fireMultiDropdownCallback(dCallback, selectedSet)
-                    if multi._onChange then
-                        multi._onChange()
-                    end
+                    applySelectedValues(val, false)
                 end
             )
         end
 
-        table.insert(base.win._searchItems, {
-            name = dName,
-            menuName = base.menuName,
-            secName = base.secName,
-            menuRef = base.menu,
+        multi = finalizeControl(base, multi, {
+            clickTargets = { selectBtn },
+            getValue = function()
+                return getSelectedValues(dOptions, selectedSet)
+            end,
+            refresh = refreshMulti,
+            root = row,
+            searchName = dName,
+            setValue = function(val)
+                applySelectedValues(val, true)
+            end,
+            updateDisabled = function(disabled)
+                label.TextTransparency = disabled and 0.35 or 0
+                selectBtn.Active = not disabled
+            end,
         })
-
-        function multi:Refresh()
-            valText.Text = getDisplayText()
-            for optName, visuals in pairs(optVisuals) do
-                local selected = selectedSet[optName]
-                visuals.chkIcon.ImageTransparency = selected and 0 or 1
-                visuals.chk.BackgroundColor3 = selected and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
-                visuals.chkStroke.Color = selected and base.colors.Main or base.colors.Line
-                visuals.chkStroke.Transparency = selected and 0.3 or 0.5
-                visuals.optLabel.TextColor3 = selected and base.colors.Main or base.colors.Text
-            end
-        end
 
         return multi
     end
@@ -844,8 +929,8 @@ return function(Library, context)
         chkBtn.Selectable = false
         chkBtn.BorderSizePixel = 0
 
-        chkBtn.Activated:Connect(function()
-            dt.Enabled = not dt.Enabled
+        local function applyToggleEnabled(enabled)
+            dt.Enabled = enabled == true
             if dt.Enabled then
                 Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
                 Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
@@ -855,6 +940,10 @@ return function(Library, context)
                 Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
                 Library:Spring(chkStroke, "Smooth", { Color = base.colors.Line, Transparency = 0.5 })
             end
+        end
+
+        chkBtn.Activated:Connect(function()
+            applyToggleEnabled(not dt.Enabled)
             dToggleCallback(dt.Enabled)
             Library:_markDirty()
         end)
@@ -922,6 +1011,19 @@ return function(Library, context)
 
         local optionButtons = {}
         local isOpen = false
+        local function applyDropdownValue(rawValue)
+            local resolved = resolveDropdownValue(dOptions, rawValue, true)
+            dt.Value = resolved
+            valText.Text = tostring(resolved)
+            for _, button in ipairs(optionButtons) do
+                local labelRef = button:FindFirstChildOfClass("TextLabel")
+                if labelRef then
+                    labelRef.TextColor3 = (labelRef.Text == tostring(resolved)) and base.colors.Main or base.colors.Text
+                end
+            end
+            return resolved
+        end
+
         local function closeDropdown()
             isOpen = false
             Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
@@ -969,24 +1071,53 @@ return function(Library, context)
                 end
             end)
             optBtn.Activated:Connect(function()
-                dt.Value = opt
-                valText.Text = tostring(opt)
+                local resolved = applyDropdownValue(opt)
                 closeDropdown()
                 arrow.Text = DROPDOWN_ARROW_CLOSED
-                for _, button in ipairs(optionButtons) do
-                    local labelRef = button:FindFirstChildOfClass("TextLabel")
-                    if labelRef then
-                        labelRef.TextColor3 = (labelRef.Text == tostring(opt)) and base.colors.Main or base.colors.Text
-                    end
-                end
-                dCallback(opt)
+                dCallback(resolved)
                 Library:_markDirty()
             end)
 
             table.insert(optionButtons, optBtn)
         end
 
+        dt = finalizeControl(base, dt, {
+            clickTargets = { chkBtn, selectBtn },
+            getValue = function()
+                return { value = dt.Value, enabled = dt.Enabled }
+            end,
+            refresh = function()
+                applyDropdownValue(dt.Value)
+                applyToggleEnabled(dt.Enabled)
+            end,
+            root = row,
+            searchName = dName,
+            setValue = function(val)
+                if type(val) ~= "table" then
+                    return
+                end
+
+                if val.value ~= nil then
+                    local resolved = applyDropdownValue(val.value)
+                    dCallback(resolved)
+                end
+                if val.enabled ~= nil then
+                    applyToggleEnabled(val.enabled)
+                    dToggleCallback(dt.Enabled)
+                end
+                Library:_markDirty()
+            end,
+            updateDisabled = function(disabled)
+                label.TextTransparency = disabled and 0.35 or 0
+                chkBtn.Active = not disabled
+                selectBtn.Active = not disabled
+            end,
+        })
+
         selectBtn.Activated:Connect(function()
+            if dt.Disabled then
+                return
+            end
             isOpen = not isOpen
             if isOpen then
                 closeTransientPopups(base, dropPanel)
@@ -1014,34 +1145,15 @@ return function(Library, context)
                     return
                 end
                 if val.value ~= nil then
-                    local resolved = resolveDropdownValue(dOptions, val.value, true)
-                    dt.Value = resolved
-                    valText.Text = tostring(resolved)
-                    for _, button in ipairs(optionButtons) do
-                        local labelRef = button:FindFirstChildOfClass("TextLabel")
-                        if labelRef then
-                            labelRef.TextColor3 = (labelRef.Text == tostring(resolved)) and base.colors.Main or base.colors.Text
-                        end
-                    end
+                    local resolved = applyDropdownValue(val.value)
                     dCallback(resolved)
                 end
                 if val.enabled ~= nil then
-                    dt.Enabled = val.enabled
-                    checkIcon.ImageTransparency = val.enabled and 0 or 1
-                    chkFrame.BackgroundColor3 = val.enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
-                    chkStroke.Color = val.enabled and base.colors.Main or base.colors.Line
-                    chkStroke.Transparency = val.enabled and 0.3 or 0.5
+                    applyToggleEnabled(val.enabled)
                     dToggleCallback(dt.Enabled)
                 end
             end
         )
-
-        table.insert(base.win._searchItems, {
-            name = dName,
-            menuName = base.menuName,
-            secName = base.secName,
-            menuRef = base.menu,
-        })
 
         return dt
     end
