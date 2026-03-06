@@ -2449,15 +2449,147 @@ function Library:CreateWindow(opts)
             function section:AddHitboxPreview(opts)
                 opts = opts or {}
                 local hName = opts.Name or "Hitbox Preview"
-                local hParts = opts.Parts or {"Head", "Chest", "Stomach", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
-                local hDefault = {}
-                if opts.Default then
-                    for _, p in ipairs(opts.Default) do hDefault[p] = true end
-                end
                 local hCallback = opts.Callback or function() end
                 local hLinked = opts.LinkedDropdown or nil -- ref to a multi-dropdown object
+                local defaultParts = {
+                    { Body = "Head", Label = "Head", Values = {"Head"} },
+                    { Body = "Chest", Label = "Chest", Values = {"Chest"} },
+                    { Body = "Stomach", Label = "Stomach", Values = {"Stomach"} },
+                    { Body = "Left Arm", Label = "Left Arm", Values = {"Left Arm"} },
+                    { Body = "Right Arm", Label = "Right Arm", Values = {"Right Arm"} },
+                    { Body = "Left Leg", Label = "Left Leg", Values = {"Left Leg"} },
+                    { Body = "Right Leg", Label = "Right Leg", Values = {"Right Leg"} },
+                }
+                local rawParts = opts.Parts or defaultParts
+                local partConfigs = {}
+                local partConfigByBody = {}
+                local visibleBodies = {}
 
-                local hitbox = { Selected = hDefault, Visible = false }
+                local function normalizeValues(entry, fallback)
+                    if type(entry) == "table" then
+                        local values = {}
+                        for _, value in ipairs(entry) do
+                            table.insert(values, value)
+                        end
+                        if #values > 0 then
+                            return values
+                        end
+                    elseif entry ~= nil then
+                        return { entry }
+                    end
+
+                    return fallback and { fallback } or {}
+                end
+
+                for _, rawPart in ipairs(rawParts) do
+                    local body
+                    local label
+                    local values
+
+                    if type(rawPart) == "string" then
+                        body = rawPart
+                        label = rawPart
+                        values = { rawPart }
+                    elseif type(rawPart) == "table" then
+                        body = rawPart.Body or rawPart.BodyPart or rawPart.Frame or rawPart.Name or rawPart.Label or rawPart.Display
+                        label = rawPart.Label or rawPart.Display or rawPart.Name or body
+                        values = normalizeValues(
+                            rawPart.Values or rawPart.Value or rawPart.LinkedValues or rawPart.LinkedValue or rawPart.Keys or rawPart.Parts,
+                            body
+                        )
+                    end
+
+                    if body then
+                        local configEntry = {
+                            Body = body,
+                            Label = label or body,
+                            Values = values,
+                        }
+                        table.insert(partConfigs, configEntry)
+                        partConfigByBody[body] = configEntry
+                        visibleBodies[body] = true
+                    end
+                end
+
+                local function buildSelectedState(raw)
+                    local selected = {}
+
+                    if type(raw) ~= "table" then
+                        return selected
+                    end
+
+                    local sequenceCount = #raw
+                    if sequenceCount > 0 then
+                        for _, value in ipairs(raw) do
+                            local matched = false
+                            if type(value) == "string" then
+                                for _, configEntry in ipairs(partConfigs) do
+                                    if configEntry.Body == value or configEntry.Label == value then
+                                        matched = true
+                                        for _, actualValue in ipairs(configEntry.Values) do
+                                            selected[actualValue] = true
+                                        end
+                                        break
+                                    end
+                                end
+                            end
+
+                            if not matched and value ~= nil then
+                                selected[value] = true
+                            end
+                        end
+                    end
+
+                    for key, enabled in pairs(raw) do
+                        if not (type(key) == "number" and key >= 1 and key <= sequenceCount) and enabled then
+                            local matched = false
+                            if type(key) == "string" then
+                                for _, configEntry in ipairs(partConfigs) do
+                                    if configEntry.Body == key or configEntry.Label == key then
+                                        matched = true
+                                        for _, actualValue in ipairs(configEntry.Values) do
+                                            selected[actualValue] = true
+                                        end
+                                        break
+                                    end
+                                end
+                            end
+
+                            if not matched then
+                                selected[key] = true
+                            end
+                        end
+                    end
+
+                    return selected
+                end
+
+                local hitbox
+
+                local function cloneSelectedState()
+                    local copy = {}
+                    for key, value in pairs(hitbox.Selected) do
+                        if value then
+                            copy[key] = true
+                        end
+                    end
+                    return copy
+                end
+
+                local function applySelectedState(raw)
+                    local nextSelected = buildSelectedState(raw)
+                    for key in pairs(hitbox.Selected) do
+                        hitbox.Selected[key] = nil
+                    end
+                    for key, value in pairs(nextSelected) do
+                        hitbox.Selected[key] = value
+                    end
+                end
+
+                hitbox = {
+                    Selected = buildSelectedState(opts.Default),
+                    Visible = false
+                }
 
                 -- Toggle row in section
                 local row = Instance.new("Frame", contentContainer)
@@ -2605,7 +2737,29 @@ function Library:CreateWindow(opts)
 
                 local partButtons = {}
 
-                local function updatePartVisual(partName, selected)
+                local function isPartSelected(partName)
+                    local configEntry = partConfigByBody[partName]
+                    if not configEntry then
+                        return hitbox.Selected[partName] or false
+                    end
+
+                    for _, actualValue in ipairs(configEntry.Values) do
+                        if hitbox.Selected[actualValue] then
+                            return true
+                        end
+                    end
+
+                    return false
+                end
+
+                local updatePartVisual
+                local function refreshPartVisuals()
+                    for partName in pairs(partButtons) do
+                        updatePartVisual(partName, isPartSelected(partName))
+                    end
+                end
+
+                updatePartVisual = function(partName, selected)
                     local pbt = partButtons[partName]
                     if not pbt then return end
                     if selected then
@@ -2630,21 +2784,32 @@ function Library:CreateWindow(opts)
                     end
                 end
 
+                local function syncFromLinked()
+                    if hLinked and hLinked.Values then
+                        applySelectedState(hLinked.Values)
+                        refreshPartVisuals()
+                    end
+                end
+
                 local function onPartToggle(partName)
                     -- Sync FROM linked dropdown first to get current state
                     if hLinked and hLinked.Values then
-                        for pName, _ in pairs(partButtons) do
-                            hitbox.Selected[pName] = hLinked.Values[pName] or false
+                        applySelectedState(hLinked.Values)
+                    end
+
+                    local configEntry = partConfigByBody[partName]
+                    local nextState = not isPartSelected(partName)
+                    if configEntry then
+                        for _, actualValue in ipairs(configEntry.Values) do
+                            hitbox.Selected[actualValue] = nextState or nil
                         end
+                    else
+                        hitbox.Selected[partName] = nextState or nil
                     end
-                    -- Now toggle
-                    hitbox.Selected[partName] = not hitbox.Selected[partName]
-                    -- Update ALL visuals
-                    for pName, _ in pairs(partButtons) do
-                        updatePartVisual(pName, hitbox.Selected[pName] or false)
-                    end
+
+                    refreshPartVisuals()
                     syncToLinked()
-                    hCallback(hitbox.Selected)
+                    hCallback(cloneSelectedState())
                     Library:_markDirty()
                 end
 
@@ -2652,10 +2817,7 @@ function Library:CreateWindow(opts)
                     local pName = pDef[1]
                     local bodyFrame = pDef[2]
 
-                    local allowed = false
-                    for _, p in ipairs(hParts) do
-                        if p == pName then allowed = true; break end
-                    end
+                    local allowed = visibleBodies[pName] == true
                     if allowed then
 
                     -- + indicator (Frame, not TextButton - clicks pass through to bodyFrame)
@@ -2663,8 +2825,8 @@ function Library:CreateWindow(opts)
                     pBtn.AnchorPoint = Vector2.new(0.5, 0.5)
                     pBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
                     pBtn.Size = UDim2.new(0, 18, 0, 18)
-                    pBtn.BackgroundColor3 = hitbox.Selected[pName] and colors.Main or Color3.fromRGB(60, 60, 60)
-                    pBtn.BackgroundTransparency = hitbox.Selected[pName] and 0 or 0.3
+                    pBtn.BackgroundColor3 = isPartSelected(pName) and colors.Main or Color3.fromRGB(60, 60, 60)
+                    pBtn.BackgroundTransparency = isPartSelected(pName) and 0 or 0.3
                     pBtn.BorderSizePixel = 0
                     pBtn.ZIndex = 93
                     Instance.new("UICorner", pBtn).CornerRadius = UDim.new(1, 0)
@@ -2674,14 +2836,14 @@ function Library:CreateWindow(opts)
                     pLabel.Size = UDim2.new(1, 0, 1, 0)
                     pLabel.Font = Enum.Font.GothamBold
                     pLabel.Text = "+"
-                    pLabel.TextColor3 = hitbox.Selected[pName] and Color3.fromRGB(255, 255, 255) or colors.TextDim
+                    pLabel.TextColor3 = isPartSelected(pName) and Color3.fromRGB(255, 255, 255) or colors.TextDim
                     pLabel.TextSize = 14
                     pLabel.ZIndex = 94
 
                     partButtons[pName] = { btn = pBtn, label = pLabel, bodyFrame = bodyFrame }
 
                     -- Highlight the body part if default selected
-                    if hitbox.Selected[pName] then
+                    if isPartSelected(pName) then
                         bodyFrame.BackgroundColor3 = Color3.fromRGB(80, 30, 40)
                     end
 
@@ -2692,13 +2854,13 @@ function Library:CreateWindow(opts)
 
                     -- Hover on body part frame
                     bodyFrame.MouseEnter:Connect(function()
-                        if not hitbox.Selected[pName] then
+                        if not isPartSelected(pName) then
                             Library:Spring(bodyFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(55, 55, 55) })
                         end
                         Library:Spring(pBtn, "Smooth", { BackgroundTransparency = 0 })
                     end)
                     bodyFrame.MouseLeave:Connect(function()
-                        local sel = hitbox.Selected[pName]
+                        local sel = isPartSelected(pName)
                         Library:Spring(bodyFrame, "Smooth", { BackgroundColor3 = sel and Color3.fromRGB(80, 30, 40) or bodyColor })
                         Library:Spring(pBtn, "Smooth", { BackgroundTransparency = sel and 0 or 0.3 })
                     end)
@@ -2709,32 +2871,18 @@ function Library:CreateWindow(opts)
                 if hLinked then
                     -- Initial sync
                     task.defer(function()
-                        if hLinked.Values then
-                            for _, pDef in ipairs(partDefs) do
-                                local pName = pDef[1]
-                                hitbox.Selected[pName] = hLinked.Values[pName] or false
-                                updatePartVisual(pName, hitbox.Selected[pName])
-                            end
-                        end
+                        syncFromLinked()
                     end)
                     -- Live sync: dropdown notifies us on every change
                     hLinked._onChange = function()
-                        if hLinked.Values then
-                            for pName, _ in pairs(partButtons) do
-                                hitbox.Selected[pName] = hLinked.Values[pName] or false
-                                updatePartVisual(pName, hitbox.Selected[pName])
-                            end
-                        end
+                        syncFromLinked()
                     end
                 end
 
                 -- Method to update from external source
                 function hitbox:SetParts(selected)
-                    for k in pairs(hitbox.Selected) do hitbox.Selected[k] = nil end
-                    for k, v in pairs(selected) do hitbox.Selected[k] = v end
-                    for pName, _ in pairs(partButtons) do
-                        updatePartVisual(pName, hitbox.Selected[pName] or false)
-                    end
+                    applySelectedState(selected)
+                    refreshPartVisuals()
                 end
 
                 -- Toggle panel visibility
@@ -2750,12 +2898,7 @@ function Library:CreateWindow(opts)
                         if win.Visible then hPanel.Visible = true end
                         
                         -- Sync from linked on show
-                        if hLinked and hLinked.Values then
-                            for pName, _ in pairs(partButtons) do
-                                hitbox.Selected[pName] = hLinked.Values[pName] or false
-                                updatePartVisual(pName, hitbox.Selected[pName])
-                            end
-                        end
+                        syncFromLinked()
                     else
                         Library:Spring(cl1, "Smooth", { ImageTransparency = 1 })
                         Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
