@@ -348,6 +348,7 @@ function Library:CreateWindow(opts)
     menuContent.Name = "ContentRoot"
     menuContent.BackgroundTransparency = 1
     menuContent.BorderSizePixel = 0
+    menuContent.Position = UDim2.new(0, 0, 0, 0)
     menuContent.Size = UDim2.new(1, 0, 1, 0)
     menuContent.ZIndex = 1
 
@@ -361,6 +362,10 @@ function Library:CreateWindow(opts)
     }
     local currentContentScale = config.ContentScale or 1
     local function refreshMenuScrolls()
+    end
+    local function updateContentScaleHost(scaleValue)
+        local safeScale = math.max(scaleValue or 1, 0.01)
+        menuContent.Size = UDim2.new(1 / safeScale, 0, 1 / safeScale, 0)
     end
 
     local function getContentScaleOption(rawValue)
@@ -379,6 +384,7 @@ function Library:CreateWindow(opts)
     local function setContentScale(rawValue)
         local option = getContentScaleOption(rawValue)
         currentContentScale = option.Value
+        updateContentScaleHost(option.Value)
         menuScale.Scale = option.Value
         refreshMenuScrolls()
         return option
