@@ -876,10 +876,11 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- DRAGGING / RESIZING
     -- ==============================
-    local dragInput, dragStart, startPos
+    local dragInput, dragStart, startPos, dragInputType, dragPending
     local resizeStart, resizeBounds, resizeInputType, resizeEndInputType
     local resizeDirection, hoverResizeDirection
     local resizeBorder = config.ResizeBorder or 8
+    local dragThreshold = 3
     local minWindowWidth = math.max(config.MinWindowWidth or 640, 520)
     local minWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
 
@@ -956,18 +957,20 @@ function Library:CreateWindow(opts)
     end
 
     header.InputBegan:Connect(function(input)
-        if hoverResizeDirection then
+        if getResizeDirection(input.Position) then
             return
         end
 
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
-            win.Dragging = true
+            dragPending = true
             dragStart = input.Position
             startPos = main.Position
-            self:Stop(main, "Position")
+            dragInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
+                    dragPending = false
+                    dragInputType = nil
                     win.Dragging = false
                     updateResizeHover(UserInputService:GetMouseLocation())
                 end
@@ -998,6 +1001,8 @@ function Library:CreateWindow(opts)
         end
 
         resizeDirection = direction
+        dragPending = false
+        dragInputType = nil
         resizeStart = input.Position
         resizeInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
         resizeEndInputType = input.UserInputType
@@ -1016,6 +1021,15 @@ function Library:CreateWindow(opts)
     trackGlobal(UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement then
             updateResizeHover(input.Position)
+        end
+
+        if dragPending and not win.Dragging and not win.Resizing and dragInputType and input.UserInputType == dragInputType then
+            local delta = input.Position - dragStart
+            if math.abs(delta.X) >= dragThreshold or math.abs(delta.Y) >= dragThreshold then
+                dragPending = false
+                win.Dragging = true
+                self:Stop(main, "Position")
+            end
         end
 
         if input == dragInput and win.Dragging then
@@ -1112,6 +1126,8 @@ function Library:CreateWindow(opts)
             closeTransientPopups()
             hoverResizeDirection = nil
             resizeDirection = nil
+            dragPending = false
+            dragInputType = nil
             resizeStart = nil
             resizeBounds = nil
             resizeInputType = nil
