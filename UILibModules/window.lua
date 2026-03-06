@@ -2264,69 +2264,19 @@ function Library:CreateWindow(opts)
 
                 local st = { Value = sDefault, Enabled = sEnabled }
 
-                local row = Instance.new("Frame", contentContainer)
-                row.Name = "SliderToggle_" .. sName
-                row.BackgroundTransparency = 1
-                row.BorderSizePixel = 0
-                row.Size = UDim2.new(1, 0, 0, 22)
-                row.ZIndex = 5
-
-                -- Label (left)
-                local label = Instance.new("TextLabel", row)
-                label.BackgroundTransparency = 1
-                label.Size = UDim2.new(0.3, 0, 1, 0)
-                label.Font = config.FontMedium
-                label.Text = sName
-                label.TextColor3 = colors.Text
-                label.TextSize = 12
-                label.TextXAlignment = Enum.TextXAlignment.Left
-                label.ZIndex = 5
-
-                -- Checkbox (far right)
-                local chkFrame = Instance.new("Frame", row)
-                chkFrame.AnchorPoint = Vector2.new(1, 0.5)
-                chkFrame.Position = UDim2.new(1, 0, 0.5, 0)
-                chkFrame.Size = UDim2.new(0, 18, 0, 18)
-                chkFrame.BackgroundColor3 = sEnabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
-                chkFrame.BorderSizePixel = 0
-                chkFrame.ZIndex = 5
-                Instance.new("UICorner", chkFrame).CornerRadius = UDim.new(0, 3)
-                local chkStroke = Instance.new("UIStroke", chkFrame)
-                chkStroke.Color = sEnabled and colors.Main or colors.Line
-                chkStroke.Transparency = sEnabled and 0.3 or 0.5
-
-                local checkIcon = Instance.new("ImageLabel", chkFrame)
-                checkIcon.BackgroundTransparency = 1
-                checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-                checkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-                checkIcon.Size = UDim2.new(0, 12, 0, 12)
-                checkIcon.Image = "rbxassetid://122354904349171"
-                checkIcon.ImageColor3 = colors.Main
-                checkIcon.ImageTransparency = sEnabled and 0 or 1
-                checkIcon.ZIndex = 6
-
-                local chkBtn = Instance.new("TextButton", chkFrame)
-                chkBtn.BackgroundTransparency = 1
-                chkBtn.Size = UDim2.new(1, 0, 1, 0)
-                chkBtn.ZIndex = 7
-                chkBtn.Text = ""
-                chkBtn.AutoButtonColor = false
-                chkBtn.Selectable = false
-                chkBtn.BorderSizePixel = 0
-
-                chkBtn.Activated:Connect(function()
-                    st.Enabled = not st.Enabled
-                    if st.Enabled then
-                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
-                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
-                        Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
-                    else
-                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
-                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
-                        Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
-                    end
-                    sToggleCallback(st.Enabled)
-                end)
+                local row = controlBase.createRow(contentContainer, "SliderToggle_" .. sName)
+                local label = controlBase.createLabel(row, sName, {
+                    Font = config.FontMedium,
+                    Size = UDim2.new(0.3, 0, 1, 0),
+                    TextColor3 = colors.Text,
+                    TextSize = 12,
+                })
+                local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
+                    ImageTransparency = sEnabled and 0 or 1,
+                })
+                local chkBtn = controlBase.createOverlayButton(chkFrame, {
+                    ZIndex = 7,
+                })
 
                 -- Slider bar (between label and checkbox)
                 local barBg = Instance.new("Frame", row)
@@ -2356,15 +2306,41 @@ function Library:CreateWindow(opts)
                 valLabel.ZIndex = 7
 
                 local dragging = false
+                local function applyEnabled(enabled, shouldMarkDirty)
+                    st.Enabled = enabled == true
+                    if st.Enabled then
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                    else
+                        Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                    end
+
+                    pcall(sToggleCallback, st.Enabled)
+                    if shouldMarkDirty then
+                        Library:_markDirty()
+                    end
+                end
+
+                local function setSliderValue(val, shouldMarkDirty)
+                    val = math.clamp(tonumber(val) or sMin, sMin, sMax)
+                    st.Value = math.floor(val + 0.5)
+                    local relX = (st.Value - sMin) / (sMax - sMin)
+                    Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
+                    valLabel.Text = tostring(st.Value) .. sSuffix
+                    pcall(sCallback, st.Value)
+                    if shouldMarkDirty then
+                        Library:_markDirty()
+                    end
+                end
+
                 local function updateSlider(inputX)
                     local bx, bw = barBg.AbsolutePosition.X, barBg.AbsoluteSize.X
                     local relX = math.clamp((inputX - bx) / bw, 0, 1)
-                    local val = math.floor(sMin + (sMax - sMin) * relX + 0.5)
-                    st.Value = val
-                    Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
-                    valLabel.Text = tostring(val) .. sSuffix
-                    sCallback(val)
-                    Library:_markDirty()
+                    local val = sMin + (sMax - sMin) * relX
+                    setSliderValue(val, true)
                 end
 
                 local dragBtn = Instance.new("TextButton", barBg)
@@ -2376,19 +2352,66 @@ function Library:CreateWindow(opts)
                 dragBtn.Selectable = false
                 dragBtn.BorderSizePixel = 0
 
-                dragBtn.InputBegan:Connect(function(input)
+                st = controlBase.attachControlLifecycle(section, st, {
+                    clickTargets = { chkBtn, dragBtn },
+                    getValue = function()
+                        return { value = st.Value, enabled = st.Enabled }
+                    end,
+                    refresh = function()
+                        setSliderValue(st.Value, false)
+                        applyEnabled(st.Enabled, false)
+                    end,
+                    root = row,
+                    searchName = sName,
+                    setValue = function(val)
+                        if type(val) ~= "table" then
+                            return
+                        end
+
+                        if val.value ~= nil then
+                            setSliderValue(val.value, true)
+                        end
+                        if val.enabled ~= nil then
+                            applyEnabled(val.enabled, true)
+                        end
+                    end,
+                    updateDisabled = function(disabled)
+                        label.TextTransparency = disabled and 0.35 or 0
+                        chkBtn.Active = not disabled
+                        dragBtn.Active = not disabled
+                        if disabled then
+                            dragging = false
+                        end
+                    end,
+                })
+
+                st:TrackConnection(chkBtn.Activated:Connect(function()
+                    if st.Disabled then
+                        return
+                    end
+
+                    applyEnabled(not st.Enabled, true)
+                end), "SliderToggleToggle")
+
+                st:TrackConnection(dragBtn.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        if st.Disabled then
+                            return
+                        end
                         dragging = true
                         updateSlider(input.Position.X)
                     end
-                end)
-                dragBtn.InputEnded:Connect(function(input)
+                end), "SliderToggleInputBegan")
+                st:TrackConnection(dragBtn.InputEnded:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         dragging = false
                     end
-                end)
-                sectionTrackGlobal(UserInputService.InputChanged:Connect(function(input)
+                end), "SliderToggleInputEnded")
+                st:TrackConnection(UserInputService.InputChanged:Connect(function(input)
                     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                        if st.Disabled then
+                            return
+                        end
                         updateSlider(input.Position.X)
                     end
                 end), nextCleanupKey("SliderToggleDrag"))
@@ -2399,23 +2422,13 @@ function Library:CreateWindow(opts)
                     function(val)
                         if type(val) ~= "table" then return end
                         if val.value ~= nil then
-                            local v = math.clamp(val.value, sMin, sMax)
-                            st.Value = v
-                            local relX = (v - sMin) / (sMax - sMin)
-                            fill.Size = UDim2.new(relX, 0, 1, 0)
-                            valLabel.Text = tostring(v) .. sSuffix
+                            setSliderValue(val.value, false)
                         end
                         if val.enabled ~= nil then
-                            st.Enabled = val.enabled
-                            cl1.BackgroundTransparency = val.enabled and 0 or 1
-                            cl2.BackgroundTransparency = val.enabled and 0 or 1
-                            chkFrame.BackgroundColor3 = val.enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
-                            chkStroke.Color = val.enabled and colors.Main or colors.Line
-                            chkStroke.Transparency = val.enabled and 0.3 or 0.5
+                            applyEnabled(val.enabled, false)
                         end
                     end
                 )
-                table.insert(win._searchItems, { name = sName, menuName = menuName, secName = secName, menuRef = menu })
 
                 return st
             end
@@ -2535,39 +2548,21 @@ function Library:CreateWindow(opts)
                 -- Current HSV state
                 local hue, sat, val = cpDefault:ToHSV()
 
-                -- Row in section
-                local row = Instance.new("Frame", contentContainer)
-                row.Name = "ColorPicker_" .. cpName
-                row.BackgroundTransparency = 1
-                row.BorderSizePixel = 0
-                row.Size = UDim2.new(1, 0, 0, 22)
-                row.ZIndex = 5
-
-                local label = Instance.new("TextLabel", row)
-                label.BackgroundTransparency = 1
-                label.Size = UDim2.new(1, -24, 1, 0)
-                label.Font = config.FontMedium
-                label.Text = cpName
-                label.TextColor3 = colors.Text
-                label.TextSize = 12
-                label.TextXAlignment = Enum.TextXAlignment.Left
-                label.ZIndex = 5
+                local row = controlBase.createRow(contentContainer, "ColorPicker_" .. cpName)
+                local label = controlBase.createLabel(row, cpName, {
+                    Font = config.FontMedium,
+                    Size = UDim2.new(1, -24, 1, 0),
+                    TextColor3 = colors.Text,
+                    TextSize = 12,
+                })
 
                 -- Color preview box (clickable)
-                local colorBox = Instance.new("TextButton", row)
-                colorBox.AnchorPoint = Vector2.new(1, 0.5)
-                colorBox.Position = UDim2.new(1, 0, 0.5, 0)
-                colorBox.Size = UDim2.new(0, 18, 0, 18)
-                colorBox.BackgroundColor3 = cpDefault
-                colorBox.BorderSizePixel = 0
-                colorBox.Text = ""
-                colorBox.ZIndex = 5
-                colorBox.AutoButtonColor = false
-                colorBox.Selectable = false
-                Instance.new("UICorner", colorBox).CornerRadius = UDim.new(0, 3)
-                local boxStroke = Instance.new("UIStroke", colorBox)
-                boxStroke.Color = colors.Line
-                boxStroke.Transparency = 0.3
+                local colorBox, boxStroke = controlBase.createRightBox(row, {
+                    BackgroundColor3 = cpDefault,
+                    ClassName = "TextButton",
+                    StrokeColor = colors.Line,
+                    StrokeTransparency = 0.3,
+                })
 
                 -- ====== POPUP PANEL (parented to window) ======
                 local cpPanel = Instance.new("Frame", clipFrame)
@@ -2667,8 +2662,7 @@ function Library:CreateWindow(opts)
                 hexText.TextXAlignment = Enum.TextXAlignment.Left
                 hexText.ZIndex = 209
 
-                -- Update function
-                local function applyColor()
+                local function applyColor(shouldMarkDirty)
                     local c = Color3.fromHSV(hue, sat, val)
                     cpicker.Value = c
                     colorBox.BackgroundColor3 = c
@@ -2677,15 +2671,36 @@ function Library:CreateWindow(opts)
                     crosshair.Position = UDim2.new(sat, 0, 1 - val, 0)
                     hueSlide.Position = UDim2.new(0.5, 0, hue, 0)
                     pcall(cpCallback, c)
+                    if shouldMarkDirty then
+                        Library:_markDirty()
+                    end
                 end
 
                 -- Panel open/close
                 local cpOpen = false
-                local UIS = game:GetService("UserInputService")
-                local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
+                local Mouse = Client:GetMouse()
+                local closePanel
+
+                local function setColorValue(rawValue, shouldMarkDirty)
+                    local c = rawValue
+                    if type(rawValue) == "table" then
+                        c = Color3.fromRGB(rawValue.R or 255, rawValue.G or 255, rawValue.B or 255)
+                    end
+                    if typeof(c) ~= "Color3" then
+                        return
+                    end
+
+                    hue, sat, val = c:ToHSV()
+                    applyColor(shouldMarkDirty)
+                end
 
                 local function openPanel()
+                    if cpicker.Disabled then
+                        return
+                    end
+
                     cpOpen = true
+                    closeTransientPopups(cpPanel)
                     local bp = colorBox.AbsolutePosition
                     cpPanel.Position = UDim2.fromOffset(
                         math.clamp(bp.X - 80, 10, clipFrame.AbsoluteSize.X - 185),
@@ -2697,7 +2712,7 @@ function Library:CreateWindow(opts)
                     Library:Spring(cpStroke, "Smooth", { Transparency = 0 })
                 end
 
-                local function closePanel()
+                closePanel = function()
                     cpOpen = false
                     Library:Spring(cpPanel, "Smooth", { Size = UDim2.new(0, 175, 0, 0) })
                     Library:Spring(cpStroke, "Smooth", { Transparency = 1 })
@@ -2706,12 +2721,44 @@ function Library:CreateWindow(opts)
                     end)
                 end
 
-                colorBox.Activated:Connect(function()
+                cpicker = controlBase.attachControlLifecycle(section, cpicker, {
+                    clickTargets = { colorBox },
+                    getValue = function()
+                        return cpicker.Value
+                    end,
+                    onDestroy = function()
+                        cpOpen = false
+                    end,
+                    refresh = function()
+                        setColorValue(cpicker.Value, false)
+                    end,
+                    root = row,
+                    searchName = cpName,
+                    setValue = function(value)
+                        setColorValue(value, true)
+                    end,
+                    updateDisabled = function(disabled)
+                        label.TextTransparency = disabled and 0.35 or 0
+                        colorBox.Active = not disabled
+                        if disabled and cpOpen then
+                            closePanel()
+                        end
+                    end,
+                })
+                cpicker:TrackInstance(cpPanel, "ColorPickerPanel")
+
+                registerTransientPopup(cpPanel, closePanel)
+
+                cpicker:TrackConnection(colorBox.Activated:Connect(function()
+                    if cpicker.Disabled then
+                        return
+                    end
+
                     if cpOpen then closePanel() else openPanel() end
-                end)
+                end), "ColorPickerToggle")
 
                 -- Click outside to close
-                trackGlobal(UIS.InputBegan:Connect(function(input)
+                cpicker:TrackConnection(UserInputService.InputBegan:Connect(function(input)
                     if not cpOpen then return end
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         task.defer(function()
@@ -2727,16 +2774,18 @@ function Library:CreateWindow(opts)
                 end), nextCleanupKey("ColorPickerOutside"))
 
                 -- SV box drag
-                svBox.InputBegan:Connect(function(input)
+                cpicker:TrackConnection(svBox.InputBegan:Connect(function(input)
                     if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-                    local dragging = true
-                    local dragKey = nextCleanupKey("ColorPickerSVDrag")
+                    if cpicker.Disabled then
+                        return
+                    end
+
+                    local dragKey = "ColorPickerSVDrag"
                     local conn
-                    conn = track(RunService.Heartbeat:Connect(function()
-                        if not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-                            dragging = false
+                    conn = cpicker:TrackConnection(RunService.Heartbeat:Connect(function()
+                        if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
                             if conn then
-                                janitor:Remove(dragKey)
+                                cpicker._janitor:Remove(dragKey)
                                 conn = nil
                             end
                             return
@@ -2745,19 +2794,23 @@ function Library:CreateWindow(opts)
                         local sx, sy = svBox.AbsoluteSize.X, svBox.AbsoluteSize.Y
                         sat = math.clamp((Mouse.X - px) / sx, 0, 1)
                         val = 1 - math.clamp((Mouse.Y - py) / sy, 0, 1)
-                        applyColor()
-                    end), "Disconnect", dragKey)
-                end)
+                        applyColor(true)
+                    end), dragKey)
+                end), "ColorPickerSVInput")
 
                 -- Hue bar drag
-                hueBar.InputBegan:Connect(function(input)
+                cpicker:TrackConnection(hueBar.InputBegan:Connect(function(input)
                     if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-                    local dragKey = nextCleanupKey("ColorPickerHueDrag")
+                    if cpicker.Disabled then
+                        return
+                    end
+
+                    local dragKey = "ColorPickerHueDrag"
                     local conn
-                    conn = track(RunService.Heartbeat:Connect(function()
-                        if not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                    conn = cpicker:TrackConnection(RunService.Heartbeat:Connect(function()
+                        if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
                             if conn then
-                                janitor:Remove(dragKey)
+                                cpicker._janitor:Remove(dragKey)
                                 conn = nil
                             end
                             return
@@ -2765,9 +2818,9 @@ function Library:CreateWindow(opts)
                         local py = hueBar.AbsolutePosition.Y
                         local sy = hueBar.AbsoluteSize.Y
                         hue = math.clamp((Mouse.Y - py) / sy, 0, 1)
-                        applyColor()
-                    end), "Disconnect", dragKey)
-                end)
+                        applyColor(true)
+                    end), dragKey)
+                end), "ColorPickerHueInput")
 
                 -- Config save/load
                 if cpSaveKey then
@@ -2777,15 +2830,10 @@ function Library:CreateWindow(opts)
                             return { R = math.floor(c.R * 255), G = math.floor(c.G * 255), B = math.floor(c.B * 255) }
                         end,
                         function(v)
-                            if type(v) ~= "table" then return end
-                            local c = Color3.fromRGB(v.R or 255, v.G or 255, v.B or 255)
-                            hue, sat, val = c:ToHSV()
-                            applyColor()
+                            setColorValue(v, false)
                         end
                     )
                 end
-
-                table.insert(win._searchItems, { name = cpName, menuName = menuName, secName = secName, menuRef = menu })
 
                 return cpicker
             end
@@ -2938,56 +2986,22 @@ function Library:CreateWindow(opts)
                     Visible = false
                 }
 
-                -- Toggle row in section
-                local row = Instance.new("Frame", contentContainer)
-                row.Name = "HitboxPreview_" .. hName
-                row.BackgroundTransparency = 1
-                row.BorderSizePixel = 0
-                row.Size = UDim2.new(1, 0, 0, 22)
-                row.ZIndex = 5
-
-                local label = Instance.new("TextLabel", row)
-                label.BackgroundTransparency = 1
-                label.Size = UDim2.new(1, -20, 1, 0)
-                label.Font = config.FontMedium
-                label.Text = hName
-                label.TextColor3 = colors.Text
-                label.TextSize = 12
-                label.TextXAlignment = Enum.TextXAlignment.Left
-                label.ZIndex = 5
+                local row = controlBase.createRow(contentContainer, "HitboxPreview_" .. hName)
+                local label = controlBase.createLabel(row, hName, {
+                    Font = config.FontMedium,
+                    Size = UDim2.new(1, -20, 1, 0),
+                    TextColor3 = colors.Text,
+                    TextSize = 12,
+                })
 
                 -- Checkbox (right side)
-                local chkFrame = Instance.new("Frame", row)
-                chkFrame.AnchorPoint = Vector2.new(1, 0.5)
-                chkFrame.Position = UDim2.new(1, 0, 0.5, 0)
-                chkFrame.Size = UDim2.new(0, 18, 0, 18)
-                chkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-                chkFrame.BorderSizePixel = 0
-                chkFrame.ZIndex = 5
-                Instance.new("UICorner", chkFrame).CornerRadius = UDim.new(0, 3)
-                local chkStroke = Instance.new("UIStroke", chkFrame)
-                chkStroke.Color = colors.Line
-                chkStroke.Transparency = 0.5
-
-                local cl1 = Instance.new("ImageLabel", chkFrame)
-                cl1.BackgroundTransparency = 1
-                cl1.AnchorPoint = Vector2.new(0.5, 0.5)
-                cl1.Position = UDim2.new(0.5, 0, 0.5, 0)
-                cl1.Size = UDim2.new(0, 10, 0, 10)
-                cl1.Image = "rbxassetid://122354904349171"
-                cl1.ImageColor3 = colors.Main
-                cl1.ImageTransparency = 1
-                cl1.ZIndex = 6
+                local chkFrame, chkStroke, cl1 = controlBase.createCheckbox(row, colors, {
+                    IconWidth = 10,
+                    IconHeight = 10,
+                })
                 local cl2 = cl1 -- alias for existing references
 
-                local clickBtn = Instance.new("TextButton", row)
-                clickBtn.BackgroundTransparency = 1
-                clickBtn.Size = UDim2.new(1, 0, 1, 0)
-                clickBtn.ZIndex = 7
-                clickBtn.Text = ""
-                clickBtn.AutoButtonColor = false
-                clickBtn.Selectable = false
-                clickBtn.BorderSizePixel = 0
+                local clickBtn = controlBase.createOverlayButton(row)
 
                 -- ==============================
                 -- FLOATING HITBOX PANEL (child of main, outside clipFrame)
@@ -3139,6 +3153,10 @@ function Library:CreateWindow(opts)
                 end
 
                 local function onPartToggle(partName)
+                    if hitbox.Disabled then
+                        return
+                    end
+
                     -- Sync FROM linked dropdown first to get current state
                     if hLinked and hLinked.Values then
                         applySelectedState(hLinked.Values)
@@ -3160,6 +3178,7 @@ function Library:CreateWindow(opts)
                     Library:_markDirty()
                 end
 
+                local linkedSyncHandler
                 for _, pDef in ipairs(partDefs) do
                     local pName = pDef[1]
                     local bodyFrame = pDef[2]
@@ -3221,9 +3240,10 @@ function Library:CreateWindow(opts)
                         syncFromLinked()
                     end)
                     -- Live sync: dropdown notifies us on every change
-                    hLinked._onChange = function()
+                    linkedSyncHandler = function()
                         syncFromLinked()
                     end
+                    hLinked._onChange = linkedSyncHandler
                 end
 
                 -- Method to update from external source
@@ -3256,10 +3276,39 @@ function Library:CreateWindow(opts)
                     end
                 end
 
-                clickBtn.Activated:Connect(togglePanel)
+                hitbox = controlBase.attachControlLifecycle(section, hitbox, {
+                    clickTargets = { clickBtn },
+                    getValue = cloneSelectedState,
+                    onDestroy = function()
+                        if hLinked and hLinked._onChange == linkedSyncHandler then
+                            hLinked._onChange = nil
+                        end
+                        win._floatingPanels[hPanel] = nil
+                    end,
+                    refresh = refreshPartVisuals,
+                    root = row,
+                    searchName = hName,
+                    setValue = function(selected)
+                        applySelectedState(selected)
+                        refreshPartVisuals()
+                        hCallback(cloneSelectedState())
+                    end,
+                    updateDisabled = function(disabled)
+                        label.TextTransparency = disabled and 0.35 or 0
+                        clickBtn.Active = not disabled
+                        if disabled and hitbox.Visible then
+                            togglePanel()
+                        end
+                    end,
+                })
+                hitbox:TrackInstance(hPanel, "HitboxPanel")
+                hitbox:TrackConnection(clickBtn.Activated:Connect(function()
+                    if hitbox.Disabled then
+                        return
+                    end
 
-                -- Register for search
-                table.insert(win._searchItems, { name = hName, menuName = menuName, secName = secName, menuRef = menu })
+                    togglePanel()
+                end), "HitboxToggle")
 
                 return hitbox
             end

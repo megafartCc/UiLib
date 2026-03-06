@@ -9,14 +9,25 @@ return function(Library, helpers)
 
     local function closeTransientPopups(exceptPanel)
         for panel, closeFn in pairs(transientPopupClosers) do
-            if panel ~= exceptPanel then
+            if not panel or not panel.Parent then
+                transientPopupClosers[panel] = nil
+            elseif panel ~= exceptPanel then
                 closeFn()
             end
         end
     end
 
     local function registerTransientPopup(panel, closeFn)
+        if not panel then
+            return function()
+            end
+        end
+
         transientPopupClosers[panel] = closeFn
+
+        return function()
+            transientPopupClosers[panel] = nil
+        end
     end
 
     local function setPopupOpen(panel, isOpen, opts)
