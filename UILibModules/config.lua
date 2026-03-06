@@ -98,6 +98,7 @@ return function(Library, context)
         WindowHeight   = 500,
         MinWindowWidth = 640,
         MinWindowHeight = 400,
+        ContentScale   = 1,
         ResizeBorder   = 8,
         HeaderHeight   = 40,
         BottomHeight   = 25,

@@ -343,6 +343,45 @@ function Library:CreateWindow(opts)
     menuFrame.ZIndex = 1
     menuFrame.ClipsDescendants = true
 
+    local menuContent = Instance.new("Frame", menuFrame)
+    menuContent.Name = "ContentRoot"
+    menuContent.BackgroundTransparency = 1
+    menuContent.BorderSizePixel = 0
+    menuContent.Size = UDim2.new(1, 0, 1, 0)
+    menuContent.ZIndex = 1
+
+    local menuScale = Instance.new("UIScale", menuContent)
+    local contentScaleOptions = {
+        { Label = "90%", Value = 0.9 },
+        { Label = "100%", Value = 1.0 },
+        { Label = "110%", Value = 1.1 },
+        { Label = "125%", Value = 1.25 },
+        { Label = "140%", Value = 1.4 },
+    }
+    local currentContentScale = config.ContentScale or 1
+
+    local function getContentScaleOption(rawValue)
+        local numericValue = tonumber(rawValue)
+        for _, option in ipairs(contentScaleOptions) do
+            if option.Label == rawValue then
+                return option
+            end
+            if numericValue and math.abs(option.Value - numericValue) < 0.001 then
+                return option
+            end
+        end
+        return contentScaleOptions[2]
+    end
+
+    local function setContentScale(rawValue)
+        local option = getContentScaleOption(rawValue)
+        currentContentScale = option.Value
+        menuScale.Scale = option.Value
+        return option
+    end
+
+    setContentScale(currentContentScale)
+
     -- ==============================
     -- BOTTOM BAR (25px)
     -- ==============================
@@ -574,9 +613,16 @@ function Library:CreateWindow(opts)
         task.delay(0.3, function() Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
     end)
 
+    local SETTINGS_DROPDOWN_ARROW_CLOSED = utf8.char(9660)
+    local SETTINGS_DROPDOWN_ARROW_OPEN = utf8.char(9650)
+    local uiScalePanel
+    local uiScaleDropdownOpen = false
+    local setUiScaleDropdownOpen = function()
+    end
+
     -- Toggle settings panel
     local settingsOpen = false
-    local SETTINGS_HEIGHT = 120
+    local SETTINGS_HEIGHT = 146
     local settingsPopupConfig = {
         ClosedSize = UDim2.new(0, 180, 0, 0),
         OpenSize = UDim2.new(0, 180, 0, SETTINGS_HEIGHT),
@@ -594,6 +640,8 @@ function Library:CreateWindow(opts)
 
         if settingsOpen then
             closeTransientPopups(settingsPanel)
+        else
+            setUiScaleDropdownOpen(false)
         end
 
         setPopupOpen(settingsPanel, settingsOpen, settingsPopupConfig)
@@ -616,7 +664,7 @@ function Library:CreateWindow(opts)
             return settingsOpen
         end,
         targets = function()
-            return { settingsPanel, gearBtn }
+            return { settingsPanel, gearBtn, uiScalePanel }
         end,
     })
 
@@ -1147,10 +1195,199 @@ function Library:CreateWindow(opts)
     end), "ToggleKeybind")
 
     -- ==============================
+    -- CONTENT SCALE (settings panel)
+    -- ==============================
+    local uiScaleRow = Instance.new("Frame", settingsPanel)
+    uiScaleRow.Position = UDim2.new(0, 10, 0, 88)
+    uiScaleRow.Size = UDim2.new(1, -20, 0, 20)
+    uiScaleRow.BackgroundTransparency = 1
+    uiScaleRow.ZIndex = 101
+
+    local uiScaleLabel = Instance.new("TextLabel", uiScaleRow)
+    uiScaleLabel.BackgroundTransparency = 1
+    uiScaleLabel.Size = UDim2.new(0.5, 0, 1, 0)
+    uiScaleLabel.Font = config.FontMedium
+    uiScaleLabel.Text = "UI Scale"
+    uiScaleLabel.TextColor3 = colors.Text
+    uiScaleLabel.TextSize = 11
+    uiScaleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    uiScaleLabel.ZIndex = 101
+
+    local uiScaleValueBtn = Instance.new("TextButton", uiScaleRow)
+    uiScaleValueBtn.AnchorPoint = Vector2.new(1, 0.5)
+    uiScaleValueBtn.Position = UDim2.new(1, 0, 0.5, 0)
+    uiScaleValueBtn.Size = UDim2.new(0.45, 0, 0, 16)
+    uiScaleValueBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    uiScaleValueBtn.BorderSizePixel = 0
+    uiScaleValueBtn.Font = config.FontMedium
+    uiScaleValueBtn.TextColor3 = colors.TextDim
+    uiScaleValueBtn.TextSize = 10
+    uiScaleValueBtn.TextXAlignment = Enum.TextXAlignment.Left
+    uiScaleValueBtn.ZIndex = 102
+    uiScaleValueBtn.AutoButtonColor = false
+    uiScaleValueBtn.Selectable = false
+    Instance.new("UICorner", uiScaleValueBtn).CornerRadius = UDim.new(0, 3)
+    local uiScaleStroke = Instance.new("UIStroke", uiScaleValueBtn)
+    uiScaleStroke.Color = colors.Line
+    uiScaleStroke.Transparency = 0.5
+
+    local uiScaleArrow = Instance.new("TextLabel", uiScaleValueBtn)
+    uiScaleArrow.BackgroundTransparency = 1
+    uiScaleArrow.AnchorPoint = Vector2.new(1, 0.5)
+    uiScaleArrow.Position = UDim2.new(1, -4, 0.5, 0)
+    uiScaleArrow.Size = UDim2.new(0, 12, 0, 12)
+    uiScaleArrow.Font = config.Font
+    uiScaleArrow.Text = SETTINGS_DROPDOWN_ARROW_CLOSED
+    uiScaleArrow.TextColor3 = colors.TextDim
+    uiScaleArrow.TextSize = 7
+    uiScaleArrow.ZIndex = 103
+
+    local function updateContentScaleVisual()
+        uiScaleValueBtn.Text = getContentScaleOption(currentContentScale).Label
+    end
+
+    updateContentScaleVisual()
+
+    local uiScalePanelWidth = 90
+    local uiScalePanelHeight = (#contentScaleOptions * 20) + 6
+    uiScalePanel = Instance.new("Frame", clipFrame)
+    uiScalePanel.Name = "UiScalePanel"
+    uiScalePanel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    uiScalePanel.BorderSizePixel = 0
+    uiScalePanel.Size = UDim2.fromOffset(uiScalePanelWidth, 0)
+    uiScalePanel.Visible = false
+    uiScalePanel.ClipsDescendants = true
+    uiScalePanel.ZIndex = 110
+    Instance.new("UICorner", uiScalePanel).CornerRadius = UDim.new(0, 4)
+    local uiScalePanelStroke = Instance.new("UIStroke", uiScalePanel)
+    uiScalePanelStroke.Color = colors.Line
+    uiScalePanelStroke.Transparency = 0.5
+
+    local uiScaleLayout = Instance.new("UIListLayout", uiScalePanel)
+    uiScaleLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local uiScalePad = Instance.new("UIPadding", uiScalePanel)
+    uiScalePad.PaddingTop = UDim.new(0, 3)
+    uiScalePad.PaddingBottom = UDim.new(0, 3)
+
+    local function positionUiScalePanel()
+        local buttonPos = uiScaleValueBtn.AbsolutePosition
+        local buttonSize = uiScaleValueBtn.AbsoluteSize
+        local clipPos = clipFrame.AbsolutePosition
+        local clipSize = clipFrame.AbsoluteSize
+        local panelX = math.clamp(
+            buttonPos.X - clipPos.X + buttonSize.X - uiScalePanelWidth,
+            4,
+            math.max(4, clipSize.X - uiScalePanelWidth - 4)
+        )
+        local panelY = math.clamp(
+            buttonPos.Y - clipPos.Y - uiScalePanelHeight - 2,
+            4,
+            math.max(4, clipSize.Y - uiScalePanelHeight - 4)
+        )
+        uiScalePanel.Position = UDim2.fromOffset(panelX, panelY)
+    end
+
+    for index, option in ipairs(contentScaleOptions) do
+        local optionButton = Instance.new("TextButton", uiScalePanel)
+        optionButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        optionButton.BackgroundTransparency = 1
+        optionButton.BorderSizePixel = 0
+        optionButton.Size = UDim2.new(1, 0, 0, 20)
+        optionButton.LayoutOrder = index
+        optionButton.Text = ""
+        optionButton.ZIndex = 111
+        optionButton.AutoButtonColor = false
+        optionButton.Selectable = false
+
+        local optionLabel = Instance.new("TextLabel", optionButton)
+        optionLabel.BackgroundTransparency = 1
+        optionLabel.Position = UDim2.new(0, 8, 0, 0)
+        optionLabel.Size = UDim2.new(1, -16, 1, 0)
+        optionLabel.Font = config.FontMedium
+        optionLabel.Text = option.Label
+        optionLabel.TextColor3 = math.abs(option.Value - currentContentScale) < 0.001 and colors.Main or colors.Text
+        optionLabel.TextSize = 10
+        optionLabel.TextXAlignment = Enum.TextXAlignment.Left
+        optionLabel.ZIndex = 112
+
+        optionButton.MouseEnter:Connect(function()
+            Library:Animate(optionButton, "Hover", { BackgroundTransparency = 0.5 })
+            if math.abs(option.Value - currentContentScale) >= 0.001 then
+                Library:Animate(optionLabel, "Hover", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+            end
+        end)
+
+        optionButton.MouseLeave:Connect(function()
+            Library:Animate(optionButton, "Hover", { BackgroundTransparency = 1 })
+            optionLabel.TextColor3 = math.abs(option.Value - currentContentScale) < 0.001 and colors.Main or colors.Text
+        end)
+
+        optionButton.Activated:Connect(function()
+            setContentScale(option.Value)
+            updateContentScaleVisual()
+            for _, child in ipairs(uiScalePanel:GetChildren()) do
+                if child:IsA("TextButton") then
+                    local childLabel = child:FindFirstChildOfClass("TextLabel")
+                    if childLabel then
+                        local selected = childLabel.Text == option.Label
+                        childLabel.TextColor3 = selected and colors.Main or colors.Text
+                    end
+                end
+            end
+            setUiScaleDropdownOpen(false)
+            pcall(function() Library:SaveConfig() end)
+        end)
+    end
+
+    local uiScalePopupConfig = {
+        ClosedSize = UDim2.fromOffset(uiScalePanelWidth, 0),
+        OpenSize = UDim2.fromOffset(uiScalePanelWidth, uiScalePanelHeight),
+        OpenToken = "Open",
+        CloseToken = "Close",
+        HideDelay = 0.2,
+    }
+
+    setUiScaleDropdownOpen = function(nextOpen)
+        if uiScaleDropdownOpen == nextOpen then
+            return
+        end
+
+        uiScaleDropdownOpen = nextOpen
+        if uiScaleDropdownOpen then
+            positionUiScalePanel()
+        end
+
+        setPopupOpen(uiScalePanel, uiScaleDropdownOpen, uiScalePopupConfig)
+        uiScaleArrow.Text = uiScaleDropdownOpen and SETTINGS_DROPDOWN_ARROW_OPEN or SETTINGS_DROPDOWN_ARROW_CLOSED
+    end
+
+    registerTransientPopup(uiScalePanel, function()
+        setUiScaleDropdownOpen(false)
+    end)
+
+    uiScaleValueBtn.Activated:Connect(function()
+        setUiScaleDropdownOpen(not uiScaleDropdownOpen)
+    end)
+
+    popupManager.bindOutsideClose({
+        cleanupKey = "UiScaleOutsideClick",
+        close = function()
+            setUiScaleDropdownOpen(false)
+        end,
+        isOpen = function()
+            return uiScaleDropdownOpen
+        end,
+        targets = function()
+            return { uiScalePanel, uiScaleValueBtn }
+        end,
+    })
+
+    -- ==============================
     -- KEYBIND CHANGER (in settings panel)
     -- ==============================
     local kbRow = Instance.new("Frame", settingsPanel)
-    kbRow.Position = UDim2.new(0, 10, 0, 88)
+    kbRow.Position = UDim2.new(0, 10, 0, 114)
     kbRow.Size = UDim2.new(1, -20, 0, 20)
     kbRow.BackgroundTransparency = 1
     kbRow.ZIndex = 101
@@ -1250,6 +1487,25 @@ function Library:CreateWindow(opts)
         end
     )
 
+    Library:RegisterConfig("__uilib.settings.content_scale", "setting",
+        function()
+            return currentContentScale
+        end,
+        function(val)
+            setContentScale(val)
+            updateContentScaleVisual()
+            for _, child in ipairs(uiScalePanel:GetChildren()) do
+                if child:IsA("TextButton") then
+                    local childLabel = child:FindFirstChildOfClass("TextLabel")
+                    if childLabel then
+                        local selected = childLabel.Text == getContentScaleOption(currentContentScale).Label
+                        childLabel.TextColor3 = selected and colors.Main or colors.Text
+                    end
+                end
+            end
+        end
+    )
+
     Library:RegisterConfig("__uilib.settings.toggle_key", "setting",
         function()
             if typeof(guiKeybind) == "EnumItem" then
@@ -1314,7 +1570,7 @@ function Library:CreateWindow(opts)
         clickBtn.Selectable = false
 
         -- Page content frame (inside menuFrame)
-        local pageFrame = Instance.new("Frame", menuFrame)
+        local pageFrame = Instance.new("Frame", menuContent)
         pageFrame.Name = "Page_" .. menuName
         pageFrame.BackgroundTransparency = 1
         pageFrame.BorderSizePixel = 0
