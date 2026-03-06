@@ -1324,11 +1324,15 @@ function Library:CreateWindow(opts)
             4,
             math.max(4, clipSize.X - uiScalePanelWidth - 4)
         )
-        local panelY = math.clamp(
-            buttonPos.Y - clipPos.Y - uiScalePanelHeight - 2,
-            4,
-            math.max(4, clipSize.Y - uiScalePanelHeight - 4)
-        )
+        local preferredBelowY = buttonPos.Y - clipPos.Y + buttonSize.Y + 2
+        local maxPanelY = math.max(4, clipSize.Y - uiScalePanelHeight - 4)
+        local panelY = preferredBelowY
+
+        if panelY > maxPanelY then
+            panelY = buttonPos.Y - clipPos.Y - uiScalePanelHeight - 2
+        end
+
+        panelY = math.clamp(panelY, 4, maxPanelY)
         uiScalePanel.Position = UDim2.fromOffset(panelX, panelY)
     end
 
