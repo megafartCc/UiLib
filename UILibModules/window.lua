@@ -924,7 +924,7 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- DRAGGING / RESIZING
     -- ==============================
-    local dragInput, dragStart, startPos, dragInputType, dragPending
+    local dragInput, dragStart, dragBounds, dragInputType, dragPending
     local resizeStart, resizeBounds, resizeInputType, resizeEndInputType
     local resizeDirection, hoverResizeDirection
     local resizeBorder = config.ResizeBorder or 8
@@ -978,15 +978,31 @@ function Library:CreateWindow(opts)
     local fullWindowSize = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
     local fullClipSize = UDim2.new(1, 0, 1, 0)
 
+    local windowBounds = {
+        left = math.floor(main.AbsolutePosition.X + 0.5),
+        top = math.floor(main.AbsolutePosition.Y + 0.5),
+        width = config.WindowWidth,
+        height = config.WindowHeight,
+    }
+
     local function applyWindowBounds(left, top, width, height)
+        local clampedLeft = math.floor(left + 0.5)
+        local clampedTop = math.floor(top + 0.5)
         local clampedWidth = math.max(minWindowWidth, math.floor(width + 0.5))
         local clampedHeight = math.max(minWindowHeight, math.floor(height + 0.5))
-        local centerX = left + (clampedWidth * 0.5)
+        local centerX = clampedLeft + (clampedWidth * 0.5)
 
-        main.Position = UDim2.fromOffset(math.floor(centerX + 0.5), math.floor(top + 0.5))
+        windowBounds.left = clampedLeft
+        windowBounds.top = clampedTop
+        windowBounds.width = clampedWidth
+        windowBounds.height = clampedHeight
+
+        main.Position = UDim2.fromOffset(math.floor(centerX + 0.5), clampedTop)
         main.Size = UDim2.fromOffset(clampedWidth, clampedHeight)
         fullWindowSize = UDim2.fromOffset(clampedWidth, clampedHeight)
     end
+
+    applyWindowBounds(windowBounds.left, windowBounds.top, windowBounds.width, windowBounds.height)
 
     local function updateResizeHover(position)
         if win.Resizing then
@@ -1017,7 +1033,12 @@ function Library:CreateWindow(opts)
             or input.UserInputType == Enum.UserInputType.Touch then
             dragPending = true
             dragStart = input.Position
-            startPos = main.Position
+            dragBounds = {
+                left = windowBounds.left,
+                top = windowBounds.top,
+                width = windowBounds.width,
+                height = windowBounds.height,
+            }
             dragInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
@@ -1055,7 +1076,7 @@ function Library:CreateWindow(opts)
         resizeDirection = direction
         dragInput = nil
         dragStart = nil
-        startPos = nil
+        dragBounds = nil
         dragPending = false
         dragInputType = nil
         win.Dragging = false
@@ -1063,10 +1084,10 @@ function Library:CreateWindow(opts)
         resizeInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
         resizeEndInputType = input.UserInputType
         resizeBounds = {
-            left = main.AbsolutePosition.X,
-            top = main.AbsolutePosition.Y,
-            width = main.AbsoluteSize.X,
-            height = main.AbsoluteSize.Y,
+            left = windowBounds.left,
+            top = windowBounds.top,
+            width = windowBounds.width,
+            height = windowBounds.height,
         }
         win.Resizing = true
         self:Stop(main, "Position")
@@ -1090,11 +1111,12 @@ function Library:CreateWindow(opts)
 
         if input == dragInput and win.Dragging then
             local delta = input.Position - dragStart
-            local target = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            applyWindowBounds(
+                dragBounds.left + delta.X,
+                dragBounds.top + delta.Y,
+                dragBounds.width,
+                dragBounds.height
             )
-            main.Position = target
             return
         end
 
@@ -1184,7 +1206,7 @@ function Library:CreateWindow(opts)
             resizeDirection = nil
             dragInput = nil
             dragStart = nil
-            startPos = nil
+            dragBounds = nil
             dragPending = false
             dragInputType = nil
             resizeStart = nil
