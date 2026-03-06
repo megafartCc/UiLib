@@ -1005,6 +1005,10 @@ function Library:CreateWindow(opts)
     end
 
     header.InputBegan:Connect(function(input)
+        if win.Resizing then
+            return
+        end
+
         if getResizeDirection(input.Position) then
             return
         end
@@ -1049,8 +1053,12 @@ function Library:CreateWindow(opts)
         end
 
         resizeDirection = direction
+        dragInput = nil
+        dragStart = nil
+        startPos = nil
         dragPending = false
         dragInputType = nil
+        win.Dragging = false
         resizeStart = input.Position
         resizeInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
         resizeEndInputType = input.UserInputType
@@ -1086,7 +1094,7 @@ function Library:CreateWindow(opts)
                 startPos.X.Scale, startPos.X.Offset + delta.X,
                 startPos.Y.Scale, startPos.Y.Offset + delta.Y
             )
-            self:Spring(main, "Drag", { Position = target })
+            main.Position = target
             return
         end
 
@@ -1174,6 +1182,9 @@ function Library:CreateWindow(opts)
             closeTransientPopups()
             hoverResizeDirection = nil
             resizeDirection = nil
+            dragInput = nil
+            dragStart = nil
+            startPos = nil
             dragPending = false
             dragInputType = nil
             resizeStart = nil
