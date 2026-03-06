@@ -96,6 +96,9 @@ return function(Library, context)
     Library.Config = {
         WindowWidth    = 750,
         WindowHeight   = 500,
+        MinWindowWidth = 640,
+        MinWindowHeight = 400,
+        ResizeBorder   = 8,
         HeaderHeight   = 40,
         BottomHeight   = 25,
         Font           = Enum.Font.GothamBold,

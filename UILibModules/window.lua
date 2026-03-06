@@ -36,6 +36,7 @@ function Library:CreateWindow(opts)
         _fusionScope = scope,
         _janitor = janitor,
     }
+    local setResizeCursor
 
     local function track(taskObject, methodName, key)
         return janitor:Add(taskObject, methodName, key)
@@ -85,6 +86,8 @@ function Library:CreateWindow(opts)
         end
 
         self._destroyed = true
+        setResizeCursor(nil, Vector2.new(0, 0))
+        win.Resizing = false
         closeTransientPopups()
 
         for panel in pairs(self._floatingPanels or {}) do
@@ -168,6 +171,21 @@ function Library:CreateWindow(opts)
             clipFrame,
         }
     }
+
+    local resizeCursor = Instance.new("TextLabel", sg)
+    resizeCursor.Name = "ResizeCursor"
+    resizeCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+    resizeCursor.BackgroundTransparency = 1
+    resizeCursor.BorderSizePixel = 0
+    resizeCursor.Size = UDim2.fromOffset(22, 22)
+    resizeCursor.Font = config.Font
+    resizeCursor.Text = utf8.char(8596)
+    resizeCursor.TextColor3 = Color3.fromRGB(255, 255, 255)
+    resizeCursor.TextSize = 18
+    resizeCursor.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    resizeCursor.TextStrokeTransparency = 0.2
+    resizeCursor.Visible = false
+    resizeCursor.ZIndex = 250
 
     -- ==============================
     -- HEADER BAR (40px)
@@ -871,20 +889,130 @@ function Library:CreateWindow(opts)
     })
 
     -- ==============================
-    -- DRAGGING
+    -- DRAGGING / RESIZING
     -- ==============================
     local dragInput, dragStart, startPos
+    local resizeInput, resizeStart, resizeBounds
+    local resizeDirection, hoverResizeDirection
+    local resizeBorder = config.ResizeBorder or 8
+    local minWindowWidth = math.max(config.MinWindowWidth or 640, 520)
+    local minWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
+    local resizeCursorOwnsMouseIcon = false
+    local resizeCursorRotation = {
+        left = 0,
+        right = 0,
+        top = 90,
+        bottom = 90,
+        topLeft = -45,
+        bottomRight = -45,
+        topRight = 45,
+        bottomLeft = 45,
+    }
+
+    setResizeCursor = function(direction, mousePosition)
+        if direction and win.Visible and main.Visible and UserInputService.MouseEnabled then
+            resizeCursor.Position = UDim2.fromOffset(mousePosition.X + 12, mousePosition.Y + 10)
+            resizeCursor.Rotation = resizeCursorRotation[direction] or 0
+            resizeCursor.Visible = true
+
+            if not resizeCursorOwnsMouseIcon then
+                UserInputService.MouseIconEnabled = false
+                resizeCursorOwnsMouseIcon = true
+            end
+            return
+        end
+
+        resizeCursor.Visible = false
+        if resizeCursorOwnsMouseIcon then
+            UserInputService.MouseIconEnabled = true
+            resizeCursorOwnsMouseIcon = false
+        end
+    end
+
+    local function getResizeDirection(position)
+        if not win.Visible or not main.Visible then
+            return nil
+        end
+
+        local boundsPos = main.AbsolutePosition
+        local boundsSize = main.AbsoluteSize
+        local x = position.X
+        local y = position.Y
+
+        if x < boundsPos.X or x > boundsPos.X + boundsSize.X or y < boundsPos.Y or y > boundsPos.Y + boundsSize.Y then
+            return nil
+        end
+
+        local onLeft = x <= boundsPos.X + resizeBorder
+        local onRight = x >= boundsPos.X + boundsSize.X - resizeBorder
+        local onTop = y <= boundsPos.Y + resizeBorder
+        local onBottom = y >= boundsPos.Y + boundsSize.Y - resizeBorder
+
+        if onTop and onLeft then
+            return "topLeft"
+        elseif onTop and onRight then
+            return "topRight"
+        elseif onBottom and onLeft then
+            return "bottomLeft"
+        elseif onBottom and onRight then
+            return "bottomRight"
+        elseif onLeft then
+            return "left"
+        elseif onRight then
+            return "right"
+        elseif onTop then
+            return "top"
+        elseif onBottom then
+            return "bottom"
+        end
+
+        return nil
+    end
+
+    local fullWindowSize = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
+    local fullClipSize = UDim2.new(1, 0, 1, 0)
+
+    local function applyWindowBounds(left, top, width, height)
+        local clampedWidth = math.max(minWindowWidth, math.floor(width + 0.5))
+        local clampedHeight = math.max(minWindowHeight, math.floor(height + 0.5))
+        local centerX = left + (clampedWidth * 0.5)
+
+        main.Position = UDim2.fromOffset(math.floor(centerX + 0.5), math.floor(top + 0.5))
+        main.Size = UDim2.fromOffset(clampedWidth, clampedHeight)
+        fullWindowSize = UDim2.fromOffset(clampedWidth, clampedHeight)
+    end
+
+    local function updateResizeHover(position)
+        if win.Resizing then
+            setResizeCursor(resizeDirection, position)
+            return
+        end
+
+        if win.Dragging then
+            hoverResizeDirection = nil
+            setResizeCursor(nil, position)
+            return
+        end
+
+        hoverResizeDirection = getResizeDirection(position)
+        setResizeCursor(hoverResizeDirection, position)
+    end
 
     header.InputBegan:Connect(function(input)
+        if hoverResizeDirection then
+            return
+        end
+
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             win.Dragging = true
             dragStart = input.Position
             startPos = main.Position
-            spr.stop(main, "Position")
+            self:Stop(main, "Position")
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     win.Dragging = false
+                    updateResizeHover(UserInputService:GetMouseLocation())
                 end
             end)
         end
@@ -897,7 +1025,41 @@ function Library:CreateWindow(opts)
         end
     end)
 
+    trackGlobal(UserInputService.InputBegan:Connect(function(input)
+        if win.Dragging or win.Resizing then
+            return
+        end
+
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        local direction = hoverResizeDirection or getResizeDirection(input.Position)
+        if not direction then
+            return
+        end
+
+        resizeDirection = direction
+        resizeInput = input
+        resizeStart = input.Position
+        resizeBounds = {
+            left = main.AbsolutePosition.X,
+            top = main.AbsolutePosition.Y,
+            width = main.AbsoluteSize.X,
+            height = main.AbsoluteSize.Y,
+        }
+        win.Resizing = true
+        self:Stop(main, "Position")
+        self:Stop(main, "Size")
+        setResizeCursor(resizeDirection, input.Position)
+    end), "WindowResizeBegin")
+
     trackGlobal(UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateResizeHover(input.Position)
+        end
+
         if input == dragInput and win.Dragging then
             local delta = input.Position - dragStart
             local target = UDim2.new(
@@ -905,15 +1067,66 @@ function Library:CreateWindow(opts)
                 startPos.Y.Scale, startPos.Y.Offset + delta.Y
             )
             self:Spring(main, "Drag", { Position = target })
+            return
         end
-    end), "WindowDrag")
+
+        if input ~= resizeInput or not win.Resizing or not resizeBounds then
+            return
+        end
+
+        local delta = input.Position - resizeStart
+        local left = resizeBounds.left
+        local top = resizeBounds.top
+        local width = resizeBounds.width
+        local height = resizeBounds.height
+
+        if resizeDirection == "left" or resizeDirection == "topLeft" or resizeDirection == "bottomLeft" then
+            width = resizeBounds.width - delta.X
+            left = resizeBounds.left + delta.X
+            if width < minWindowWidth then
+                left = resizeBounds.left + (resizeBounds.width - minWindowWidth)
+                width = minWindowWidth
+            end
+        end
+
+        if resizeDirection == "right" or resizeDirection == "topRight" or resizeDirection == "bottomRight" then
+            width = math.max(minWindowWidth, resizeBounds.width + delta.X)
+        end
+
+        if resizeDirection == "top" or resizeDirection == "topLeft" or resizeDirection == "topRight" then
+            height = resizeBounds.height - delta.Y
+            top = resizeBounds.top + delta.Y
+            if height < minWindowHeight then
+                top = resizeBounds.top + (resizeBounds.height - minWindowHeight)
+                height = minWindowHeight
+            end
+        end
+
+        if resizeDirection == "bottom" or resizeDirection == "bottomLeft" or resizeDirection == "bottomRight" then
+            height = math.max(minWindowHeight, resizeBounds.height + delta.Y)
+        end
+
+        applyWindowBounds(left, top, width, height)
+        setResizeCursor(resizeDirection, input.Position)
+    end), "WindowDragResize")
+
+    trackGlobal(UserInputService.InputEnded:Connect(function(input)
+        if input ~= resizeInput then
+            return
+        end
+
+        resizeInput = nil
+        resizeStart = nil
+        resizeBounds = nil
+        resizeDirection = nil
+        win.Resizing = false
+        updateResizeHover(UserInputService:GetMouseLocation())
+    end), "WindowResizeEnd")
 
     -- ==============================
     -- TOGGLE (Insert key)
     -- ==============================
     local guiKeybind = keybind  -- mutable keybind
-    local fullWindowSize = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
-    local fullClipSize = UDim2.new(1, 0, 1, 0)
     
     win._floatingPanels = {} -- panels that live outside clipFrame and need independent toggle states
 
@@ -930,9 +1143,17 @@ function Library:CreateWindow(opts)
             main.Visible = true
             main.Size = fullWindowSize
             clipFrame.Size = fullClipSize
+            updateResizeHover(UserInputService:GetMouseLocation())
             syncFloatingPanels()
         else
             closeTransientPopups()
+            hoverResizeDirection = nil
+            resizeDirection = nil
+            resizeInput = nil
+            resizeStart = nil
+            resizeBounds = nil
+            win.Resizing = false
+            setResizeCursor(nil, Vector2.new(0, 0))
             main.Visible = false
             syncFloatingPanels()
         end
@@ -2293,12 +2514,11 @@ function Library:CreateWindow(opts)
                 -- FLOATING HITBOX PANEL (child of main, outside clipFrame)
                 -- ==============================
                 local panelW = 150
-                local panelH = config.WindowHeight - 60
                 local hPanel = Instance.new("Frame", main)
                 hPanel.Name = "HitboxPanel"
                 hPanel.AnchorPoint = Vector2.new(0, 0.5)
                 hPanel.Position = UDim2.new(1, 4, 0.5, 0)
-                hPanel.Size = UDim2.fromOffset(panelW, panelH)
+                hPanel.Size = UDim2.new(0, panelW, 1, -60)
                 hPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
                 hPanel.BorderSizePixel = 0
                 hPanel.Visible = false
