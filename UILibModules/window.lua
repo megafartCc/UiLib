@@ -360,6 +360,8 @@ function Library:CreateWindow(opts)
         { Label = "140%", Value = 1.4 },
     }
     local currentContentScale = config.ContentScale or 1
+    local function refreshMenuScrolls()
+    end
 
     local function getContentScaleOption(rawValue)
         local numericValue = tonumber(rawValue)
@@ -378,6 +380,7 @@ function Library:CreateWindow(opts)
         local option = getContentScaleOption(rawValue)
         currentContentScale = option.Value
         menuScale.Scale = option.Value
+        refreshMenuScrolls()
         return option
     end
 
@@ -1001,6 +1004,7 @@ function Library:CreateWindow(opts)
         main.Position = UDim2.fromOffset(math.floor(centerX + 0.5), clampedTop)
         main.Size = UDim2.fromOffset(clampedWidth, clampedHeight)
         fullWindowSize = UDim2.fromOffset(clampedWidth, clampedHeight)
+        refreshMenuScrolls()
     end
 
     applyWindowBounds(windowBounds.left, windowBounds.top, windowBounds.width, windowBounds.height)
@@ -1561,7 +1565,7 @@ function Library:CreateWindow(opts)
         local menuIcon = menuOpts.Icon or "eye"
         local numColumns = menuOpts.Columns or 3
 
-        local menu = { Sections = {}, _columns = {} }
+        local menu = { Sections = {}, _columns = {}, _columnScrollers = {} }
 
         -- Tab button (in header scroll)
         local menuBtn = Instance.new("Frame", tbc)
@@ -1619,6 +1623,11 @@ function Library:CreateWindow(opts)
         local columnPadding = 8
         local colWidth = (1 / numColumns)
 
+        local function getVisibleColumnHeight()
+            local viewportHeight = math.max(0, menuFrame.AbsoluteSize.Y - 4)
+            return viewportHeight / math.max(currentContentScale, 0.01)
+        end
+
         for i = 1, numColumns do
             local col = Instance.new("Frame", pageFrame)
             col.Name = "Column_" .. i
@@ -1650,18 +1659,34 @@ function Library:CreateWindow(opts)
 
             -- Mouse wheel scroll (frame-level to consume input)
             local scrollOffset = 0
-            local SCROLL_STEP = 30
+            local BASE_SCROLL_STEP = 30
+
+            local function refreshScroll()
+                local contentH = colLayout.AbsoluteContentSize.Y + 8
+                local visibleH = getVisibleColumnHeight()
+                local maxScroll = math.max(0, contentH - visibleH)
+                scrollOffset = math.clamp(scrollOffset, 0, maxScroll)
+                inner.Position = UDim2.new(0, 0, 0, -scrollOffset)
+            end
 
             col.InputChanged:Connect(function(input)
                 if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
                 local contentH = colLayout.AbsoluteContentSize.Y + 8
-                local visibleH = col.AbsoluteSize.Y
+                local visibleH = getVisibleColumnHeight()
                 local maxScroll = math.max(0, contentH - visibleH)
-                scrollOffset = math.clamp(scrollOffset - input.Position.Z * SCROLL_STEP, 0, maxScroll)
-                inner.Position = UDim2.new(0, 0, 0, -scrollOffset)
+                local scrollStep = BASE_SCROLL_STEP / math.max(currentContentScale, 0.01)
+                scrollOffset = math.clamp(scrollOffset - input.Position.Z * scrollStep, 0, maxScroll)
+                refreshScroll()
             end)
 
+            table.insert(menu._columnScrollers, refreshScroll)
             menu._columns[i] = inner -- sections parent to inner
+        end
+
+        function menu:_refreshScroll()
+            for _, refreshScroll in ipairs(self._columnScrollers) do
+                refreshScroll()
+            end
         end
 
         menu._btn = menuBtn
@@ -1676,6 +1701,7 @@ function Library:CreateWindow(opts)
                 Library:Spring(btnStroke, "Smooth", { Transparency = 0.85 })
                 Library:Spring(menuLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
                 pageFrame.Visible = true
+                menu:_refreshScroll()
             else
                 Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 1 })
                 Library:Spring(btnStroke, "Smooth", { Transparency = 1 })
@@ -3317,6 +3343,14 @@ function Library:CreateWindow(opts)
         end
 
         return menu
+    end
+
+    refreshMenuScrolls = function()
+        for _, menu in ipairs(win.Menus or {}) do
+            if menu and menu._refreshScroll then
+                menu:_refreshScroll()
+            end
+        end
     end
 
 
