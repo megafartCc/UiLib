@@ -80,8 +80,8 @@ return function(Library, context)
         return string.format("%s.%s", tostring(sectionName or "Section"), tostring(dropdownName or "Dropdown"))
     end
 
-    local function fireMultiDropdownCallback(callback, selectedSet)
-        callback(selectedSet, selectedSet)
+    local function fireMultiDropdownCallback(callback, options, selectedSet)
+        callback(getSelectedValues(options, selectedSet), selectedSet)
     end
 
     local function closeTransientPopups(base, exceptPanel)
@@ -712,7 +712,7 @@ return function(Library, context)
 
             multi.Values = selectedSet
             refreshMulti()
-            fireMultiDropdownCallback(dCallback, selectedSet)
+            fireMultiDropdownCallback(dCallback, dOptions, selectedSet)
             if multi._onChange then
                 multi._onChange()
             end
@@ -800,7 +800,7 @@ return function(Library, context)
                 end
                 valText.Text = getDisplayText()
                 multi.Values = selectedSet
-                fireMultiDropdownCallback(dCallback, selectedSet)
+                fireMultiDropdownCallback(dCallback, dOptions, selectedSet)
                 if multi._onChange then
                     multi._onChange()
                 end
