@@ -9,7 +9,6 @@ return function()
     local UserInputService = game:GetService("UserInputService")
     local RunService = game:GetService("RunService")
     local Players = game:GetService("Players")
-    local CoreGui = game:GetService("CoreGui")
     local HttpService = game:GetService("HttpService")
     local TextService = game:GetService("TextService")
     local Client = Players.LocalPlayer
@@ -24,7 +23,10 @@ return function()
             if typeof(get_hidden_gui) == "function" then return get_hidden_gui() end
             if typeof(gethiddenui) == "function" then return gethiddenui() end
         end)
-        return (ok and ui) or CoreGui
+        if ok and typeof(ui) == "Instance" then
+            return ui
+        end
+        error("UILib requires gethui/get_hidden_gui/gethiddenui for UI parenting")
     end
 
     local function protectGui(gui)
@@ -52,7 +54,6 @@ return function()
         UserInputService = UserInputService,
         RunService = RunService,
         Players = Players,
-        CoreGui = CoreGui,
         HttpService = HttpService,
         TextService = TextService,
         Client = Client,
