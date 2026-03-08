@@ -2,6 +2,104 @@ return function(Library, context)
     local UserInputService = context.UserInputService
     local DROPDOWN_ARROW_CLOSED = utf8.char(9660)
     local DROPDOWN_ARROW_OPEN = utf8.char(9650)
+    local DROPDOWN_MAX_VISIBLE_OPTIONS = 8
+
+    local function createDropdownPanelContent(base, panel, optionCount, rowHeight)
+        local showSearch = optionCount > DROPDOWN_MAX_VISIBLE_OPTIONS
+        local visibleRows = math.min(optionCount, DROPDOWN_MAX_VISIBLE_OPTIONS)
+        local openHeight = 6 + (visibleRows * rowHeight) + (showSearch and 28 or 0)
+        local topOffset = 3
+        local searchBox = nil
+
+        if showSearch then
+            local searchInputFrame = Instance.new("Frame", panel)
+            searchInputFrame.Position = UDim2.new(0, 4, 0, 3)
+            searchInputFrame.Size = UDim2.new(1, -8, 0, 22)
+            searchInputFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+            searchInputFrame.BorderSizePixel = 0
+            searchInputFrame.ZIndex = 51
+            Instance.new("UICorner", searchInputFrame).CornerRadius = UDim.new(0, 2)
+
+            local searchStroke = Instance.new("UIStroke", searchInputFrame)
+            searchStroke.Color = base.colors.Line
+            searchStroke.Transparency = 0.5
+
+            searchBox = Instance.new("TextBox", searchInputFrame)
+            searchBox.BackgroundTransparency = 1
+            searchBox.Position = UDim2.new(0, 7, 0, 0)
+            searchBox.Size = UDim2.new(1, -14, 1, 0)
+            searchBox.Font = base.config.FontMedium
+            searchBox.PlaceholderText = "Search..."
+            searchBox.PlaceholderColor3 = base.colors.TextDim
+            searchBox.Text = ""
+            searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+            searchBox.TextSize = 11
+            searchBox.TextXAlignment = Enum.TextXAlignment.Left
+            searchBox.ClearTextOnFocus = false
+            searchBox.ZIndex = 52
+
+            topOffset = 29
+        end
+
+        local optionsScroll = Instance.new("ScrollingFrame", panel)
+        optionsScroll.Name = "OptionsScroll"
+        optionsScroll.Position = UDim2.new(0, 0, 0, topOffset)
+        optionsScroll.Size = UDim2.new(1, 0, 1, -(topOffset + 3))
+        optionsScroll.BackgroundTransparency = 1
+        optionsScroll.BorderSizePixel = 0
+        optionsScroll.ZIndex = 51
+        optionsScroll.ScrollBarThickness = 3
+        optionsScroll.ScrollBarImageColor3 = base.colors.Line
+        optionsScroll.CanvasPosition = Vector2.new(0, 0)
+        optionsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+        local optionsInner = Instance.new("Frame", optionsScroll)
+        optionsInner.Name = "OptionsInner"
+        optionsInner.BackgroundTransparency = 1
+        optionsInner.BorderSizePixel = 0
+        optionsInner.Position = UDim2.new(0, 0, 0, 0)
+        optionsInner.Size = UDim2.new(1, -3, 0, 0)
+        optionsInner.ZIndex = 51
+
+        local optionsLayout = Instance.new("UIListLayout", optionsInner)
+        optionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+        local function refreshCanvas()
+            local contentHeight = optionsLayout.AbsoluteContentSize.Y
+            optionsInner.Size = UDim2.new(1, -3, 0, contentHeight)
+            optionsScroll.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
+        end
+
+        optionsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshCanvas)
+
+        local function bindSearch(optionButtons)
+            if not searchBox then
+                task.defer(refreshCanvas)
+                return
+            end
+
+            local function applyFilter()
+                local query = string.lower(searchBox.Text or "")
+                for _, optionButton in ipairs(optionButtons) do
+                    local text = string.lower(tostring(optionButton:GetAttribute("OptionText") or ""))
+                    optionButton.Visible = query == "" or string.find(text, query, 1, true) ~= nil
+                end
+                optionsScroll.CanvasPosition = Vector2.new(0, 0)
+                task.defer(refreshCanvas)
+            end
+
+            searchBox:GetPropertyChangedSignal("Text"):Connect(applyFilter)
+            applyFilter()
+        end
+
+        return {
+            bindSearch = bindSearch,
+            openHeight = openHeight,
+            optionsParent = optionsInner,
+            refreshCanvas = refreshCanvas,
+            searchBox = searchBox,
+        }
+    end
 
     local function resolveDropdownValue(options, rawValue, allowFallback)
         if type(options) ~= "table" or #options == 0 then
@@ -220,7 +318,6 @@ return function(Library, context)
         selArrow.TextSize = 7
         selArrow.ZIndex = 6
 
-        local fullHeight = #dOptions * 22 + 6
         local dPanel = Instance.new("Frame", selBtn)
         dPanel.Position = UDim2.new(0, 0, 1, 2)
         dPanel.Size = UDim2.new(1, 0, 0, 0)
@@ -235,12 +332,8 @@ return function(Library, context)
         dpStroke.Color = base.colors.Line
         dpStroke.Transparency = 0.5
 
-        local dpLayout = Instance.new("UIListLayout", dPanel)
-        dpLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-        local dpPad = Instance.new("UIPadding", dPanel)
-        dpPad.PaddingTop = UDim.new(0, 3)
-        dpPad.PaddingBottom = UDim.new(0, 3)
+        local dPanelContent = createDropdownPanelContent(base, dPanel, #dOptions, 22)
+        local fullHeight = dPanelContent.openHeight
 
         local optBtns = {}
         local isOpen = false
@@ -269,7 +362,7 @@ return function(Library, context)
 
         registerTransientPopup(base, dPanel, closeDropdown)
         for idx, opt in ipairs(dOptions) do
-            local optBtn = Instance.new("TextButton", dPanel)
+            local optBtn = Instance.new("TextButton", dPanelContent.optionsParent)
             optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
             optBtn.BackgroundTransparency = 1
             optBtn.BorderSizePixel = 0
@@ -279,6 +372,7 @@ return function(Library, context)
             optBtn.LayoutOrder = idx
             optBtn.AutoButtonColor = false
             optBtn.Selectable = false
+            optBtn:SetAttribute("OptionText", tostring(opt))
 
             local optLabel = Instance.new("TextLabel", optBtn)
             optLabel.BackgroundTransparency = 1
@@ -312,6 +406,8 @@ return function(Library, context)
 
             table.insert(optBtns, optBtn)
         end
+        dPanelContent.bindSearch(optBtns)
+        dPanelContent.refreshCanvas()
 
         dropdown = finalizeControl(base, dropdown, {
             clickTargets = { selBtn },
@@ -341,6 +437,10 @@ return function(Library, context)
                 closeTransientPopups(base, dPanel)
                 dPanel.Visible = true
                 dPanel.Size = UDim2.new(1, 0, 0, 0)
+                if dPanelContent.searchBox then
+                    dPanelContent.searchBox.Text = ""
+                end
+                dPanelContent.refreshCanvas()
                 Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 selArrow.Text = DROPDOWN_ARROW_OPEN
             else
@@ -426,7 +526,6 @@ return function(Library, context)
         arrow.TextSize = 8
         arrow.ZIndex = 6
 
-        local fullHeight = #dOptions * 24 + 6
         local dropPanel = Instance.new("Frame", selectBtn)
         dropPanel.Position = UDim2.new(0, 0, 1, 2)
         dropPanel.Size = UDim2.new(1, 0, 0, 0)
@@ -441,12 +540,8 @@ return function(Library, context)
         pStroke.Color = base.colors.Line
         pStroke.Transparency = 0.5
 
-        local pLayout = Instance.new("UIListLayout", dropPanel)
-        pLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-        local pPad = Instance.new("UIPadding", dropPanel)
-        pPad.PaddingTop = UDim.new(0, 3)
-        pPad.PaddingBottom = UDim.new(0, 3)
+        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #dOptions, 24)
+        local fullHeight = dropPanelContent.openHeight
 
         local optionButtons = {}
         local isOpen = false
@@ -475,7 +570,7 @@ return function(Library, context)
 
         registerTransientPopup(base, dropPanel, closeDropdown)
         for idx, opt in ipairs(dOptions) do
-            local optBtn = Instance.new("TextButton", dropPanel)
+            local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
             optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
             optBtn.BackgroundTransparency = 1
             optBtn.BorderSizePixel = 0
@@ -485,6 +580,7 @@ return function(Library, context)
             optBtn.LayoutOrder = idx
             optBtn.AutoButtonColor = false
             optBtn.Selectable = false
+            optBtn:SetAttribute("OptionText", tostring(opt))
 
             local optLabel = Instance.new("TextLabel", optBtn)
             optLabel.BackgroundTransparency = 1
@@ -519,6 +615,8 @@ return function(Library, context)
 
             table.insert(optionButtons, optBtn)
         end
+        dropPanelContent.bindSearch(optionButtons)
+        dropPanelContent.refreshCanvas()
 
         dropdown = finalizeControl(base, dropdown, {
             clickTargets = { selectBtn },
@@ -550,6 +648,10 @@ return function(Library, context)
                 closeTransientPopups(base, dropPanel)
                 dropPanel.Visible = true
                 dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                if dropPanelContent.searchBox then
+                    dropPanelContent.searchBox.Text = ""
+                end
+                dropPanelContent.refreshCanvas()
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
@@ -663,7 +765,6 @@ return function(Library, context)
         arrow.TextSize = 8
         arrow.ZIndex = 6
 
-        local fullHeight = #dOptions * 24 + 6
         local dropPanel = Instance.new("Frame", selectBtn)
         dropPanel.Position = UDim2.new(0, 0, 1, 2)
         dropPanel.Size = UDim2.new(1, 0, 0, 0)
@@ -678,13 +779,10 @@ return function(Library, context)
         pStroke.Color = base.colors.Line
         pStroke.Transparency = 0.5
 
-        local pLayout = Instance.new("UIListLayout", dropPanel)
-        pLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #dOptions, 24)
+        local fullHeight = dropPanelContent.openHeight
 
-        local pPad = Instance.new("UIPadding", dropPanel)
-        pPad.PaddingTop = UDim.new(0, 3)
-        pPad.PaddingBottom = UDim.new(0, 3)
-
+        local optionButtons = {}
         local optVisuals = {}
         local function refreshMulti()
             valText.Text = getDisplayText()
@@ -735,7 +833,7 @@ return function(Library, context)
 
         registerTransientPopup(base, dropPanel, closeDropdown)
         for idx, opt in ipairs(dOptions) do
-            local optBtn = Instance.new("TextButton", dropPanel)
+            local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
             optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
             optBtn.BackgroundTransparency = 1
             optBtn.BorderSizePixel = 0
@@ -745,6 +843,7 @@ return function(Library, context)
             optBtn.LayoutOrder = idx
             optBtn.AutoButtonColor = false
             optBtn.Selectable = false
+            optBtn:SetAttribute("OptionText", tostring(opt))
 
             local chk = Instance.new("Frame", optBtn)
             chk.AnchorPoint = Vector2.new(0, 0.5)
@@ -813,7 +912,10 @@ return function(Library, context)
                 chkStroke = chkStroke,
                 optLabel = optLabel,
             }
+            table.insert(optionButtons, optBtn)
         end
+        dropPanelContent.bindSearch(optionButtons)
+        dropPanelContent.refreshCanvas()
 
         selectBtn.Activated:Connect(function()
             if multi.Disabled then
@@ -824,6 +926,10 @@ return function(Library, context)
                 closeTransientPopups(base, dropPanel)
                 dropPanel.Visible = true
                 dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                if dropPanelContent.searchBox then
+                    dropPanelContent.searchBox.Text = ""
+                end
+                dropPanelContent.refreshCanvas()
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
@@ -987,7 +1093,6 @@ return function(Library, context)
         arrow.TextSize = 8
         arrow.ZIndex = 6
 
-        local fullHeight = #dOptions * 24 + 6
         local dropPanel = Instance.new("Frame", selectBtn)
         dropPanel.Position = UDim2.new(0, 0, 1, 2)
         dropPanel.Size = UDim2.new(1, 0, 0, 0)
@@ -1002,12 +1107,8 @@ return function(Library, context)
         pStroke.Color = base.colors.Line
         pStroke.Transparency = 0.5
 
-        local pLayout = Instance.new("UIListLayout", dropPanel)
-        pLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-        local pPad = Instance.new("UIPadding", dropPanel)
-        pPad.PaddingTop = UDim.new(0, 3)
-        pPad.PaddingBottom = UDim.new(0, 3)
+        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #dOptions, 24)
+        local fullHeight = dropPanelContent.openHeight
 
         local optionButtons = {}
         local isOpen = false
@@ -1036,7 +1137,7 @@ return function(Library, context)
 
         registerTransientPopup(base, dropPanel, closeDropdown)
         for idx, opt in ipairs(dOptions) do
-            local optBtn = Instance.new("TextButton", dropPanel)
+            local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
             optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
             optBtn.BackgroundTransparency = 1
             optBtn.BorderSizePixel = 0
@@ -1046,6 +1147,7 @@ return function(Library, context)
             optBtn.LayoutOrder = idx
             optBtn.AutoButtonColor = false
             optBtn.Selectable = false
+            optBtn:SetAttribute("OptionText", tostring(opt))
 
             local optLabel = Instance.new("TextLabel", optBtn)
             optLabel.BackgroundTransparency = 1
@@ -1080,6 +1182,8 @@ return function(Library, context)
 
             table.insert(optionButtons, optBtn)
         end
+        dropPanelContent.bindSearch(optionButtons)
+        dropPanelContent.refreshCanvas()
 
         dt = finalizeControl(base, dt, {
             clickTargets = { chkBtn, selectBtn },
@@ -1123,6 +1227,10 @@ return function(Library, context)
                 closeTransientPopups(base, dropPanel)
                 dropPanel.Visible = true
                 dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                if dropPanelContent.searchBox then
+                    dropPanelContent.searchBox.Text = ""
+                end
+                dropPanelContent.refreshCanvas()
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
