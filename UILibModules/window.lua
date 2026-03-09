@@ -271,7 +271,7 @@ function Library:CreateWindow(opts)
     })
 
     local HEADER_LEFT_PADDING = 14
-    local HEADER_TITLE_GAP = 28
+    local HEADER_TITLE_GAP = 10
     local HEADER_RIGHT_PADDING = 6
     local USER_PROFILE_WIDTH = 150
     local TABS_MIN_WIDTH = 120
