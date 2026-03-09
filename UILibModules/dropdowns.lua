@@ -50,6 +50,9 @@ return function(Library, context)
         optionsScroll.ZIndex = 51
         optionsScroll.ScrollBarThickness = 3
         optionsScroll.ScrollBarImageColor3 = base.colors.Line
+        optionsScroll.Active = true
+        optionsScroll.ScrollingEnabled = true
+        optionsScroll.ScrollingDirection = Enum.ScrollingDirection.Y
         optionsScroll.CanvasPosition = Vector2.new(0, 0)
         optionsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 

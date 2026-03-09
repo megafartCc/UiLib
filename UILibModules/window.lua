@@ -1811,6 +1811,9 @@ function Library:CreateWindow(opts)
                 if searchOpen and isMouseInside(searchPanel) then
                     return
                 end
+                if popupManager.isMouseOverTransientPopup and popupManager.isMouseOverTransientPopup() then
+                    return
+                end
                 local scrollStep = BASE_SCROLL_STEP / math.max(currentContentScale, 0.01)
                 scrollState:ScrollBy(-input.Position.Z * scrollStep)
             end)

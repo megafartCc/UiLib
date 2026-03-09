@@ -30,6 +30,25 @@ return function(Library, helpers)
         end
     end
 
+    local function isMouseOverTransientPopup()
+        local mousePos = UserInputService:GetMouseLocation()
+        local mx, my = mousePos.X, mousePos.Y
+
+        for panel in pairs(transientPopupClosers) do
+            if panel and panel.Parent and panel.Visible then
+                local pos = panel.AbsolutePosition
+                local size = panel.AbsoluteSize
+                local inside = mx >= pos.X and mx <= pos.X + size.X
+                    and my >= pos.Y and my <= pos.Y + size.Y
+                if inside then
+                    return true
+                end
+            end
+        end
+
+        return false
+    end
+
     local function setPopupOpen(panel, isOpen, opts)
         local state = popupStates[panel]
         if state == nil then
@@ -121,6 +140,7 @@ return function(Library, helpers)
     return {
         bindOutsideClose = bindOutsideClose,
         closeTransientPopups = closeTransientPopups,
+        isMouseOverTransientPopup = isMouseOverTransientPopup,
         registerTransientPopup = registerTransientPopup,
         setPopupOpen = setPopupOpen,
     }
