@@ -271,7 +271,7 @@ function Library:CreateWindow(opts)
     })
 
     local HEADER_LEFT_PADDING = 14
-    local HEADER_TITLE_GAP = 10
+    local HEADER_TITLE_GAP = 0
     local HEADER_RIGHT_PADDING = 6
     local USER_PROFILE_WIDTH = 150
     local TABS_MIN_WIDTH = 120
@@ -358,7 +358,7 @@ function Library:CreateWindow(opts)
     local function measureTitleWidth()
         local ok, bounds = pcall(TextService.GetTextSize, TextService, tostring(name or ""), headerText.TextSize, headerText.Font, Vector2.new(1000, config.HeaderHeight))
         if ok and bounds then
-            return math.clamp(math.ceil(bounds.X) + 10, 120, 320)
+            return math.clamp(math.ceil(bounds.X) + 6, 120, 320)
         end
         return 160
     end
