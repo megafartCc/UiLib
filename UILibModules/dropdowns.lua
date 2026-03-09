@@ -995,7 +995,7 @@ return function(Library, context)
 
         local label = Instance.new("TextLabel", row)
         label.BackgroundTransparency = 1
-        label.Size = UDim2.new(0.3, 0, 1, 0)
+        label.Size = UDim2.new(0.35, 0, 1, 0)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
@@ -1056,8 +1056,8 @@ return function(Library, context)
 
         local selectBtn = Instance.new("TextButton", row)
         selectBtn.AnchorPoint = Vector2.new(1, 0.5)
-        selectBtn.Position = UDim2.new(1, -20, 0.5, 0)
-        selectBtn.Size = UDim2.new(0.45, 0, 0, 18)
+        selectBtn.Position = UDim2.new(1, -24, 0.5, 0)
+        selectBtn.Size = UDim2.new(0.6, 0, 0, 18)
         selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         selectBtn.BorderSizePixel = 0
         selectBtn.Text = ""
