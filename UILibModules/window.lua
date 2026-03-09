@@ -2038,6 +2038,13 @@ function Library:CreateWindow(opts)
                     ImageTransparency = tDefault and 0 or 1,
                 })
                 local clickBtn = controlBase.createOverlayButton(row)
+                local checkBtn = controlBase.createOverlayButton(row, {
+                    Name = "CheckButton",
+                    Position = checkFrame.Position,
+                    Size = checkFrame.Size,
+                    ZIndex = checkFrame.ZIndex + 2,
+                })
+                checkBtn.AnchorPoint = checkFrame.AnchorPoint
 
                 -- Lazy sub-container (only created when AddDropdown/AddSlider is called)
                 local subContainer = nil
@@ -2093,7 +2100,7 @@ function Library:CreateWindow(opts)
                 end
 
                 toggle = controlBase.attachControlLifecycle(section, toggle, {
-                    clickTargets = { clickBtn },
+                    clickTargets = { clickBtn, checkBtn },
                     getValue = function()
                         return toggle.Value
                     end,
@@ -2110,16 +2117,20 @@ function Library:CreateWindow(opts)
                     updateDisabled = function(disabled)
                         label.TextTransparency = disabled and 0.35 or 0
                         clickBtn.Active = not disabled
+                        checkBtn.Active = not disabled
                     end,
                 })
 
-                toggle:TrackConnection(clickBtn.Activated:Connect(function()
+                local function handleToggleActivated()
                     if toggle.Disabled then
                         return
                     end
 
                     setToggleValue(not toggle.Value, true)
-                end), "ToggleClick")
+                end
+
+                toggle:TrackConnection(clickBtn.Activated:Connect(handleToggleActivated), "ToggleClick")
+                toggle:TrackConnection(checkBtn.Activated:Connect(handleToggleActivated), "ToggleCheckClick")
 
                 -- Hover
                 toggle:TrackConnection(clickBtn.MouseEnter:Connect(function()
@@ -2131,6 +2142,15 @@ function Library:CreateWindow(opts)
                 toggle:TrackConnection(clickBtn.MouseLeave:Connect(function()
                     Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
                 end), "ToggleHoverLeave")
+                toggle:TrackConnection(checkBtn.MouseEnter:Connect(function()
+                    if toggle.Disabled then
+                        return
+                    end
+                    Library:Spring(label, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                end), "ToggleCheckHoverEnter")
+                toggle:TrackConnection(checkBtn.MouseLeave:Connect(function()
+                    Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
+                end), "ToggleCheckHoverLeave")
 
                 -- Init visual
                 updateVisual()
