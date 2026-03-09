@@ -254,10 +254,11 @@ return function(Library, context)
 
     local function addToggleDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
-        local dName = dropOpts.Name or "Dropdown"
-        local dOptions = dropOpts.Options or {"Option 1", "Option 2"}
+        local dName = dropOpts.Name or dropOpts.Title or "Dropdown"
+        local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
         local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
         local dCallback = dropOpts.Callback or function() end
+        local dSaveKey = getDropdownConfigKey(dropOpts.SaveKey, base.secName, dName)
 
         local dropdown = { Value = dDefault }
 
@@ -418,6 +419,7 @@ return function(Library, context)
                 applyDropdownValue(dropdown.Value)
             end,
             root = dRow,
+            saveKey = dSaveKey,
             setValue = function(val)
                 local resolved = applyDropdownValue(val)
                 dCallback(resolved)
@@ -456,12 +458,21 @@ return function(Library, context)
             selArrow.Text = DROPDOWN_ARROW_CLOSED
         end, "ToggleDropdownOutside")
 
+        dropdown.GetSelection = function()
+            return dropdown:Get()
+        end
+        dropdown.SetSelection = function(value)
+            dropdown:Set(value)
+            return dropdown
+        end
+        dropdown.SetText = dropdown.SetSelection
+
         return dropdown
     end
 
     local function addStandaloneDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
-        local dName = dropOpts.Name or "Dropdown"
+        local dName = dropOpts.Name or dropOpts.Title or "Dropdown"
         local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
         local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
         local dCallback = dropOpts.Callback or function() end
@@ -627,6 +638,7 @@ return function(Library, context)
                 applyDropdownValue(dropdown.Value)
             end,
             root = row,
+            saveKey = dSaveKey,
             searchName = dName,
             setValue = function(val)
                 local resolved = applyDropdownValue(val)
@@ -677,13 +689,22 @@ return function(Library, context)
             )
         end
 
+        dropdown.GetSelection = function()
+            return dropdown:Get()
+        end
+        dropdown.SetSelection = function(value)
+            dropdown:Set(value)
+            return dropdown
+        end
+        dropdown.SetText = dropdown.SetSelection
+
         return dropdown
     end
 
     local function addMultiDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
-        local dName = dropOpts.Name or "Multi Select"
-        local dOptions = dropOpts.Options or {"Option 1", "Option 2"}
+        local dName = dropOpts.Name or dropOpts.Title or "Multi Select"
+        local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
         local dDefaults = dropOpts.Default or {}
         local dCallback = dropOpts.Callback or function() end
         local dSaveKey = getDropdownConfigKey(dropOpts.SaveKey, base.secName, dName)
@@ -961,6 +982,7 @@ return function(Library, context)
             end,
             refresh = refreshMulti,
             root = row,
+            saveKey = dSaveKey,
             searchName = dName,
             setValue = function(val)
                 applySelectedValues(val, true)
@@ -971,17 +993,52 @@ return function(Library, context)
             end,
         })
 
+        multi.GetSelections = function()
+            return multi:Get()
+        end
+        multi.SetSelection = function(value)
+            multi:Set(value)
+            return multi
+        end
+        multi.SetValues = multi.SetSelection
+        multi.SetValue = multi.SetSelection
+        multi.SetSelected = function(name, state)
+            if name == nil then
+                return multi
+            end
+            local temp = {}
+            for _, opt in ipairs(getSelectedValues(dOptions, selectedSet)) do
+                temp[opt] = true
+            end
+            if state == false then
+                temp[name] = nil
+            else
+                temp[name] = true
+            end
+            multi:Set(temp)
+            return multi
+        end
+        multi.Select = multi.SetSelected
+
         return multi
     end
 
     local function addDropdownToggle(base, opts)
         opts = opts or {}
-        local dName = opts.Name or "Dropdown"
-        local dOptions = opts.Options or {"Option 1", "Option 2"}
+        local dName = opts.Name or opts.Title or "Dropdown"
+        local dOptions = opts.Options or opts.Items or {"Option 1", "Option 2"}
         local dDefault = resolveDropdownValue(dOptions, opts.Default, true)
-        local dEnabled = opts.Enabled ~= false
+        local dEnabled = opts.Enabled
+        if dEnabled == nil then
+            if opts.DefaultToggle ~= nil then
+                dEnabled = opts.DefaultToggle
+            else
+                dEnabled = true
+            end
+        end
         local dCallback = opts.Callback or function() end
-        local dToggleCallback = opts.OnToggle or function() end
+        local dToggleCallback = opts.OnToggle or opts.OnToggleChange or function() end
+        local dSaveKey = getDropdownConfigKey(opts.SaveKey, base.secName, dName)
 
         local dt = { Value = dDefault, Enabled = dEnabled }
 
@@ -1195,6 +1252,7 @@ return function(Library, context)
                 applyToggleEnabled(dt.Enabled)
             end,
             root = row,
+            saveKey = dSaveKey,
             searchName = dName,
             setValue = function(val)
                 if type(val) ~= "table" then
@@ -1217,6 +1275,21 @@ return function(Library, context)
                 selectBtn.Active = not disabled
             end,
         })
+
+        dt.GetSelection = function()
+            return dt.Value
+        end
+        dt.SetSelection = function(value)
+            dt:Set({ value = value })
+            return dt
+        end
+        dt.GetToggleState = function()
+            return dt.Enabled and true or false
+        end
+        dt.SetToggleState = function(value)
+            dt:Set({ enabled = value and true or false })
+            return dt
+        end
 
         selectBtn.Activated:Connect(function()
             if dt.Disabled then
@@ -1246,22 +1319,24 @@ return function(Library, context)
             arrow.Text = DROPDOWN_ARROW_CLOSED
         end, "DropdownToggleOutside")
 
-        Library:RegisterConfig(base.secName .. "." .. dName, "dropdowntoggle",
-            function() return { value = dt.Value, enabled = dt.Enabled } end,
-            function(val)
-                if type(val) ~= "table" then
-                    return
+        if dSaveKey then
+            Library:RegisterConfig(dSaveKey, "dropdowntoggle",
+                function() return { value = dt.Value, enabled = dt.Enabled } end,
+                function(val)
+                    if type(val) ~= "table" then
+                        return
+                    end
+                    if val.value ~= nil then
+                        local resolved = applyDropdownValue(val.value)
+                        dCallback(resolved)
+                    end
+                    if val.enabled ~= nil then
+                        applyToggleEnabled(val.enabled)
+                        dToggleCallback(dt.Enabled)
+                    end
                 end
-                if val.value ~= nil then
-                    local resolved = applyDropdownValue(val.value)
-                    dCallback(resolved)
-                end
-                if val.enabled ~= nil then
-                    applyToggleEnabled(val.enabled)
-                    dToggleCallback(dt.Enabled)
-                end
-            end
-        )
+            )
+        end
 
         return dt
     end

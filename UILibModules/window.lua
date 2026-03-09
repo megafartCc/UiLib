@@ -12,7 +12,7 @@ return function(Library, context, moduleRequire)
 
 function Library:CreateWindow(opts)
     opts = opts or {}
-    local name = opts.Name or "FATALITY"
+    local name = opts.Name or opts.Title or "FATALITY"
     local expire = opts.Expire or "never"
     local keybind = opts.Keybind or self.Config.ToggleKey
     local configName = opts.ConfigName or nil
@@ -1691,7 +1691,7 @@ function Library:CreateWindow(opts)
     -- ==============================
     function win:AddMenu(menuOpts)
         menuOpts = menuOpts or {}
-        local menuName = menuOpts.Name or "TAB"
+        local menuName = menuOpts.Name or menuOpts.Title or "TAB"
         local menuIcon = menuOpts.Icon or "eye"
         local numColumns = menuOpts.Columns or 3
 
@@ -1882,7 +1882,7 @@ function Library:CreateWindow(opts)
         -- ==============================
         function menu:AddSection(sectionOpts)
             sectionOpts = sectionOpts or {}
-            local secName = sectionOpts.Name or "SECTION"
+            local secName = sectionOpts.Name or sectionOpts.Title or "SECTION"
             local colNum = math.clamp(sectionOpts.Column or 1, 1, numColumns)
 
             local targetCol = menu._columns[colNum]
@@ -2016,9 +2016,10 @@ function Library:CreateWindow(opts)
             -- ==============================
             function section:AddToggle(toggleOpts)
                 toggleOpts = toggleOpts or {}
-                local tName = toggleOpts.Name or "Toggle"
+                local tName = toggleOpts.Name or toggleOpts.Title or "Toggle"
                 local tDefault = toggleOpts.Default or false
                 local tCallback = toggleOpts.Callback or function() end
+                local tSaveKey = toggleOpts.SaveKey
 
                 local toggle = { Value = tDefault }
 
@@ -2098,6 +2099,7 @@ function Library:CreateWindow(opts)
                     end,
                     refresh = updateVisual,
                     root = row,
+                    saveKey = tSaveKey,
                     searchName = tName,
                     setValue = function(val)
                         setToggleValue(val == true, true)
@@ -2510,12 +2512,13 @@ function Library:CreateWindow(opts)
             -- ==============================
             function section:AddSlider(sliderOpts)
                 sliderOpts = sliderOpts or {}
-                local sName = sliderOpts.Name or "Slider"
+                local sName = sliderOpts.Name or sliderOpts.Title or "Slider"
                 local sMin = sliderOpts.Min or 0
                 local sMax = sliderOpts.Max or 100
                 local sDefault = math.clamp(sliderOpts.Default or sMin, sMin, sMax)
                 local sSuffix = sliderOpts.Suffix or "%"
                 local sCallback = sliderOpts.Callback or function() end
+                local sSaveKey = sliderOpts.SaveKey
 
                 local slider = { Value = sDefault }
 
@@ -2606,6 +2609,7 @@ function Library:CreateWindow(opts)
                         setSliderValue(slider.Value, false)
                     end,
                     root = row,
+                    saveKey = sSaveKey,
                     searchName = sName,
                     setValue = function(val)
                         setSliderValue(val, true)
@@ -2656,19 +2660,156 @@ function Library:CreateWindow(opts)
                 return dropdownControls.addMultiDropdown(sectionDropdownBase, dropOpts)
             end
 
+            function section:AddMultiDropdownToggle(opts)
+                opts = opts or {}
+                local mtName = opts.Name or opts.Title or "Multi Select Toggle"
+                local mtOptions = opts.Options or opts.Items or { "Option 1", "Option 2" }
+                local mtDefault = opts.Default or {}
+                local mtEnabled = (opts.Enabled ~= nil and opts.Enabled)
+                    or (opts.DefaultToggle ~= nil and opts.DefaultToggle)
+                    or false
+                local mtSaveKey = opts.SaveKey
+                local mtToggleName = opts.ToggleName or (mtName .. " Enabled")
+                local mtCallback = opts.Callback or function() end
+
+                if type(mtSaveKey) == "string" and mtSaveKey ~= "" and type(Library._GetSetting) == "function" then
+                    local saved = Library:_GetSetting(mtSaveKey, nil)
+                    if type(saved) == "table" then
+                        if saved.selections ~= nil then
+                            mtDefault = saved.selections
+                        elseif saved.selected ~= nil then
+                            mtDefault = saved.selected
+                        end
+                        if saved.toggled ~= nil then
+                            mtEnabled = saved.toggled and true or false
+                        elseif saved.enabled ~= nil then
+                            mtEnabled = saved.enabled and true or false
+                        end
+                    end
+                end
+
+                local selectedValues = {}
+                local isEnabled = mtEnabled and true or false
+                local control = {}
+
+                local function persistState()
+                    if type(mtSaveKey) == "string" and mtSaveKey ~= "" and type(Library.SetSaveKey) == "function" then
+                        Library:SetSaveKey(mtSaveKey, {
+                            selections = selectedValues,
+                            toggled = isEnabled,
+                            enabled = isEnabled,
+                        })
+                    end
+                end
+
+                local multi = section:AddMultiDropdown({
+                    Name = mtName,
+                    Options = mtOptions,
+                    Default = mtDefault,
+                    Callback = function(list, selectedMap)
+                        selectedValues = list or {}
+                        persistState()
+                        pcall(mtCallback, isEnabled, selectedValues, selectedMap)
+                    end,
+                })
+                selectedValues = multi:Get() or {}
+
+                local toggle = section:AddToggle({
+                    Name = mtToggleName,
+                    Default = isEnabled,
+                    Callback = function(state)
+                        isEnabled = state and true or false
+                        persistState()
+                        pcall(mtCallback, isEnabled, selectedValues)
+                    end,
+                })
+
+                control.Multi = multi
+                control.Toggle = toggle
+
+                function control:Get()
+                    return {
+                        selections = selectedValues,
+                        toggled = isEnabled,
+                        enabled = isEnabled,
+                    }
+                end
+
+                function control:Set(value)
+                    if type(value) ~= "table" then
+                        return control
+                    end
+                    if value.selections ~= nil then
+                        multi:Set(value.selections)
+                        selectedValues = multi:Get() or selectedValues
+                    elseif value.selected ~= nil then
+                        multi:Set(value.selected)
+                        selectedValues = multi:Get() or selectedValues
+                    end
+                    if value.toggled ~= nil then
+                        toggle:Set(value.toggled and true or false)
+                        isEnabled = toggle:Get() and true or false
+                    elseif value.enabled ~= nil then
+                        toggle:Set(value.enabled and true or false)
+                        isEnabled = toggle:Get() and true or false
+                    end
+                    persistState()
+                    return control
+                end
+
+                control.GetSelections = function()
+                    return selectedValues
+                end
+                control.SetSelection = function(value)
+                    multi:Set(value)
+                    selectedValues = multi:Get() or selectedValues
+                    persistState()
+                    return control
+                end
+                control.SetValues = control.SetSelection
+                control.SetValue = control.SetSelection
+                control.GetToggleState = function()
+                    return isEnabled
+                end
+                control.SetToggleState = function(value)
+                    toggle:Set(value and true or false)
+                    isEnabled = toggle:Get() and true or false
+                    persistState()
+                    return control
+                end
+                control.GetState = control.GetToggleState
+                control.SetState = control.SetToggleState
+
+                if type(mtSaveKey) == "string" and mtSaveKey ~= "" then
+                    Library._widgetRegistry = Library._widgetRegistry or {}
+                    Library._widgetRegistry[mtSaveKey] = control
+                end
+
+                persistState()
+                return control
+            end
+
             -- ==============================
             -- AddSliderToggle (slider + checkbox)
             -- ==============================
             function section:AddSliderToggle(opts)
                 opts = opts or {}
-                local sName = opts.Name or "Slider"
+                local sName = opts.Name or opts.Title or "Slider"
                 local sMin = opts.Min or 0
                 local sMax = opts.Max or 100
                 local sDefault = math.clamp(opts.Default or sMin, sMin, sMax)
                 local sSuffix = opts.Suffix or "%"
-                local sEnabled = opts.Enabled ~= false
-                local sCallback = opts.Callback or function() end
-                local sToggleCallback = opts.OnToggle or function() end
+                local sEnabled = opts.Enabled
+                if sEnabled == nil then
+                    if opts.DefaultToggle ~= nil then
+                        sEnabled = opts.DefaultToggle
+                    else
+                        sEnabled = true
+                    end
+                end
+                local sCallback = opts.Callback or opts.OnSliderChange or function() end
+                local sToggleCallback = opts.OnToggle or opts.OnToggleChange or function() end
+                local sSaveKey = opts.SaveKey
 
                 local st = { Value = sDefault, Enabled = sEnabled }
 
@@ -2770,6 +2911,7 @@ function Library:CreateWindow(opts)
                         applyEnabled(st.Enabled, false)
                     end,
                     root = row,
+                    saveKey = sSaveKey,
                     searchName = sName,
                     setValue = function(val)
                         if type(val) ~= "table" then
@@ -2792,6 +2934,21 @@ function Library:CreateWindow(opts)
                         end
                     end,
                 })
+
+                st.GetSliderValue = function()
+                    return st.Value
+                end
+                st.SetSliderValue = function(value)
+                    st:Set({ value = value })
+                    return st
+                end
+                st.GetToggleState = function()
+                    return st.Enabled and true or false
+                end
+                st.SetToggleState = function(value)
+                    st:Set({ enabled = value and true or false })
+                    return st
+                end
 
                 st:TrackConnection(chkBtn.Activated:Connect(function()
                     if st.Disabled then
@@ -2860,7 +3017,7 @@ function Library:CreateWindow(opts)
             -- ==============================
             function section:AddButton(btnOpts)
                 btnOpts = btnOpts or {}
-                local bName = btnOpts.Name or "Button"
+                local bName = btnOpts.Name or btnOpts.Title or "Button"
                 local bCallback = btnOpts.Callback or function() end
 
                 local buttonControl = {}
@@ -2901,6 +3058,7 @@ function Library:CreateWindow(opts)
                 buttonControl = controlBase.attachControlLifecycle(section, buttonControl, {
                     clickTargets = { btnBox },
                     root = row,
+                    saveKey = btnOpts.SaveKey,
                     searchName = bName,
                     updateDisabled = function(disabled)
                         label.TextTransparency = disabled and 0.35 or 0
@@ -2938,6 +3096,79 @@ function Library:CreateWindow(opts)
                 end
 
                 return buttonControl
+            end
+
+            function section:AddInputBox(inputOpts)
+                inputOpts = inputOpts or {}
+                local iName = inputOpts.Name or inputOpts.Title or "Input"
+                local iDefault = tostring(inputOpts.Default or inputOpts.Placeholder or "")
+                local iCallback = inputOpts.Callback or function() end
+                local iSaveKey = inputOpts.SaveKey
+
+                local inputControl = { Value = iDefault }
+                local row = controlBase.createRow(contentContainer, "Input_" .. iName)
+                local label = controlBase.createLabel(row, iName, {
+                    Font = config.FontMedium,
+                    Size = UDim2.new(0.35, 0, 1, 0),
+                    TextColor3 = colors.Text,
+                    TextSize = 12,
+                })
+
+                local box = Instance.new("TextBox", row)
+                box.AnchorPoint = Vector2.new(1, 0.5)
+                box.Position = UDim2.new(1, 0, 0.5, 0)
+                box.Size = UDim2.new(0.62, 0, 0, 18)
+                box.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                box.BorderSizePixel = 0
+                box.TextXAlignment = Enum.TextXAlignment.Left
+                box.Font = config.FontMedium
+                box.TextSize = 11
+                box.TextColor3 = colors.Text
+                box.ClearTextOnFocus = inputOpts.ClearTextOnFocus == true
+                box.PlaceholderText = tostring(inputOpts.Placeholder or "")
+                box.Text = iDefault
+                box.ZIndex = 6
+                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 3)
+
+                inputControl = controlBase.attachControlLifecycle(section, inputControl, {
+                    clickTargets = { box },
+                    getValue = function()
+                        return box.Text
+                    end,
+                    refresh = function()
+                        box.Text = tostring(inputControl.Value or "")
+                    end,
+                    root = row,
+                    saveKey = iSaveKey,
+                    searchName = iName,
+                    setValue = function(value)
+                        local nextText = tostring(value or "")
+                        inputControl.Value = nextText
+                        box.Text = nextText
+                        pcall(iCallback, nextText)
+                    end,
+                    updateDisabled = function(disabled)
+                        label.TextTransparency = disabled and 0.35 or 0
+                        box.Active = not disabled
+                        box.TextEditable = not disabled
+                    end,
+                })
+
+                inputControl.Object = box
+                inputControl.GetText = function()
+                    return box.Text
+                end
+                inputControl.SetText = function(value)
+                    inputControl:Set(value)
+                    return inputControl
+                end
+
+                inputControl:TrackConnection(box.FocusLost:Connect(function()
+                    inputControl.Value = box.Text
+                    pcall(iCallback, box.Text)
+                end), "InputBoxFocusLost")
+
+                return inputControl
             end
 
             -- ==============================

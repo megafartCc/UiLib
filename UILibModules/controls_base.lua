@@ -124,6 +124,7 @@ return function(Library, context)
         opts = opts or {}
         local cleanup = Cleaner.new()
         local searchEntry
+        local saveKey = opts.saveKey
 
         if section and section._cleanup then
             section._cleanup:Add(cleanup, "Cleanup")
@@ -152,6 +153,11 @@ return function(Library, context)
         control.Visible = opts.root == nil or opts.root.Visible ~= false
         control.Disabled = false
 
+        if type(saveKey) == "string" and saveKey ~= "" then
+            Library._widgetRegistry = Library._widgetRegistry or {}
+            Library._widgetRegistry[saveKey] = control
+        end
+
         function control:TrackConnection(conn, key)
             return cleanup:Add(conn, "Disconnect", key)
         end
@@ -167,6 +173,14 @@ return function(Library, context)
             return rawget(self, "Value")
         end
 
+        function control:GetValue()
+            return self:Get()
+        end
+
+        function control:GetState()
+            return self:Get()
+        end
+
         function control:Set(value)
             if opts.setValue then
                 opts.setValue(value)
@@ -177,6 +191,14 @@ return function(Library, context)
                 self.Value = value
             end
             return self
+        end
+
+        function control:SetValue(value)
+            return self:Set(value)
+        end
+
+        function control:SetState(value)
+            return self:Set(value)
         end
 
         function control:Refresh()
@@ -238,6 +260,12 @@ return function(Library, context)
 
             if searchEntry and section and section._win and section._win._searchItems then
                 removeArrayValue(section._win._searchItems, searchEntry)
+            end
+
+            if type(saveKey) == "string" and saveKey ~= "" and Library._widgetRegistry then
+                if Library._widgetRegistry[saveKey] == self then
+                    Library._widgetRegistry[saveKey] = nil
+                end
             end
 
             cleanup:Cleanup()
