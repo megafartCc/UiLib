@@ -783,6 +783,7 @@ function Library:CreateWindow(opts)
     searchPanel.Size = UDim2.new(0, 240, 0, 0)
     searchPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
     searchPanel.BorderSizePixel = 0
+    searchPanel.Active = true
     searchPanel.ClipsDescendants = true
     searchPanel.Visible = false
     searchPanel.ZIndex = 100
@@ -823,6 +824,7 @@ function Library:CreateWindow(opts)
     resultsFrame.Size = UDim2.new(1, -8, 1, -44)
     resultsFrame.BackgroundTransparency = 1
     resultsFrame.BorderSizePixel = 0
+    resultsFrame.Active = true
     resultsFrame.ClipsDescendants = true
     resultsFrame.ZIndex = 101
 
@@ -854,11 +856,19 @@ function Library:CreateWindow(opts)
     })
     track(searchScrollState, "Destroy", nextCleanupKey("SearchScrollState"))
 
+    local function isMouseInside(guiObject)
+        if not guiObject or not guiObject.Parent then
+            return false
+        end
+        local mp = UserInputService:GetMouseLocation()
+        local ap = guiObject.AbsolutePosition
+        local as = guiObject.AbsoluteSize
+        return mp.X >= ap.X and mp.X <= ap.X + as.X and mp.Y >= ap.Y and mp.Y <= ap.Y + as.Y
+    end
+
     trackGlobal(UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-        local mp = UserInputService:GetMouseLocation()
-        local ap, as = resultsFrame.AbsolutePosition, resultsFrame.AbsoluteSize
-        if mp.X < ap.X or mp.X > ap.X + as.X or mp.Y < ap.Y or mp.Y > ap.Y + as.Y then return end
+        if not isMouseInside(resultsFrame) then return end
         searchScrollState:ScrollBy(-input.Position.Z * SEARCH_SCROLL_STEP)
     end), "SearchScroll")
 
@@ -1768,6 +1778,9 @@ function Library:CreateWindow(opts)
 
             col.InputChanged:Connect(function(input)
                 if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
+                if searchOpen and isMouseInside(searchPanel) then
+                    return
+                end
                 local scrollStep = BASE_SCROLL_STEP / math.max(currentContentScale, 0.01)
                 scrollState:ScrollBy(-input.Position.Z * scrollStep)
             end)
