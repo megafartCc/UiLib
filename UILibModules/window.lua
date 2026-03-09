@@ -270,20 +270,26 @@ function Library:CreateWindow(opts)
         NumberSequenceKeypoint.new(1, 1),
     })
 
+    local HEADER_LEFT_PADDING = 14
+    local HEADER_TITLE_GAP = 28
+    local HEADER_RIGHT_PADDING = 6
+    local USER_PROFILE_WIDTH = 150
+    local TABS_MIN_WIDTH = 120
+
     -- Title text
     local headerText = Instance.new("TextLabel", header)
     headerText.Name = randomStr()
-    headerText.AnchorPoint = Vector2.new(0.5, 0.5)
+    headerText.AnchorPoint = Vector2.new(0, 0.5)
     headerText.BackgroundTransparency = 1
     headerText.BorderSizePixel = 0
-    headerText.Position = UDim2.new(0, 57, 0.5, 0)
-    headerText.Size = UDim2.new(0, 115, 1, 0)
+    headerText.Position = UDim2.new(0, HEADER_LEFT_PADDING, 0.5, 0)
+    headerText.Size = UDim2.new(0, 160, 1, 0)
     headerText.ZIndex = 4
     headerText.Font = config.Font
     headerText.Text = name
     headerText.TextColor3 = colors.Text
     headerText.TextSize = 21
-    headerText.TextXAlignment = Enum.TextXAlignment.Center
+    headerText.TextXAlignment = Enum.TextXAlignment.Left
     headerText.TextStrokeColor3 = Color3.fromRGB(205, 67, 218)
     headerText.TextStrokeTransparency = 0.64
 
@@ -296,8 +302,8 @@ function Library:CreateWindow(opts)
     menuBtnCont.BackgroundTransparency = 1
     menuBtnCont.BorderSizePixel = 0
     menuBtnCont.ClipsDescendants = true
-    menuBtnCont.Position = UDim2.new(0, 115, 0.5, 0)
-    menuBtnCont.Size = UDim2.new(1, -275, 0.75, 0)
+    menuBtnCont.Position = UDim2.new(0, 210, 0.5, 0)
+    menuBtnCont.Size = UDim2.new(0, 300, 0.75, 0)
     menuBtnCont.ZIndex = 4
     menuBtnCont.Active = true  -- sinks mouse input
 
@@ -346,8 +352,32 @@ function Library:CreateWindow(opts)
     userProfile.BackgroundTransparency = 1
     userProfile.BorderSizePixel = 0
     userProfile.Position = UDim2.new(1, -5, 0.5, 0)
-    userProfile.Size = UDim2.new(0, 150, 0.75, 0)
+    userProfile.Size = UDim2.new(0, USER_PROFILE_WIDTH, 0.75, 0)
     userProfile.ZIndex = 4
+
+    local function measureTitleWidth()
+        local ok, bounds = pcall(TextService.GetTextSize, TextService, tostring(name or ""), headerText.TextSize, headerText.Font, Vector2.new(1000, config.HeaderHeight))
+        if ok and bounds then
+            return math.clamp(math.ceil(bounds.X) + 10, 120, 320)
+        end
+        return 160
+    end
+
+    local function refreshHeaderLayout()
+        local titleWidth = measureTitleWidth()
+        headerText.Size = UDim2.new(0, titleWidth, 1, 0)
+
+        local tabsStartX = HEADER_LEFT_PADDING + titleWidth + HEADER_TITLE_GAP
+        local rightReserved = USER_PROFILE_WIDTH + HEADER_RIGHT_PADDING + 12
+        local tabsWidth = math.max(TABS_MIN_WIDTH, header.AbsoluteSize.X - tabsStartX - rightReserved)
+
+        menuBtnCont.Position = UDim2.new(0, tabsStartX, 0.5, 0)
+        menuBtnCont.Size = UDim2.new(0, tabsWidth, 0.75, 0)
+        tabScrollState:Refresh(true)
+    end
+
+    trackGlobal(header:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshHeaderLayout), "HeaderLayoutChanged")
+    task.defer(refreshHeaderLayout)
 
     -- Avatar
     local userIcon = Instance.new("ImageLabel", userProfile)
