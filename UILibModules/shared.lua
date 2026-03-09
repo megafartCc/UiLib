@@ -19,14 +19,14 @@ return function(moduleRequire)
 
     local function getHiddenParent()
         local ok, ui = pcall(function()
-            if typeof(gethui) == "function" then return gethui() end
-            if typeof(get_hidden_gui) == "function" then return get_hidden_gui() end
-            if typeof(gethiddenui) == "function" then return gethiddenui() end
+            if typeof(gethui) == "function" then
+                return gethui()
+            end
         end)
         if ok and typeof(ui) == "Instance" then
             return ui
         end
-        error("UILib requires gethui/get_hidden_gui/gethiddenui for UI parenting")
+        error("UILib requires gethui() for UI parenting")
     end
 
     local function protectGui(gui)
