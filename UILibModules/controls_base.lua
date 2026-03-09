@@ -1,5 +1,5 @@
 return function(Library, context)
-    local Janitor = context.Janitor
+    local Cleaner = context.Cleaner
 
     local function removeArrayValue(array, value)
         if type(array) ~= "table" then
@@ -122,15 +122,15 @@ return function(Library, context)
 
     local function attachControlLifecycle(section, control, opts)
         opts = opts or {}
-        local janitor = Janitor.new()
+        local cleanup = Cleaner.new()
         local searchEntry
 
-        if section and section._janitor then
-            section._janitor:Add(janitor, "Cleanup")
+        if section and section._cleanup then
+            section._cleanup:Add(cleanup, "Cleanup")
         end
 
         if opts.root then
-            janitor:Add(opts.root, "Destroy", "Root")
+            cleanup:Add(opts.root, "Destroy", "Root")
         end
 
         if section and section._controls then
@@ -147,17 +147,17 @@ return function(Library, context)
             table.insert(section._win._searchItems, searchEntry)
         end
 
-        control._janitor = janitor
+        control._cleanup = cleanup
         control._root = opts.root
         control.Visible = opts.root == nil or opts.root.Visible ~= false
         control.Disabled = false
 
         function control:TrackConnection(conn, key)
-            return janitor:Add(conn, "Disconnect", key)
+            return cleanup:Add(conn, "Disconnect", key)
         end
 
         function control:TrackInstance(instance, key)
-            return janitor:Add(instance, "Destroy", key)
+            return cleanup:Add(instance, "Destroy", key)
         end
 
         function control:Get()
@@ -240,7 +240,7 @@ return function(Library, context)
                 removeArrayValue(section._win._searchItems, searchEntry)
             end
 
-            janitor:Cleanup()
+            cleanup:Cleanup()
         end
 
         return control

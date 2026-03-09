@@ -2,14 +2,10 @@ return function(Library, context, moduleRequire)
     local UserInputService = context.UserInputService
     local RunService = context.RunService
     local Players = context.Players
-    local CoreGui = context.CoreGui
     local HttpService = context.HttpService
     local TextService = context.TextService
     local Client = context.Client
-    local Fusion = context.Fusion
-    local Janitor = context.Janitor
-    local FusionChildren = context.FusionChildren
-    local spr = context.spr
+    local Cleaner = context.Cleaner
     local getHiddenParent = context.getHiddenParent
     local protectGui = context.protectGui
     local randomStr = context.randomStr
@@ -22,8 +18,7 @@ function Library:CreateWindow(opts)
     local configName = opts.ConfigName or nil
     local colors = self.Colors
     local config = self.Config
-    local scope = Fusion:scoped()
-    local janitor = Janitor.new()
+    local rootCleanup = Cleaner.new()
 
     -- Set config name for save/load
     self._configName = configName
@@ -33,14 +28,13 @@ function Library:CreateWindow(opts)
         Menus = {},
         ActiveMenu = nil,
         Visible = true,
-        _fusionScope = scope,
-        _janitor = janitor,
+        _cleanup = rootCleanup,
     }
     local startupReady = false
     local setResizeCursor
 
     local function track(taskObject, methodName, key)
-        return janitor:Add(taskObject, methodName, key)
+        return rootCleanup:Add(taskObject, methodName, key)
     end
 
     local function trackGlobal(conn, key)
@@ -142,12 +136,11 @@ function Library:CreateWindow(opts)
     local setPopupOpen = popupManager.setPopupOpen
 
     -- ScreenGui
-    local sg = scope:New "ScreenGui" {
-        Name = randomStr(),
-        ResetOnSpawn = false,
-        IgnoreGuiInset = true,
-        ZIndexBehavior = Enum.ZIndexBehavior.Global,
-    }
+    local sg = Instance.new("ScreenGui")
+    sg.Name = randomStr()
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Global
 
     -- Kill blue selection borders globally
     pcall(function()
@@ -173,11 +166,7 @@ function Library:CreateWindow(opts)
         end
 
         pcall(function()
-            janitor:Cleanup()
-        end)
-
-        pcall(function()
-            Fusion.doCleanup(scope)
+            rootCleanup:Cleanup()
         end)
 
         pcall(function()
@@ -194,62 +183,55 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- MAIN FRAME
     -- ==============================
-    local blankSel = scope:New "Frame" {
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 0, 0, 0),
-        Selectable = false,
-    }
+    local blankSel = Instance.new("Frame")
+    blankSel.BackgroundTransparency = 1
+    blankSel.BorderSizePixel = 0
+    blankSel.Size = UDim2.new(0, 0, 0, 0)
+    blankSel.Selectable = false
 
-    local dropShadow = scope:New "ImageLabel" {
-        Name = randomStr(),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        Size = UDim2.new(1, 47, 1, 47),
-        ZIndex = -1,
-        Image = "rbxassetid://6014261993",
-        ImageColor3 = Color3.fromRGB(0, 0, 0),
-        ImageTransparency = 0.75,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(49, 49, 450, 450),
-    }
+    local dropShadow = Instance.new("ImageLabel")
+    dropShadow.Name = randomStr()
+    dropShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+    dropShadow.BackgroundTransparency = 1
+    dropShadow.BorderSizePixel = 0
+    dropShadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+    dropShadow.Size = UDim2.new(1, 47, 1, 47)
+    dropShadow.ZIndex = -1
+    dropShadow.Image = "rbxassetid://6014261993"
+    dropShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    dropShadow.ImageTransparency = 0.75
+    dropShadow.ScaleType = Enum.ScaleType.Slice
+    dropShadow.SliceCenter = Rect.new(49, 49, 450, 450)
 
-    local clipFrame = scope:New "Frame" {
-        Name = "ClipFrame",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        ClipsDescendants = true,
-        ZIndex = 1,
-        [FusionChildren] = {
-            scope:New "UICorner" {
-                CornerRadius = UDim.new(0, 5),
-            }
-        }
-    }
+    local clipFrame = Instance.new("Frame")
+    clipFrame.Name = "ClipFrame"
+    clipFrame.BackgroundTransparency = 1
+    clipFrame.BorderSizePixel = 0
+    clipFrame.Size = UDim2.new(1, 0, 1, 0)
+    clipFrame.ClipsDescendants = true
+    clipFrame.ZIndex = 1
+    local clipCorner = Instance.new("UICorner")
+    clipCorner.CornerRadius = UDim.new(0, 5)
+    clipCorner.Parent = clipFrame
 
-    local main = scope:New "Frame" {
-        Parent = sg,
-        Name = randomStr(),
-        Active = true,
-        AnchorPoint = Vector2.new(0.5, 0),
-        BackgroundColor3 = colors.Background,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0.5, 0, 0.2, 0),
-        Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight),
-        ClipsDescendants = false,
-        Visible = false,
-        SelectionImageObject = blankSel,
-        [FusionChildren] = {
-            scope:New "UICorner" {
-                CornerRadius = UDim.new(0, 5),
-            },
-            dropShadow,
-            clipFrame,
-        }
-    }
+    local main = Instance.new("Frame")
+    main.Parent = sg
+    main.Name = randomStr()
+    main.Active = true
+    main.AnchorPoint = Vector2.new(0.5, 0)
+    main.BackgroundColor3 = colors.Background
+    main.BorderSizePixel = 0
+    main.Position = UDim2.new(0.5, 0, 0.2, 0)
+    main.Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
+    main.ClipsDescendants = false
+    main.Visible = false
+    main.SelectionImageObject = blankSel
+
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 5)
+    mainCorner.Parent = main
+    dropShadow.Parent = main
+    clipFrame.Parent = main
 
     -- ==============================
     -- HEADER BAR (40px)
@@ -1617,7 +1599,7 @@ function Library:CreateWindow(opts)
                 Library:Spring(kbStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                 kbListening = false
                 if kbConn then
-                    janitor:Remove("KeybindCapture")
+                    rootCleanup:Remove("KeybindCapture")
                     kbConn = nil
                 end
             end
@@ -1862,7 +1844,7 @@ function Library:CreateWindow(opts)
 
             local targetCol = menu._columns[colNum]
             local section = {}
-            local sectionJanitor = Janitor.new()
+            local sectionCleanup = Cleaner.new()
 
             -- Section container (The dark panel)
             local secFrame = Instance.new("Frame", targetCol)
@@ -1916,16 +1898,16 @@ function Library:CreateWindow(opts)
             section._layout = secLayout
             section._title = secTitle
             section._controls = {}
-            section._janitor = sectionJanitor
+            section._cleanup = sectionCleanup
             section._menu = menu
             section._menuName = menuName
             section._secName = secName
             section._win = win
             table.insert(menu.Sections, section)
-            track(sectionJanitor, "Cleanup", nextCleanupKey("SectionJanitor"))
+            track(sectionCleanup, "Cleanup", nextCleanupKey("SectionCleanup"))
 
             function section:TrackConnection(conn, key)
-                return self._janitor:Add(conn, "Disconnect", key)
+                return self._cleanup:Add(conn, "Disconnect", key)
             end
 
             function section:Destroy()
@@ -1942,7 +1924,7 @@ function Library:CreateWindow(opts)
                     end
                 end
 
-                self._janitor:Cleanup()
+                self._cleanup:Cleanup()
 
                 for index = #win._searchItems, 1, -1 do
                     local item = win._searchItems[index]
@@ -2104,6 +2086,252 @@ function Library:CreateWindow(opts)
 
                 -- Init visual
                 updateVisual()
+
+                -- ==============================
+                -- Toggle:AddColorPicker (inline)
+                -- ==============================
+                function toggle:AddColorPicker(cpOpts)
+                    cpOpts = cpOpts or {}
+                    local cpName = cpOpts.Name or "Color"
+                    local cpDefault = cpOpts.Default or Color3.fromRGB(255, 255, 255)
+                    local cpCallback = cpOpts.Callback or function() end
+                    local cpSaveKey = cpOpts.SaveKey
+
+                    local cpicker = { Value = cpDefault }
+                    local hue, sat, val = cpDefault:ToHSV()
+
+                    local colorBox, boxStroke = controlBase.createRightBox(row, {
+                        BackgroundColor3 = cpDefault,
+                        ClassName = "TextButton",
+                        StrokeColor = colors.Line,
+                        StrokeTransparency = 0.3,
+                        RightOffset = -24,
+                        Width = 16,
+                        Height = 10,
+                        ZIndex = 20,
+                    })
+
+                    clickBtn.Size = UDim2.new(1, -44, 1, 0)
+
+                    local cpPanel = Instance.new("Frame", clipFrame)
+                    cpPanel.Name = "CP_" .. cpName
+                    cpPanel.BackgroundColor3 = Color3.fromRGB(19, 19, 19)
+                    cpPanel.BorderSizePixel = 0
+                    cpPanel.Size = UDim2.new(0, 175, 0, 0)
+                    cpPanel.Position = UDim2.new(0, 0, 0, 0)
+                    cpPanel.ZIndex = 200
+                    cpPanel.ClipsDescendants = true
+                    cpPanel.Visible = false
+                    cpPanel.Active = true
+                    Instance.new("UICorner", cpPanel).CornerRadius = UDim.new(0, 4)
+                    local cpStroke = Instance.new("UIStroke", cpPanel)
+                    cpStroke.Color = Color3.fromRGB(40, 40, 40)
+                    cpStroke.Transparency = 1
+
+                    local svBox = Instance.new("ImageLabel", cpPanel)
+                    svBox.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+                    svBox.BorderSizePixel = 0
+                    svBox.Position = UDim2.new(0, 7, 0, 7)
+                    svBox.Size = UDim2.new(0, 135, 0, 135)
+                    svBox.ZIndex = 201
+                    svBox.Image = "http://www.roblox.com/asset/?id=112554223509763"
+                    Instance.new("UICorner", svBox).CornerRadius = UDim.new(0, 2)
+                    local svStroke = Instance.new("UIStroke", svBox)
+                    svStroke.Color = Color3.fromRGB(29, 29, 29)
+
+                    local crosshair = Instance.new("ImageLabel", svBox)
+                    crosshair.BackgroundTransparency = 1
+                    crosshair.AnchorPoint = Vector2.new(0.5, 0.5)
+                    crosshair.Position = UDim2.new(sat, 0, 1 - val, 0)
+                    crosshair.Size = UDim2.new(0, 12, 0, 12)
+                    crosshair.ZIndex = 205
+                    crosshair.Image = "rbxassetid://4805639000"
+
+                    local hueBar = Instance.new("Frame", cpPanel)
+                    hueBar.AnchorPoint = Vector2.new(1, 0)
+                    hueBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    hueBar.BorderSizePixel = 0
+                    hueBar.Position = UDim2.new(1, -7, 0, 7)
+                    hueBar.Size = UDim2.new(0, 20, 0, 135)
+                    hueBar.ZIndex = 206
+                    Instance.new("UICorner", hueBar).CornerRadius = UDim.new(0, 3)
+
+                    local hueGrad = Instance.new("UIGradient", hueBar)
+                    hueGrad.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
+                        ColorSequenceKeypoint.new(0.10, Color3.fromRGB(255, 153, 0)),
+                        ColorSequenceKeypoint.new(0.20, Color3.fromRGB(203, 255, 0)),
+                        ColorSequenceKeypoint.new(0.30, Color3.fromRGB(50, 255, 0)),
+                        ColorSequenceKeypoint.new(0.40, Color3.fromRGB(0, 255, 102)),
+                        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 255, 255)),
+                        ColorSequenceKeypoint.new(0.60, Color3.fromRGB(0, 101, 255)),
+                        ColorSequenceKeypoint.new(0.70, Color3.fromRGB(50, 0, 255)),
+                        ColorSequenceKeypoint.new(0.80, Color3.fromRGB(204, 0, 255)),
+                        ColorSequenceKeypoint.new(0.90, Color3.fromRGB(255, 0, 153)),
+                        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 0))
+                    }
+                    hueGrad.Rotation = 90
+
+                    local hueSlide = Instance.new("Frame", hueBar)
+                    hueSlide.AnchorPoint = Vector2.new(0.5, 0)
+                    hueSlide.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    hueSlide.BorderSizePixel = 0
+                    hueSlide.Position = UDim2.new(0.5, 0, hue, 0)
+                    hueSlide.Size = UDim2.new(1, 5, 0, 2)
+                    hueSlide.ZIndex = 207
+                    local hsStroke = Instance.new("UIStroke", hueSlide)
+                    hsStroke.Color = Color3.fromRGB(29, 29, 29)
+                    hsStroke.Transparency = 0.75
+
+                    local hexFrame = Instance.new("Frame", cpPanel)
+                    hexFrame.AnchorPoint = Vector2.new(0.5, 0)
+                    hexFrame.Position = UDim2.new(0.5, 0, 0, 149)
+                    hexFrame.Size = UDim2.new(1, -15, 0, 18)
+                    hexFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+                    hexFrame.BackgroundTransparency = 0.4
+                    hexFrame.BorderSizePixel = 0
+                    hexFrame.ZIndex = 206
+                    Instance.new("UICorner", hexFrame).CornerRadius = UDim.new(0, 4)
+
+                    local hexText = Instance.new("TextLabel", hexFrame)
+                    hexText.BackgroundTransparency = 1
+                    hexText.Position = UDim2.new(0, 6, 0, 0)
+                    hexText.Size = UDim2.new(1, -12, 1, 0)
+                    hexText.Font = config.FontMedium
+                    hexText.Text = "#" .. cpDefault:ToHex()
+                    hexText.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    hexText.TextTransparency = 0.45
+                    hexText.TextSize = 11
+                    hexText.TextXAlignment = Enum.TextXAlignment.Left
+                    hexText.ZIndex = 209
+
+                    local function applyColor(shouldMarkDirty)
+                        local c = Color3.fromHSV(hue, sat, val)
+                        cpicker.Value = c
+                        colorBox.BackgroundColor3 = c
+                        svBox.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+                        hexText.Text = "#" .. c:ToHex()
+                        crosshair.Position = UDim2.new(sat, 0, 1 - val, 0)
+                        hueSlide.Position = UDim2.new(0.5, 0, hue, 0)
+                        pcall(cpCallback, c)
+                        if shouldMarkDirty then Library:_markDirty() end
+                    end
+
+                    local cpOpen = false
+                    local Mouse = Client:GetMouse()
+                    local closePanel
+
+                    local function setColorValue(rawValue, shouldMarkDirty)
+                        local c = rawValue
+                        if type(rawValue) == "table" then
+                            c = Color3.fromRGB(rawValue.R or 255, rawValue.G or 255, rawValue.B or 255)
+                        end
+                        if typeof(c) ~= "Color3" then return end
+                        hue, sat, val = c:ToHSV()
+                        applyColor(shouldMarkDirty)
+                    end
+
+                    local function openPanel()
+                        if toggle.Disabled then return end
+                        cpOpen = true
+                        closeTransientPopups(cpPanel)
+                        local bp = colorBox.AbsolutePosition
+                        cpPanel.Position = UDim2.fromOffset(
+                            math.clamp(bp.X - 80, 10, clipFrame.AbsoluteSize.X - 185),
+                            math.clamp(bp.Y + 20 - clipFrame.AbsolutePosition.Y, 10, clipFrame.AbsoluteSize.Y - 185)
+                        )
+                        cpPanel.Visible = true
+                        cpPanel.Size = UDim2.new(0, 175, 0, 0)
+                        Library:Spring(cpPanel, "Smooth", { Size = UDim2.new(0, 175, 0, 175) })
+                        Library:Spring(cpStroke, "Smooth", { Transparency = 0 })
+                    end
+
+                    closePanel = function()
+                        cpOpen = false
+                        Library:Spring(cpPanel, "Smooth", { Size = UDim2.new(0, 175, 0, 0) })
+                        Library:Spring(cpStroke, "Smooth", { Transparency = 1 })
+                        task.delay(0.2, function() if not cpOpen then cpPanel.Visible = false end end)
+                    end
+
+                    cpicker = controlBase.attachControlLifecycle(section, cpicker, {
+                        clickTargets = { colorBox },
+                        getValue = function() return cpicker.Value end,
+                        onDestroy = function() cpOpen = false end,
+                        refresh = function() setColorValue(cpicker.Value, false) end,
+                        root = row,
+                        searchName = cpName,
+                        setValue = function(value) setColorValue(value, true) end,
+                        updateDisabled = function(disabled)
+                            colorBox.Active = not disabled
+                            if disabled and cpOpen then closePanel() end
+                        end,
+                    })
+
+                    cpicker:TrackInstance(cpPanel, "ColorPickerPanel")
+                    registerTransientPopup(cpPanel, closePanel)
+
+                    cpicker:TrackConnection(colorBox.Activated:Connect(function()
+                        if cpicker.Disabled then return end
+                        if cpOpen then closePanel() else openPanel() end
+                    end), "ColorPickerToggleMode")
+
+                    cpicker:TrackConnection(UserInputService.InputBegan:Connect(function(input)
+                        if not cpOpen then return end
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                            task.defer(function()
+                                if not cpOpen then return end
+                                local pp, ps = cpPanel.AbsolutePosition, cpPanel.AbsoluteSize
+                                local mx, my = input.Position.X, input.Position.Y
+                                local inPanel = mx >= pp.X and mx <= pp.X + ps.X and my >= pp.Y and my <= pp.Y + ps.Y
+                                local bp, bs = colorBox.AbsolutePosition, colorBox.AbsoluteSize
+                                local inBox = mx >= bp.X and mx <= bp.X + bs.X and my >= bp.Y and my <= bp.Y + bs.Y
+                                if not inPanel and not inBox then closePanel() end
+                            end)
+                        end
+                    end), nextCleanupKey("ColorPickerOutsideTgl"))
+
+                    cpicker:TrackConnection(svBox.InputBegan:Connect(function(input)
+                        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                        if cpicker.Disabled then return end
+                        local dragKey = "ColorPickerSVDragTgl"
+                        local conn
+                        conn = cpicker:TrackConnection(RunService.Heartbeat:Connect(function()
+                            if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                                if conn then cpicker._cleanup:Remove(dragKey); conn = nil end
+                                return
+                            end
+                            local px, py = svBox.AbsolutePosition.X, svBox.AbsolutePosition.Y
+                            local sx, sy = svBox.AbsoluteSize.X, svBox.AbsoluteSize.Y
+                            sat = math.clamp((Mouse.X - px) / sx, 0, 1)
+                            val = 1 - math.clamp((Mouse.Y - py) / sy, 0, 1)
+                            applyColor(true)
+                        end), dragKey)
+                    end), "ColorPickerSVInputTgl")
+
+                    cpicker:TrackConnection(hueBar.InputBegan:Connect(function(input)
+                        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                        if cpicker.Disabled then return end
+                        local dragKey = "ColorPickerHueDragTgl"
+                        local conn
+                        conn = cpicker:TrackConnection(RunService.Heartbeat:Connect(function()
+                            if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                                if conn then cpicker._cleanup:Remove(dragKey); conn = nil end
+                                return
+                            end
+                            local px, py = hueBar.AbsolutePosition.X, hueBar.AbsolutePosition.Y
+                            local sx, sy = hueBar.AbsoluteSize.X, hueBar.AbsoluteSize.Y
+                            hue = math.clamp((Mouse.Y - py) / sy, 0, 1)
+                            applyColor(true)
+                        end), dragKey)
+                    end), "ColorPickerHueInputTgl")
+
+                    Library:RegisterConfig(section._secName .. "." .. tName .. "_" .. cpName, "colorpicker",
+                        function() return cpicker.Value end,
+                        function(val) setColorValue(val, false) end
+                    )
+
+                    return cpicker
+                end
 
                 -- ==============================
                 -- Toggle:AddDropdown (chained)
@@ -2922,7 +3150,7 @@ function Library:CreateWindow(opts)
                     conn = cpicker:TrackConnection(RunService.Heartbeat:Connect(function()
                         if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
                             if conn then
-                                cpicker._janitor:Remove(dragKey)
+                                cpicker._cleanup:Remove(dragKey)
                                 conn = nil
                             end
                             return
@@ -2947,7 +3175,7 @@ function Library:CreateWindow(opts)
                     conn = cpicker:TrackConnection(RunService.Heartbeat:Connect(function()
                         if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
                             if conn then
-                                cpicker._janitor:Remove(dragKey)
+                                cpicker._cleanup:Remove(dragKey)
                                 conn = nil
                             end
                             return

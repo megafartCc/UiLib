@@ -1,8 +1,6 @@
 return function(Library, context)
-    local spr = context.spr
-
-    Library.Fusion = context.Fusion
-    Library.Janitor = context.Janitor
+    local animator = context.Animator
+    Library.Cleaner = context.Cleaner
 
     Library.Motion = {
         Smooth      = { 1.0,  6  },
@@ -23,14 +21,15 @@ return function(Library, context)
     Library.Springs = Library.Motion
 
     function Library:Stop(inst, prop)
-        pcall(function()
-            spr.stop(inst, prop)
-        end)
+        animator:stop(inst, prop)
     end
 
     function Library:Animate(inst, token, props)
         local p = self.Motion[token] or self.Motion.Smooth
-        spr.target(inst, p[1], p[2], props)
+        local speed = math.max(1, (p[2] or 8) / math.max(0.2, p[1] or 1))
+        for prop, value in pairs(props or {}) do
+            animator:setTarget(inst, prop, value, speed)
+        end
     end
 
     function Library:Spring(inst, preset, props)

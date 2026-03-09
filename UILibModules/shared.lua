@@ -1,4 +1,4 @@
-return function()
+return function(moduleRequire)
     local SharedEnv = typeof(getgenv) == "function" and getgenv() or _G
     local SharedState = SharedEnv.__FatalityUILibState
     if type(SharedState) ~= "table" then
@@ -13,9 +13,9 @@ return function()
     local TextService = game:GetService("TextService")
     local Client = Players.LocalPlayer
 
-    local Fusion = loadstring(game:HttpGet("https://pst.rs.abhicracker.com/raw/96VnxLoJ.txt"))()
-    local Janitor = loadstring(game:HttpGet("https://pst.rs.abhicracker.com/raw/FFP0rQvn.txt"))()
-    local spr = loadstring(game:HttpGet("https://raw.githubusercontent.com/Fraktality/spr/master/spr.lua"))()
+    local Cleaner = moduleRequire("cleanup.lua")
+    local createAnimator = moduleRequire("animator.lua")
+    local Animator = createAnimator(RunService)
 
     local function getHiddenParent()
         local ok, ui = pcall(function()
@@ -57,10 +57,8 @@ return function()
         HttpService = HttpService,
         TextService = TextService,
         Client = Client,
-        Fusion = Fusion,
-        Janitor = Janitor,
-        FusionChildren = Fusion.Children,
-        spr = spr,
+        Cleaner = Cleaner,
+        Animator = Animator,
         getHiddenParent = getHiddenParent,
         protectGui = protectGui,
         randomStr = randomStr,

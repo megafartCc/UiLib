@@ -2,7 +2,7 @@ return function(moduleRequire)
     local Library = {}
     Library.__index = Library
 
-    local context = moduleRequire("shared.lua")()
+    local context = moduleRequire("shared.lua")(moduleRequire)
 
     moduleRequire("motion.lua")(Library, context)
     moduleRequire("config.lua")(Library, context)
