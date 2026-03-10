@@ -8,6 +8,8 @@ return function(Library, context)
     Library._autoSaveDelay = 2
     Library._dirty = false
     Library._controlSyncDepth = 0
+    Library._configReplayDepth = 0
+    Library._configItemOrder = {}
 
     local CONFIG_FOLDER = "Eps1lonScript"
 
@@ -23,6 +25,9 @@ return function(Library, context)
     end
 
     function Library:RegisterConfig(key, cType, getter, setter)
+        if self._configItems[key] == nil then
+            table.insert(self._configItemOrder, key)
+        end
         self._configItems[key] = { type = cType, get = getter, set = setter }
     end
 
@@ -39,6 +44,21 @@ return function(Library, context)
 
     function Library:_callbacksSuppressed()
         return (self._controlSyncDepth or 0) > 0
+    end
+
+    function Library:_beginConfigReplay()
+        self._configReplayDepth = (self._configReplayDepth or 0) + 1
+    end
+
+    function Library:_endConfigReplay()
+        local depth = self._configReplayDepth or 0
+        if depth > 0 then
+            self._configReplayDepth = depth - 1
+        end
+    end
+
+    function Library:_isConfigReplaying()
+        return (self._configReplayDepth or 0) > 0
     end
 
     function Library:SaveConfig()
@@ -64,19 +84,36 @@ return function(Library, context)
         if not ok then return end
         local ok2, data = pcall(function() return HttpService:JSONDecode(json) end)
         if not ok2 or type(data) ~= "table" then return end
-        for key, entry in pairs(data) do
+        local replayQueue = {}
+        for _, key in ipairs(self._configItemOrder) do
+            local entry = data[key]
             local item = self._configItems[key]
             if item and entry.value ~= nil then
                 self:_beginControlSync()
                 pcall(item.set, entry.value)
                 self:_endControlSync()
+                table.insert(replayQueue, {
+                    item = item,
+                    value = entry.value,
+                })
             end
         end
+
+        if #replayQueue == 0 then
+            return
+        end
+
+        self:_beginConfigReplay()
+        for _, replay in ipairs(replayQueue) do
+            pcall(replay.item.set, replay.value)
+        end
+        self:_endConfigReplay()
     end
 
     function Library:_markDirty()
         if not self._autoSave then return end
         if self:_callbacksSuppressed() then return end
+        if self:_isConfigReplaying() then return end
         self._dirty = true
     end
 
