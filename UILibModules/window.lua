@@ -2946,6 +2946,7 @@ function Library:CreateWindow(opts)
                     TextColor3 = colors.Text,
                     TextSize = 12,
                 })
+                label.TextTruncate = Enum.TextTruncate.AtEnd
                 local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
                     ImageTransparency = sEnabled and 0 or 1,
                 })
@@ -2963,6 +2964,31 @@ function Library:CreateWindow(opts)
                 barBg.ClipsDescendants = true
                 barBg.ZIndex = 5
                 Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 3)
+
+                local function layoutSliderToggle()
+                    local rowWidth = row.AbsoluteSize.X
+                    if rowWidth <= 0 then
+                        return
+                    end
+
+                    local checkboxInset = 24
+                    local labelGap = 8
+                    local minLabelWidth = 72
+                    local minBarWidth = 108
+                    local textWidth = TextService:GetTextSize(
+                        tostring(sName),
+                        label.TextSize,
+                        label.Font,
+                        Vector2.new(1000, row.AbsoluteSize.Y > 0 and row.AbsoluteSize.Y or 22)
+                    ).X + 8
+
+                    local maxLabelWidth = math.max(minLabelWidth, rowWidth - checkboxInset - labelGap - minBarWidth)
+                    local labelWidth = math.clamp(textWidth, minLabelWidth, maxLabelWidth)
+                    local barWidth = math.max(minBarWidth, rowWidth - labelWidth - checkboxInset - labelGap)
+
+                    label.Size = UDim2.new(0, labelWidth, 1, 0)
+                    barBg.Size = UDim2.new(0, barWidth, 0, 16)
+                end
 
                 local fill = Instance.new("Frame", barBg)
                 fill.BackgroundColor3 = colors.Main
@@ -3079,6 +3105,13 @@ function Library:CreateWindow(opts)
                     st:Set({ enabled = value and true or false })
                     return st
                 end
+
+                st:TrackConnection(row:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutSliderToggle), "SliderToggleLayout")
+                task.defer(function()
+                    if row.Parent then
+                        layoutSliderToggle()
+                    end
+                end)
 
                 st:TrackConnection(chkBtn.Activated:Connect(function()
                     if st.Disabled then
