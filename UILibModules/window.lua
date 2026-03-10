@@ -497,9 +497,9 @@ function Library:CreateWindow(opts)
     expireDays.TextStrokeTransparency = 0.7
     expireDays.TextXAlignment = Enum.TextXAlignment.Right
 
-    local mobileMinimizeBtn
+    local mobileUi = {}
     if isMobileClient then
-        mobileMinimizeBtn = Instance.new("ImageButton", userProfile)
+        local mobileMinimizeBtn = Instance.new("ImageButton", userProfile)
         mobileMinimizeBtn.Name = "MobileMinimizeButton"
         mobileMinimizeBtn.AnchorPoint = Vector2.new(1, 0.5)
         mobileMinimizeBtn.Position = UDim2.new(1, -8, 0.5, 0)
@@ -518,6 +518,8 @@ function Library:CreateWindow(opts)
         mobileMinimizeBtn.MouseLeave:Connect(function()
             Library:Animate(mobileMinimizeBtn, "Hover", { ImageColor3 = colors.TextDim })
         end)
+
+        mobileUi.MinimizeButton = mobileMinimizeBtn
     end
 
     -- ==============================
@@ -540,129 +542,138 @@ function Library:CreateWindow(opts)
     menuContent.Size = UDim2.new(1, 0, 1, 0)
     menuContent.ZIndex = 1
 
-    local keyGateRoot = Instance.new("Frame", clipFrame)
-    keyGateRoot.Name = "KeyGateRoot"
-    keyGateRoot.BackgroundTransparency = 1
-    keyGateRoot.BorderSizePixel = 0
-    keyGateRoot.Position = UDim2.new(0, 0, 0, 0)
-    keyGateRoot.Size = UDim2.new(1, 0, 1, 0)
-    keyGateRoot.Visible = false
-    keyGateRoot.ZIndex = 3
+    local keyUi = {}
+    do
+        local keyGateRoot = Instance.new("Frame", clipFrame)
+        keyGateRoot.Name = "KeyGateRoot"
+        keyGateRoot.BackgroundTransparency = 1
+        keyGateRoot.BorderSizePixel = 0
+        keyGateRoot.Position = UDim2.new(0, 0, 0, 0)
+        keyGateRoot.Size = UDim2.new(1, 0, 1, 0)
+        keyGateRoot.Visible = false
+        keyGateRoot.ZIndex = 3
 
-    local keyGateCard = Instance.new("Frame", keyGateRoot)
-    keyGateCard.Name = "KeyGateCard"
-    keyGateCard.AnchorPoint = Vector2.new(0.5, 0.5)
-    keyGateCard.Position = UDim2.new(0.5, 0, 0.5, 0)
-    keyGateCard.Size = UDim2.fromOffset(360, 176)
-    keyGateCard.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-    keyGateCard.BorderSizePixel = 0
-    keyGateCard.ZIndex = 4
-    Instance.new("UICorner", keyGateCard).CornerRadius = UDim.new(0, 6)
+        local keyGateCard = Instance.new("Frame", keyGateRoot)
+        keyGateCard.Name = "KeyGateCard"
+        keyGateCard.AnchorPoint = Vector2.new(0.5, 0.5)
+        keyGateCard.Position = UDim2.new(0.5, 0, 0.5, 0)
+        keyGateCard.Size = UDim2.fromOffset(360, 176)
+        keyGateCard.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+        keyGateCard.BorderSizePixel = 0
+        keyGateCard.ZIndex = 4
+        Instance.new("UICorner", keyGateCard).CornerRadius = UDim.new(0, 6)
 
-    local keyGateStroke = Instance.new("UIStroke", keyGateCard)
-    keyGateStroke.Color = colors.Line
-    keyGateStroke.Transparency = 0.25
+        local keyGateStroke = Instance.new("UIStroke", keyGateCard)
+        keyGateStroke.Color = colors.Line
+        keyGateStroke.Transparency = 0.25
 
-    local keyGateTitle = Instance.new("TextLabel", keyGateCard)
-    keyGateTitle.BackgroundTransparency = 1
-    keyGateTitle.Position = UDim2.new(0, 18, 0, 14)
-    keyGateTitle.Size = UDim2.new(1, -36, 0, 22)
-    keyGateTitle.Font = config.Font
-    keyGateTitle.Text = "KEY SYSTEM"
-    keyGateTitle.TextColor3 = colors.Text
-    keyGateTitle.TextSize = 18
-    keyGateTitle.TextXAlignment = Enum.TextXAlignment.Left
-    keyGateTitle.ZIndex = 5
+        local keyGateTitle = Instance.new("TextLabel", keyGateCard)
+        keyGateTitle.BackgroundTransparency = 1
+        keyGateTitle.Position = UDim2.new(0, 18, 0, 14)
+        keyGateTitle.Size = UDim2.new(1, -36, 0, 22)
+        keyGateTitle.Font = config.Font
+        keyGateTitle.Text = "KEY SYSTEM"
+        keyGateTitle.TextColor3 = colors.Text
+        keyGateTitle.TextSize = 18
+        keyGateTitle.TextXAlignment = Enum.TextXAlignment.Left
+        keyGateTitle.ZIndex = 5
 
-    local keyGateSubtitle = Instance.new("TextLabel", keyGateCard)
-    keyGateSubtitle.BackgroundTransparency = 1
-    keyGateSubtitle.Position = UDim2.new(0, 18, 0, 38)
-    keyGateSubtitle.Size = UDim2.new(1, -36, 0, 18)
-    keyGateSubtitle.Font = config.FontMedium
-    keyGateSubtitle.Text = "Enter your key to unlock the window."
-    keyGateSubtitle.TextColor3 = colors.TextDim
-    keyGateSubtitle.TextSize = 11
-    keyGateSubtitle.TextXAlignment = Enum.TextXAlignment.Left
-    keyGateSubtitle.ZIndex = 5
+        local keyGateSubtitle = Instance.new("TextLabel", keyGateCard)
+        keyGateSubtitle.BackgroundTransparency = 1
+        keyGateSubtitle.Position = UDim2.new(0, 18, 0, 38)
+        keyGateSubtitle.Size = UDim2.new(1, -36, 0, 18)
+        keyGateSubtitle.Font = config.FontMedium
+        keyGateSubtitle.Text = "Enter your key to unlock the window."
+        keyGateSubtitle.TextColor3 = colors.TextDim
+        keyGateSubtitle.TextSize = 11
+        keyGateSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+        keyGateSubtitle.ZIndex = 5
 
-    local keyInput = Instance.new("TextBox", keyGateCard)
-    keyInput.Name = "KeyInput"
-    keyInput.Position = UDim2.new(0, 18, 0, 72)
-    keyInput.Size = UDim2.new(1, -36, 0, 34)
-    keyInput.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-    keyInput.BorderSizePixel = 0
-    keyInput.ClearTextOnFocus = false
-    keyInput.Font = config.FontMedium
-    keyInput.PlaceholderText = "Enter key here"
-    keyInput.PlaceholderColor3 = colors.TextMuted
-    keyInput.Text = ""
-    keyInput.TextColor3 = colors.Text
-    keyInput.TextSize = 13
-    keyInput.TextXAlignment = Enum.TextXAlignment.Left
-    keyInput.ZIndex = 5
-    Instance.new("UICorner", keyInput).CornerRadius = UDim.new(0, 4)
+        local keyInput = Instance.new("TextBox", keyGateCard)
+        keyInput.Name = "KeyInput"
+        keyInput.Position = UDim2.new(0, 18, 0, 72)
+        keyInput.Size = UDim2.new(1, -36, 0, 34)
+        keyInput.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+        keyInput.BorderSizePixel = 0
+        keyInput.ClearTextOnFocus = false
+        keyInput.Font = config.FontMedium
+        keyInput.PlaceholderText = "Enter key here"
+        keyInput.PlaceholderColor3 = colors.TextMuted
+        keyInput.Text = ""
+        keyInput.TextColor3 = colors.Text
+        keyInput.TextSize = 13
+        keyInput.TextXAlignment = Enum.TextXAlignment.Left
+        keyInput.ZIndex = 5
+        Instance.new("UICorner", keyInput).CornerRadius = UDim.new(0, 4)
 
-    local keyInputPadding = Instance.new("UIPadding", keyInput)
-    keyInputPadding.PaddingLeft = UDim.new(0, 10)
-    keyInputPadding.PaddingRight = UDim.new(0, 10)
+        local keyInputPadding = Instance.new("UIPadding", keyInput)
+        keyInputPadding.PaddingLeft = UDim.new(0, 10)
+        keyInputPadding.PaddingRight = UDim.new(0, 10)
 
-    local keyInputStroke = Instance.new("UIStroke", keyInput)
-    keyInputStroke.Color = colors.Line
-    keyInputStroke.Transparency = 0.45
+        local keyInputStroke = Instance.new("UIStroke", keyInput)
+        keyInputStroke.Color = colors.Line
+        keyInputStroke.Transparency = 0.45
 
-    local keyStatus = Instance.new("TextLabel", keyGateCard)
-    keyStatus.BackgroundTransparency = 1
-    keyStatus.Position = UDim2.new(0, 18, 0, 112)
-    keyStatus.Size = UDim2.new(1, -36, 0, 18)
-    keyStatus.Font = config.FontMedium
-    keyStatus.Text = ""
-    keyStatus.TextColor3 = colors.TextDim
-    keyStatus.TextSize = 10
-    keyStatus.TextXAlignment = Enum.TextXAlignment.Left
-    keyStatus.ZIndex = 5
+        local keyStatus = Instance.new("TextLabel", keyGateCard)
+        keyStatus.BackgroundTransparency = 1
+        keyStatus.Position = UDim2.new(0, 18, 0, 112)
+        keyStatus.Size = UDim2.new(1, -36, 0, 18)
+        keyStatus.Font = config.FontMedium
+        keyStatus.Text = ""
+        keyStatus.TextColor3 = colors.TextDim
+        keyStatus.TextSize = 10
+        keyStatus.TextXAlignment = Enum.TextXAlignment.Left
+        keyStatus.ZIndex = 5
 
-    local keyGetButton = Instance.new("TextButton", keyGateCard)
-    keyGetButton.Name = "GetKeyButton"
-    keyGetButton.Position = UDim2.new(0, 18, 1, -50)
-    keyGetButton.Size = UDim2.new(0.5, -23, 0, 30)
-    keyGetButton.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
-    keyGetButton.BorderSizePixel = 0
-    keyGetButton.Font = config.FontMedium
-    keyGetButton.Text = keyLinkText
-    keyGetButton.TextColor3 = colors.Text
-    keyGetButton.TextSize = 11
-    keyGetButton.ZIndex = 5
-    keyGetButton.AutoButtonColor = false
-    keyGetButton.Selectable = false
-    Instance.new("UICorner", keyGetButton).CornerRadius = UDim.new(0, 4)
+        local keyGetButton = Instance.new("TextButton", keyGateCard)
+        keyGetButton.Name = "GetKeyButton"
+        keyGetButton.Position = UDim2.new(0, 18, 1, -50)
+        keyGetButton.Size = UDim2.new(0.5, -23, 0, 30)
+        keyGetButton.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+        keyGetButton.BorderSizePixel = 0
+        keyGetButton.Font = config.FontMedium
+        keyGetButton.Text = keyLinkText
+        keyGetButton.TextColor3 = colors.Text
+        keyGetButton.TextSize = 11
+        keyGetButton.ZIndex = 5
+        keyGetButton.AutoButtonColor = false
+        keyGetButton.Selectable = false
+        Instance.new("UICorner", keyGetButton).CornerRadius = UDim.new(0, 4)
 
-    local keyGetStroke = Instance.new("UIStroke", keyGetButton)
-    keyGetStroke.Color = colors.Line
-    keyGetStroke.Transparency = 0.4
+        local keyGetStroke = Instance.new("UIStroke", keyGetButton)
+        keyGetStroke.Color = colors.Line
+        keyGetStroke.Transparency = 0.4
 
-    local keySubmitButton = Instance.new("TextButton", keyGateCard)
-    keySubmitButton.Name = "SubmitKeyButton"
-    keySubmitButton.AnchorPoint = Vector2.new(1, 0)
-    keySubmitButton.Position = UDim2.new(1, -18, 1, -50)
-    keySubmitButton.Size = UDim2.new(0.5, -23, 0, 30)
-    keySubmitButton.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
-    keySubmitButton.BorderSizePixel = 0
-    keySubmitButton.Font = config.FontMedium
-    keySubmitButton.Text = keySubmitText
-    keySubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    keySubmitButton.TextSize = 11
-    keySubmitButton.ZIndex = 5
-    keySubmitButton.AutoButtonColor = false
-    keySubmitButton.Selectable = false
-    Instance.new("UICorner", keySubmitButton).CornerRadius = UDim.new(0, 4)
+        local keySubmitButton = Instance.new("TextButton", keyGateCard)
+        keySubmitButton.Name = "SubmitKeyButton"
+        keySubmitButton.AnchorPoint = Vector2.new(1, 0)
+        keySubmitButton.Position = UDim2.new(1, -18, 1, -50)
+        keySubmitButton.Size = UDim2.new(0.5, -23, 0, 30)
+        keySubmitButton.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
+        keySubmitButton.BorderSizePixel = 0
+        keySubmitButton.Font = config.FontMedium
+        keySubmitButton.Text = keySubmitText
+        keySubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        keySubmitButton.TextSize = 11
+        keySubmitButton.ZIndex = 5
+        keySubmitButton.AutoButtonColor = false
+        keySubmitButton.Selectable = false
+        Instance.new("UICorner", keySubmitButton).CornerRadius = UDim.new(0, 4)
 
-    local keySubmitStroke = Instance.new("UIStroke", keySubmitButton)
-    keySubmitStroke.Color = colors.Main
-    keySubmitStroke.Transparency = 0.35
+        local keySubmitStroke = Instance.new("UIStroke", keySubmitButton)
+        keySubmitStroke.Color = colors.Main
+        keySubmitStroke.Transparency = 0.35
 
-    local mobileRestoreBar
+        keyUi.Root = keyGateRoot
+        keyUi.Input = keyInput
+        keyUi.InputStroke = keyInputStroke
+        keyUi.StatusLabel = keyStatus
+        keyUi.GetButton = keyGetButton
+        keyUi.SubmitButton = keySubmitButton
+    end
+
     if isMobileClient then
-        mobileRestoreBar = Instance.new("TextButton", sg)
+        local mobileRestoreBar = Instance.new("TextButton", sg)
         mobileRestoreBar.Name = "MobileRestoreBar"
         mobileRestoreBar.AnchorPoint = Vector2.new(1, 0)
         mobileRestoreBar.Position = UDim2.new(1, -14, 0, 14)
@@ -708,6 +719,8 @@ function Library:CreateWindow(opts)
         mobileRestoreBar.MouseLeave:Connect(function()
             Library:Animate(mobileRestoreBar, "Hover", { BackgroundColor3 = Color3.fromRGB(24, 24, 24) })
         end)
+
+        mobileUi.RestoreBar = mobileRestoreBar
     end
 
     local menuScale = Instance.new("UIScale", menuContent)
@@ -1575,8 +1588,8 @@ function Library:CreateWindow(opts)
     win._floatingPanels = {} -- panels that live outside clipFrame and need independent toggle states
 
     local function syncMobileRestoreButton()
-        if mobileRestoreBar then
-            mobileRestoreBar.Visible = startupReady and isMobileClient and not win.Visible
+        if mobileUi.RestoreBar then
+            mobileUi.RestoreBar.Visible = startupReady and isMobileClient and not win.Visible
         end
     end
 
@@ -1630,14 +1643,14 @@ function Library:CreateWindow(opts)
         end
     end), "ToggleKeybind")
 
-    if mobileMinimizeBtn then
-        mobileMinimizeBtn.Activated:Connect(function()
+    if mobileUi.MinimizeButton then
+        mobileUi.MinimizeButton.Activated:Connect(function()
             smoothToggle()
         end)
     end
 
-    if mobileRestoreBar then
-        mobileRestoreBar.Activated:Connect(function()
+    if mobileUi.RestoreBar then
+        mobileUi.RestoreBar.Activated:Connect(function()
             smoothToggle()
         end)
     end
@@ -1971,8 +1984,8 @@ function Library:CreateWindow(opts)
     )
 
     local function setKeyStatus(text, color)
-        keyStatus.Text = tostring(text or "")
-        keyStatus.TextColor3 = color or colors.TextDim
+        keyUi.StatusLabel.Text = tostring(text or "")
+        keyUi.StatusLabel.TextColor3 = color or colors.TextDim
     end
 
     local function setKeyChromeLocked(locked)
@@ -2003,7 +2016,7 @@ function Library:CreateWindow(opts)
         userProfile.Visible = not locked
         menuFrame.Visible = not locked
         bottom.Visible = not locked
-        keyGateRoot.Visible = locked
+        keyUi.Root.Visible = locked
     end
 
     local function copyToClipboard(text)
@@ -2066,13 +2079,13 @@ function Library:CreateWindow(opts)
 
         if keyGateUnlocked then
             bootstrapWindowContent()
-            keyInput.Text = ""
+            keyUi.Input.Text = ""
             setKeyStatus("", colors.TextDim)
         end
     end
 
     local function tryUnlockWindow()
-        local submitted = normalizeKeyInput(keyInput.Text)
+        local submitted = normalizeKeyInput(keyUi.Input.Text)
         if not keySystemActive then
             setKeyVerified(true)
             return true
@@ -2080,10 +2093,10 @@ function Library:CreateWindow(opts)
 
         if not isAcceptedKey(submitted) then
             setKeyStatus("Invalid key.", Color3.fromRGB(255, 160, 160))
-            Library:Spring(keyInputStroke, "Smooth", { Color = Color3.fromRGB(200, 90, 90), Transparency = 0.1 })
+            Library:Spring(keyUi.InputStroke, "Smooth", { Color = Color3.fromRGB(200, 90, 90), Transparency = 0.1 })
             task.delay(0.3, function()
-                if keyInputStroke.Parent then
-                    Library:Spring(keyInputStroke, "Smooth", { Color = colors.Line, Transparency = 0.45 })
+                if keyUi.InputStroke.Parent then
+                    Library:Spring(keyUi.InputStroke, "Smooth", { Color = colors.Line, Transparency = 0.45 })
                 end
             end)
             return false
@@ -2101,21 +2114,21 @@ function Library:CreateWindow(opts)
         return true
     end
 
-    keyGetButton.MouseEnter:Connect(function()
-        Library:Animate(keyGetButton, "Hover", { BackgroundColor3 = Color3.fromRGB(42, 42, 42) })
+    keyUi.GetButton.MouseEnter:Connect(function()
+        Library:Animate(keyUi.GetButton, "Hover", { BackgroundColor3 = Color3.fromRGB(42, 42, 42) })
     end)
-    keyGetButton.MouseLeave:Connect(function()
-        Library:Animate(keyGetButton, "Hover", { BackgroundColor3 = Color3.fromRGB(32, 32, 32) })
+    keyUi.GetButton.MouseLeave:Connect(function()
+        Library:Animate(keyUi.GetButton, "Hover", { BackgroundColor3 = Color3.fromRGB(32, 32, 32) })
     end)
-    keySubmitButton.MouseEnter:Connect(function()
-        Library:Animate(keySubmitButton, "Hover", { BackgroundColor3 = Color3.fromRGB(60, 30, 38) })
+    keyUi.SubmitButton.MouseEnter:Connect(function()
+        Library:Animate(keyUi.SubmitButton, "Hover", { BackgroundColor3 = Color3.fromRGB(60, 30, 38) })
     end)
-    keySubmitButton.MouseLeave:Connect(function()
-        Library:Animate(keySubmitButton, "Hover", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+    keyUi.SubmitButton.MouseLeave:Connect(function()
+        Library:Animate(keyUi.SubmitButton, "Hover", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
     end)
-    keyGetButton.Activated:Connect(runGetKeyAction)
-    keySubmitButton.Activated:Connect(tryUnlockWindow)
-    keyInput.FocusLost:Connect(function(enterPressed)
+    keyUi.GetButton.Activated:Connect(runGetKeyAction)
+    keyUi.SubmitButton.Activated:Connect(tryUnlockWindow)
+    keyUi.Input.FocusLost:Connect(function(enterPressed)
         if enterPressed then
             tryUnlockWindow()
         end
@@ -4638,8 +4651,8 @@ function Library:CreateWindow(opts)
         else
             setKeyChromeLocked(true)
             task.defer(function()
-                if keyInput.Parent and main.Visible and win.Visible then
-                    keyInput:CaptureFocus()
+                if keyUi.Input.Parent and main.Visible and win.Visible then
+                    keyUi.Input:CaptureFocus()
                 end
             end)
         end
