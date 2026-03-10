@@ -1,9 +1,62 @@
 --[[
     UILib Test Script (Fatality-style)
-    Copy `build.lua` and the `UILibModules` folder into your executor workspace.
+    Loads UILib dynamically from the GitHub repo, matching SAB-style usage.
 ]]
 
-local Library = loadstring(readfile("build.lua"))()
+local function loadRemoteUiLib()
+    local baseUrl = "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules"
+    local moduleCache = {}
+    local cacheBust = "cb=" .. tostring(os.clock()):gsub("%.", "")
+
+    local function normalizePath(path)
+        local parts = {}
+        for part in string.gmatch(string.gsub(path, "\\", "/"), "[^/]+") do
+            if part == ".." then
+                if #parts > 0 then
+                    table.remove(parts)
+                end
+            elseif part ~= "." and part ~= "" then
+                table.insert(parts, part)
+            end
+        end
+        return table.concat(parts, "/")
+    end
+
+    local function loadRemoteModule(path)
+        local normalized = normalizePath(path)
+        local cached = moduleCache[normalized]
+        if cached ~= nil then
+            return cached
+        end
+
+        local source = game:HttpGet(baseUrl .. "/" .. normalized .. "?" .. cacheBust)
+        local chunk, err = loadstring(source)
+        if not chunk then
+            error(string.format("UiLib load failed for %s: %s", normalized, tostring(err)))
+        end
+
+        local exported = chunk()
+        moduleCache[normalized] = exported
+        return exported
+    end
+
+    local entryModule = loadRemoteModule("init.lua")
+
+    local function moduleRequire(relativePath)
+        return loadRemoteModule(relativePath)
+    end
+
+    return entryModule(moduleRequire)
+end
+
+local Library = loadRemoteUiLib()
+
+pcall(function()
+    local env = type(getgenv) == "function" and getgenv() or _G
+    if type(env) == "table" then
+        env.__UILIB_FORCE_MOBILE = true
+    end
+end)
 
 local Window = Library:CreateWindow({
     Name = "FATALITY",
