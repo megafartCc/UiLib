@@ -9,6 +9,7 @@ local Window = Library:CreateWindow({
     Name = "FATALITY",
     Expire = "never",
     ConfigName = "fatality_test",  -- Saves to workspace/Eps1lonScript/fatality_test.json
+    ForceMobile = true, -- lets you preview the phone layout on PC
 })
 
 -- Create tabs

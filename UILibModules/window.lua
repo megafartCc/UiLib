@@ -26,6 +26,11 @@ function Library:CreateWindow(opts)
     local colors = self.Colors
     local config = self.Config
     local rootCleanup = Cleaner.new()
+    local minWindowWidth = math.max(config.MinWindowWidth or 640, 520)
+    local minWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
+    local isMobileClient = opts.ForceMobile == true or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled)
+    local initialWindowWidth = isMobileClient and math.min(config.WindowWidth, minWindowWidth + 80) or config.WindowWidth
+    local initialWindowHeight = isMobileClient and minWindowHeight or config.WindowHeight
 
     -- Set config name for save/load
     self._configName = configName
@@ -264,7 +269,7 @@ function Library:CreateWindow(opts)
     main.BackgroundColor3 = colors.Background
     main.BorderSizePixel = 0
     main.Position = UDim2.new(0.5, 0, 0.2, 0)
-    main.Size = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
+    main.Size = UDim2.fromOffset(initialWindowWidth, initialWindowHeight)
     main.ClipsDescendants = false
     main.Visible = false
     main.SelectionImageObject = blankSel
@@ -315,7 +320,12 @@ function Library:CreateWindow(opts)
     local HEADER_LEFT_PADDING = 14
     local HEADER_TITLE_GAP = 0
     local HEADER_RIGHT_PADDING = 6
-    local USER_PROFILE_WIDTH = 150
+    local MOBILE_TOGGLE_SIZE = 18
+    local MOBILE_TOGGLE_GAP = 8
+    local USER_PROFILE_WIDTH = isMobileClient and 186 or 150
+    local USER_PROFILE_OFFSET_X = isMobileClient and 14 or -5
+    local AVATAR_RIGHT_INSET = isMobileClient and (8 + MOBILE_TOGGLE_SIZE + MOBILE_TOGGLE_GAP) or 10
+    local PROFILE_TEXT_RIGHT_INSET = isMobileClient and (AVATAR_RIGHT_INSET + 30) or 40
     local TABS_MIN_WIDTH = 120
 
     -- Title text
@@ -393,7 +403,7 @@ function Library:CreateWindow(opts)
     userProfile.AnchorPoint = Vector2.new(1, 0.5)
     userProfile.BackgroundTransparency = 1
     userProfile.BorderSizePixel = 0
-    userProfile.Position = UDim2.new(1, -5, 0.5, 0)
+    userProfile.Position = UDim2.new(1, USER_PROFILE_OFFSET_X, 0.5, 0)
     userProfile.Size = UDim2.new(0, USER_PROFILE_WIDTH, 0.75, 0)
     userProfile.ZIndex = 4
 
@@ -427,7 +437,7 @@ function Library:CreateWindow(opts)
     userIcon.AnchorPoint = Vector2.new(1, 0.5)
     userIcon.BackgroundTransparency = 1
     userIcon.BorderSizePixel = 0
-    userIcon.Position = UDim2.new(1, -10, 0.5, 0)
+    userIcon.Position = UDim2.new(1, -AVATAR_RIGHT_INSET, 0.5, 0)
     userIcon.Size = UDim2.new(0.8, 0, 0.8, 0)
     userIcon.SizeConstraint = Enum.SizeConstraint.RelativeYY
     userIcon.ZIndex = 5
@@ -445,7 +455,7 @@ function Library:CreateWindow(opts)
     userName.AnchorPoint = Vector2.new(1, 0)
     userName.BackgroundTransparency = 1
     userName.BorderSizePixel = 0
-    userName.Position = UDim2.new(1, -40, 0, 3)
+    userName.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 3)
     userName.Size = UDim2.new(0, 200, 0, 15)
     userName.ZIndex = 4
     userName.Font = config.FontMedium
@@ -461,7 +471,7 @@ function Library:CreateWindow(opts)
     expireDays.AnchorPoint = Vector2.new(1, 0)
     expireDays.BackgroundTransparency = 1
     expireDays.BorderSizePixel = 0
-    expireDays.Position = UDim2.new(1, -40, 0, 16)
+    expireDays.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 16)
     expireDays.Size = UDim2.new(0, 200, 0, 15)
     expireDays.ZIndex = 4
     expireDays.Font = config.FontMedium
@@ -471,6 +481,29 @@ function Library:CreateWindow(opts)
     expireDays.TextSize = 12
     expireDays.TextStrokeTransparency = 0.7
     expireDays.TextXAlignment = Enum.TextXAlignment.Right
+
+    local mobileMinimizeBtn
+    if isMobileClient then
+        mobileMinimizeBtn = Instance.new("ImageButton", userProfile)
+        mobileMinimizeBtn.Name = "MobileMinimizeButton"
+        mobileMinimizeBtn.AnchorPoint = Vector2.new(1, 0.5)
+        mobileMinimizeBtn.Position = UDim2.new(1, -8, 0.5, 0)
+        mobileMinimizeBtn.Size = UDim2.new(0, MOBILE_TOGGLE_SIZE, 0, MOBILE_TOGGLE_SIZE)
+        mobileMinimizeBtn.BackgroundTransparency = 1
+        mobileMinimizeBtn.BorderSizePixel = 0
+        mobileMinimizeBtn.Image = "rbxassetid://118845250851570"
+        mobileMinimizeBtn.ImageColor3 = colors.TextDim
+        mobileMinimizeBtn.ZIndex = 6
+        mobileMinimizeBtn.AutoButtonColor = false
+        mobileMinimizeBtn.Selectable = false
+
+        mobileMinimizeBtn.MouseEnter:Connect(function()
+            Library:Animate(mobileMinimizeBtn, "Hover", { ImageColor3 = colors.Main })
+        end)
+        mobileMinimizeBtn.MouseLeave:Connect(function()
+            Library:Animate(mobileMinimizeBtn, "Hover", { ImageColor3 = colors.TextDim })
+        end)
+    end
 
     -- ==============================
     -- MENU CONTENT AREA
@@ -611,6 +644,35 @@ function Library:CreateWindow(opts)
     local keySubmitStroke = Instance.new("UIStroke", keySubmitButton)
     keySubmitStroke.Color = colors.Main
     keySubmitStroke.Transparency = 0.35
+
+    local mobileRestoreBtn
+    if isMobileClient then
+        mobileRestoreBtn = Instance.new("ImageButton", sg)
+        mobileRestoreBtn.Name = "MobileRestoreButton"
+        mobileRestoreBtn.AnchorPoint = Vector2.new(1, 0)
+        mobileRestoreBtn.Position = UDim2.new(1, -16, 0, 16)
+        mobileRestoreBtn.Size = UDim2.fromOffset(28, 28)
+        mobileRestoreBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+        mobileRestoreBtn.BorderSizePixel = 0
+        mobileRestoreBtn.Image = "rbxassetid://118845250851570"
+        mobileRestoreBtn.ImageColor3 = colors.Text
+        mobileRestoreBtn.ZIndex = 150
+        mobileRestoreBtn.Visible = false
+        mobileRestoreBtn.AutoButtonColor = false
+        mobileRestoreBtn.Selectable = false
+        Instance.new("UICorner", mobileRestoreBtn).CornerRadius = UDim.new(0, 999)
+
+        local mobileRestoreStroke = Instance.new("UIStroke", mobileRestoreBtn)
+        mobileRestoreStroke.Color = colors.Line
+        mobileRestoreStroke.Transparency = 0.2
+
+        mobileRestoreBtn.MouseEnter:Connect(function()
+            Library:Animate(mobileRestoreBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(34, 34, 34) })
+        end)
+        mobileRestoreBtn.MouseLeave:Connect(function()
+            Library:Animate(mobileRestoreBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(24, 24, 24) })
+        end)
+    end
 
     local menuScale = Instance.new("UIScale", menuContent)
     local contentScaleOptions = {
@@ -1216,8 +1278,6 @@ function Library:CreateWindow(opts)
     local resizeDirection, hoverResizeDirection
     local resizeBorder = config.ResizeBorder or 8
     local dragThreshold = 3
-    local minWindowWidth = math.max(config.MinWindowWidth or 640, 520)
-    local minWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
 
     setResizeCursor = function()
     end
@@ -1267,14 +1327,14 @@ function Library:CreateWindow(opts)
     end
 
     local lockedWindowSize = UDim2.fromOffset(392, 208)
-    local fullWindowSize = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
+    local fullWindowSize = UDim2.fromOffset(initialWindowWidth, initialWindowHeight)
     local fullClipSize = UDim2.new(1, 0, 1, 0)
 
     local windowBounds = {
         left = math.floor(main.AbsolutePosition.X + 0.5),
         top = math.floor(main.AbsolutePosition.Y + 0.5),
-        width = config.WindowWidth,
-        height = config.WindowHeight,
+        width = initialWindowWidth,
+        height = initialWindowHeight,
     }
 
     local function applyWindowBounds(left, top, width, height)
@@ -1478,6 +1538,12 @@ function Library:CreateWindow(opts)
     
     win._floatingPanels = {} -- panels that live outside clipFrame and need independent toggle states
 
+    local function syncMobileRestoreButton()
+        if mobileRestoreBtn then
+            mobileRestoreBtn.Visible = startupReady and isMobileClient and not win.Visible
+        end
+    end
+
     local function syncFloatingPanels()
         for panel, state in pairs(win._floatingPanels) do
             panel.Visible = startupReady and win.Visible and keyGateUnlocked and state.Active or false
@@ -1488,6 +1554,7 @@ function Library:CreateWindow(opts)
         win.Visible = not win.Visible
 
         if not startupReady then
+            syncMobileRestoreButton()
             syncFloatingPanels()
             return
         end
@@ -1516,6 +1583,8 @@ function Library:CreateWindow(opts)
             main.Visible = false
             syncFloatingPanels()
         end
+
+        syncMobileRestoreButton()
     end
 
     trackGlobal(UserInputService.InputBegan:Connect(function(input, gpe)
@@ -1524,6 +1593,18 @@ function Library:CreateWindow(opts)
             smoothToggle()
         end
     end), "ToggleKeybind")
+
+    if mobileMinimizeBtn then
+        mobileMinimizeBtn.Activated:Connect(function()
+            smoothToggle()
+        end)
+    end
+
+    if mobileRestoreBtn then
+        mobileRestoreBtn.Activated:Connect(function()
+            smoothToggle()
+        end)
+    end
 
     -- ==============================
     -- CONTENT SCALE (settings panel)
@@ -4524,6 +4605,7 @@ function Library:CreateWindow(opts)
             end)
         end
 
+        syncMobileRestoreButton()
         syncFloatingPanels()
     end)
 
