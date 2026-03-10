@@ -2005,6 +2005,7 @@ function Library:CreateWindow(opts)
                 colors = colors,
                 config = config,
                 contentContainer = contentContainer,
+                fitLabel = controlBase.bindAdaptiveLabel,
                 makeControl = function(control, opts)
                     return controlBase.attachControlLifecycle(section, control, opts)
                 end,
@@ -2157,6 +2158,11 @@ function Library:CreateWindow(opts)
                 toggle:TrackConnection(checkBtn.MouseLeave:Connect(function()
                     Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
                 end), "ToggleCheckHoverLeave")
+                controlBase.bindAdaptiveLabel(toggle, label, {
+                    BaseTextSize = 12,
+                    MinTextSize = 10,
+                    WidthPadding = 2,
+                })
 
                 -- Init visual
                 updateVisual()
@@ -2186,6 +2192,7 @@ function Library:CreateWindow(opts)
                     })
 
                     clickBtn.Size = UDim2.new(1, -44, 1, 0)
+                    label.Size = UDim2.new(1, -44, 1, 0)
 
                     local cpPanel = Instance.new("Frame", clipFrame)
                     cpPanel.Name = "CP_" .. cpName
@@ -2523,6 +2530,11 @@ function Library:CreateWindow(opts)
                             updateSlider(input.Position.X)
                         end
                     end), nextCleanupKey("ToggleSliderDrag"))
+                    controlBase.bindAdaptiveLabel(toggle, sLabel, {
+                        BaseTextSize = 11,
+                        MinTextSize = 9,
+                        WidthPadding = 2,
+                    })
 
                     return slider
                 end
@@ -2676,6 +2688,11 @@ function Library:CreateWindow(opts)
                         updateSlider(input.Position.X)
                     end
                 end), nextCleanupKey("SliderDrag"))
+                controlBase.bindAdaptiveLabel(slider, label, {
+                    BaseTextSize = 12,
+                    MinTextSize = 10,
+                    WidthPadding = 2,
+                })
 
                 -- Register for config save/load
                 Library:RegisterConfig(secName .. "." .. sName, "slider",
@@ -3112,6 +3129,11 @@ function Library:CreateWindow(opts)
                         layoutSliderToggle()
                     end
                 end)
+                controlBase.bindAdaptiveLabel(st, label, {
+                    BaseTextSize = 12,
+                    MinTextSize = 9,
+                    WidthPadding = 2,
+                })
 
                 st:TrackConnection(chkBtn.Activated:Connect(function()
                     if st.Disabled then
@@ -3252,6 +3274,11 @@ function Library:CreateWindow(opts)
                     flashButton()
                     pcall(bCallback)
                 end), "ButtonActivated")
+                controlBase.bindAdaptiveLabel(buttonControl, label, {
+                    BaseTextSize = 12,
+                    MinTextSize = 10,
+                    WidthPadding = 2,
+                })
 
                 function buttonControl:Fire()
                     flashButton()
@@ -3332,6 +3359,11 @@ function Library:CreateWindow(opts)
                     inputControl.Value = box.Text
                     pcall(iCallback, box.Text)
                 end), "InputBoxFocusLost")
+                controlBase.bindAdaptiveLabel(inputControl, label, {
+                    BaseTextSize = 12,
+                    MinTextSize = 10,
+                    WidthPadding = 2,
+                })
 
                 return inputControl
             end
@@ -3640,6 +3672,11 @@ function Library:CreateWindow(opts)
                         end
                     )
                 end
+                controlBase.bindAdaptiveLabel(cpicker, label, {
+                    BaseTextSize = 12,
+                    MinTextSize = 10,
+                    WidthPadding = 2,
+                })
 
                 return cpicker
             end
@@ -3859,7 +3896,6 @@ function Library:CreateWindow(opts)
                     s.Transparency = 0.4
                     return f
                 end
-
                 -- Head (circle)
                 local headPart = makeBodyPart(charFrame, 45, 0, 28, 28, 14)
 
@@ -4106,6 +4142,11 @@ function Library:CreateWindow(opts)
                             togglePanel()
                         end
                     end,
+                })
+                controlBase.bindAdaptiveLabel(hitbox, label, {
+                    BaseTextSize = 12,
+                    MinTextSize = 10,
+                    WidthPadding = 2,
                 })
                 hitbox:TrackInstance(hPanel, "HitboxPanel")
                 hitbox:TrackConnection(clickBtn.Activated:Connect(function()

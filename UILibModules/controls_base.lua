@@ -1,5 +1,6 @@
 return function(Library, context)
     local Cleaner = context.Cleaner
+    local TextService = context.TextService
 
     local function removeArrayValue(array, value)
         if type(array) ~= "table" then
@@ -41,8 +42,81 @@ return function(Library, context)
         label.TextSize = opts.TextSize or 12
         label.TextTransparency = opts.TextTransparency or 0
         label.TextXAlignment = opts.TextXAlignment or Enum.TextXAlignment.Left
+        label.TextWrapped = false
         label.ZIndex = opts.ZIndex or 5
         return label
+    end
+
+    local function bindAdaptiveLabel(control, label, opts)
+        opts = opts or {}
+        if not label then
+            return function() end
+        end
+
+        local baseTextSize = tonumber(opts.BaseTextSize or label.TextSize) or 12
+        local minTextSize = tonumber(opts.MinTextSize or math.max(8, baseTextSize - 3)) or 9
+        local widthPadding = tonumber(opts.WidthPadding or 0) or 0
+        local getAvailableWidth = opts.GetAvailableWidth
+
+        label.TextTruncate = opts.TextTruncate or Enum.TextTruncate.AtEnd
+        label.TextWrapped = false
+
+        local function refresh()
+            if not label.Parent then
+                return
+            end
+
+            local availableWidth = nil
+            if type(getAvailableWidth) == "function" then
+                local ok, value = pcall(getAvailableWidth)
+                if ok and type(value) == "number" then
+                    availableWidth = value
+                end
+            end
+            if type(availableWidth) ~= "number" then
+                availableWidth = label.AbsoluteSize.X - widthPadding
+            end
+            availableWidth = math.max(0, availableWidth or 0)
+            if availableWidth <= 0 then
+                return
+            end
+
+            local nextTextSize = baseTextSize
+            if TextService then
+                nextTextSize = minTextSize
+                local text = tostring(label.Text or "")
+                for size = baseTextSize, minTextSize, -1 do
+                    local ok, bounds = pcall(function()
+                        return TextService:GetTextSize(
+                            text,
+                            size,
+                            label.Font,
+                            Vector2.new(4096, math.max(12, label.AbsoluteSize.Y))
+                        )
+                    end)
+                    if ok and bounds and bounds.X <= availableWidth then
+                        nextTextSize = size
+                        break
+                    end
+                end
+            end
+
+            label.TextSize = nextTextSize
+        end
+
+        local function track(signal, key)
+            local conn = signal:Connect(refresh)
+            if control and control.TrackConnection then
+                control:TrackConnection(conn, key)
+            end
+        end
+
+        track(label:GetPropertyChangedSignal("AbsoluteSize"), (label.Name or "Label") .. "_AdaptiveSize")
+        track(label:GetPropertyChangedSignal("Text"), (label.Name or "Label") .. "_AdaptiveText")
+        track(label:GetPropertyChangedSignal("Font"), (label.Name or "Label") .. "_AdaptiveFont")
+        refresh()
+
+        return refresh
     end
 
     local function createRightBox(parent, opts)
@@ -286,6 +360,7 @@ return function(Library, context)
 
     return {
         attachControlLifecycle = attachControlLifecycle,
+        bindAdaptiveLabel = bindAdaptiveLabel,
         createCheckbox = createCheckbox,
         createLabel = createLabel,
         createOverlayButton = createOverlayButton,

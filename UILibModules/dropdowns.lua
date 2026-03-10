@@ -438,6 +438,18 @@ return function(Library, context)
                 selBtn.Active = not disabled
             end,
         })
+        if base.fitLabel then
+            base.fitLabel(dropdown, dLabel, {
+                BaseTextSize = 11,
+                MinTextSize = 9,
+                WidthPadding = 2,
+            })
+            base.fitLabel(dropdown, selVal, {
+                BaseTextSize = 10,
+                MinTextSize = 8,
+                WidthPadding = 2,
+            })
+        end
 
         selBtn.Activated:Connect(function()
             if dropdown.Disabled then
@@ -661,6 +673,18 @@ return function(Library, context)
                 selectBtn.Active = not disabled
             end,
         })
+        if base.fitLabel then
+            base.fitLabel(dropdown, label, {
+                BaseTextSize = 12,
+                MinTextSize = 10,
+                WidthPadding = 2,
+            })
+            base.fitLabel(dropdown, valText, {
+                BaseTextSize = 11,
+                MinTextSize = 9,
+                WidthPadding = 2,
+            })
+        end
 
         selectBtn.Activated:Connect(function()
             if dropdown.Disabled then
@@ -735,11 +759,7 @@ return function(Library, context)
             if #selected == 0 then
                 return "None"
             end
-            local text = table.concat(selected, ", ")
-            if #text > 20 then
-                text = string.sub(text, 1, 18) .. ".."
-            end
-            return text
+            return table.concat(selected, ", ")
         end
 
         local row = Instance.new("Frame", base.contentContainer)
@@ -1009,6 +1029,18 @@ return function(Library, context)
                 selectBtn.Active = not disabled
             end,
         })
+        if base.fitLabel then
+            base.fitLabel(multi, label, {
+                BaseTextSize = 12,
+                MinTextSize = 10,
+                WidthPadding = 2,
+            })
+            base.fitLabel(multi, valText, {
+                BaseTextSize = 11,
+                MinTextSize = 9,
+                WidthPadding = 2,
+            })
+        end
 
         multi.GetSelections = function()
             return multi:Get()
@@ -1309,6 +1341,18 @@ return function(Library, context)
                 selectBtn.Active = not disabled
             end,
         })
+        if base.fitLabel then
+            base.fitLabel(dt, label, {
+                BaseTextSize = 12,
+                MinTextSize = 10,
+                WidthPadding = 2,
+            })
+            base.fitLabel(dt, valText, {
+                BaseTextSize = 11,
+                MinTextSize = 9,
+                WidthPadding = 2,
+            })
+        end
 
         dt.GetSelection = function()
             return dt.Value
