@@ -23,6 +23,9 @@ function Library:CreateWindow(opts)
     -- Set config name for save/load
     self._configName = configName
     self._configItems = {}
+    self._configItemOrder = {}
+    self._loadedConfigData = nil
+    self._configReplayToken = 0
 
     local win = {
         Menus = {},

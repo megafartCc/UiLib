@@ -10,6 +10,8 @@ return function(Library, context)
     Library._controlSyncDepth = 0
     Library._configReplayDepth = 0
     Library._configItemOrder = {}
+    Library._loadedConfigData = nil
+    Library._configReplayToken = 0
 
     local CONFIG_FOLDER = "Eps1lonScript"
 
@@ -29,6 +31,14 @@ return function(Library, context)
             table.insert(self._configItemOrder, key)
         end
         self._configItems[key] = { type = cType, get = getter, set = setter }
+
+        local loadedEntry = self._loadedConfigData and self._loadedConfigData[key]
+        if loadedEntry and loadedEntry.value ~= nil then
+            self:_beginControlSync()
+            pcall(setter, loadedEntry.value)
+            self:_endControlSync()
+            self:_scheduleConfigReplay()
+        end
     end
 
     function Library:_beginControlSync()
@@ -61,6 +71,32 @@ return function(Library, context)
         return (self._configReplayDepth or 0) > 0
     end
 
+    function Library:_scheduleConfigReplay()
+        self._configReplayToken = (self._configReplayToken or 0) + 1
+        local replayToken = self._configReplayToken
+
+        task.delay(0.2, function()
+            if self._configReplayToken ~= replayToken then
+                return
+            end
+
+            local data = self._loadedConfigData
+            if type(data) ~= "table" then
+                return
+            end
+
+            self:_beginConfigReplay()
+            for _, key in ipairs(self._configItemOrder) do
+                local item = self._configItems[key]
+                local entry = data[key]
+                if item and entry and entry.value ~= nil then
+                    pcall(item.set, entry.value)
+                end
+            end
+            self:_endConfigReplay()
+        end)
+    end
+
     function Library:SaveConfig()
         local path = self:_getConfigPath()
         if not path then return end
@@ -84,30 +120,17 @@ return function(Library, context)
         if not ok then return end
         local ok2, data = pcall(function() return HttpService:JSONDecode(json) end)
         if not ok2 or type(data) ~= "table" then return end
-        local replayQueue = {}
+        self._loadedConfigData = data
         for _, key in ipairs(self._configItemOrder) do
             local entry = data[key]
             local item = self._configItems[key]
-            if item and entry.value ~= nil then
+            if item and entry and entry.value ~= nil then
                 self:_beginControlSync()
                 pcall(item.set, entry.value)
                 self:_endControlSync()
-                table.insert(replayQueue, {
-                    item = item,
-                    value = entry.value,
-                })
             end
         end
-
-        if #replayQueue == 0 then
-            return
-        end
-
-        self:_beginConfigReplay()
-        for _, replay in ipairs(replayQueue) do
-            pcall(replay.item.set, replay.value)
-        end
-        self:_endConfigReplay()
+        self:_scheduleConfigReplay()
     end
 
     function Library:_markDirty()
