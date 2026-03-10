@@ -2714,6 +2714,61 @@ function Library:CreateWindow(opts)
                 local selectedValues = {}
                 local isEnabled = mtEnabled and true or false
                 local control = {}
+                local syncDepth = 0
+
+                local function beginSync()
+                    syncDepth += 1
+                end
+
+                local function finishSync()
+                    if syncDepth > 0 then
+                        syncDepth -= 1
+                    end
+                end
+
+                local function isSyncing()
+                    return syncDepth > 0
+                end
+
+                local function buildSelectionLookup(raw)
+                    local lookup = {}
+                    if type(raw) ~= "table" then
+                        if raw ~= nil then
+                            lookup[raw] = true
+                        end
+                        return lookup
+                    end
+                    if #raw > 0 then
+                        for _, value in ipairs(raw) do
+                            if value ~= nil then
+                                lookup[value] = true
+                            end
+                        end
+                        return lookup
+                    end
+                    for key, enabled in pairs(raw) do
+                        if enabled then
+                            lookup[key] = true
+                        end
+                    end
+                    return lookup
+                end
+
+                local function selectionsEqual(left, right)
+                    local leftLookup = buildSelectionLookup(left)
+                    local rightLookup = buildSelectionLookup(right)
+                    for key, enabled in pairs(leftLookup) do
+                        if enabled ~= (rightLookup[key] and true or false) then
+                            return false
+                        end
+                    end
+                    for key, enabled in pairs(rightLookup) do
+                        if enabled ~= (leftLookup[key] and true or false) then
+                            return false
+                        end
+                    end
+                    return true
+                end
 
                 local function persistState()
                     if type(mtSaveKey) == "string" and mtSaveKey ~= "" and type(Library.SetSaveKey) == "function" then
@@ -2731,6 +2786,9 @@ function Library:CreateWindow(opts)
                     Default = mtDefault,
                     Callback = function(list, selectedMap)
                         selectedValues = list or {}
+                        if isSyncing() then
+                            return
+                        end
                         persistState()
                         pcall(mtCallback, isEnabled, selectedValues, selectedMap)
                     end,
@@ -2742,6 +2800,9 @@ function Library:CreateWindow(opts)
                     Default = isEnabled,
                     Callback = function(state)
                         isEnabled = state and true or false
+                        if isSyncing() then
+                            return
+                        end
                         persistState()
                         pcall(mtCallback, isEnabled, selectedValues)
                     end,
@@ -2762,6 +2823,23 @@ function Library:CreateWindow(opts)
                     if type(value) ~= "table" then
                         return control
                     end
+                    local nextSelections = nil
+                    if value.selections ~= nil then
+                        nextSelections = value.selections
+                    elseif value.selected ~= nil then
+                        nextSelections = value.selected
+                    end
+                    local nextEnabled = nil
+                    if value.toggled ~= nil then
+                        nextEnabled = value.toggled and true or false
+                    elseif value.enabled ~= nil then
+                        nextEnabled = value.enabled and true or false
+                    end
+                    if (nextSelections == nil or selectionsEqual(selectedValues, nextSelections))
+                        and (nextEnabled == nil or isEnabled == nextEnabled) then
+                        return control
+                    end
+                    beginSync()
                     if value.selections ~= nil then
                         multi:Set(value.selections)
                         selectedValues = multi:Get() or selectedValues
@@ -2776,7 +2854,7 @@ function Library:CreateWindow(opts)
                         toggle:Set(value.enabled and true or false)
                         isEnabled = toggle:Get() and true or false
                     end
-                    persistState()
+                    finishSync()
                     return control
                 end
 
@@ -2784,9 +2862,13 @@ function Library:CreateWindow(opts)
                     return selectedValues
                 end
                 control.SetSelection = function(value)
+                    if selectionsEqual(selectedValues, value) then
+                        return control
+                    end
+                    beginSync()
                     multi:Set(value)
                     selectedValues = multi:Get() or selectedValues
-                    persistState()
+                    finishSync()
                     return control
                 end
                 control.SetValues = control.SetSelection
@@ -2795,9 +2877,14 @@ function Library:CreateWindow(opts)
                     return isEnabled
                 end
                 control.SetToggleState = function(value)
-                    toggle:Set(value and true or false)
+                    local nextValue = value and true or false
+                    if isEnabled == nextValue then
+                        return control
+                    end
+                    beginSync()
+                    toggle:Set(nextValue)
                     isEnabled = toggle:Get() and true or false
-                    persistState()
+                    finishSync()
                     return control
                 end
                 control.GetState = control.GetToggleState
