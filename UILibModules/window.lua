@@ -26,8 +26,8 @@ function Library:CreateWindow(opts)
     local colors = self.Colors
     local config = self.Config
     local rootCleanup = Cleaner.new()
-    local minWindowWidth = math.max(config.MinWindowWidth or 640, 520)
-    local minWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
+    local desktopMinWindowWidth = math.max(config.MinWindowWidth or 640, 520)
+    local desktopMinWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
     local forcedMobileOverride = opts.ForceMobile == true
     if not forcedMobileOverride then
         pcall(function()
@@ -38,7 +38,13 @@ function Library:CreateWindow(opts)
         end)
     end
     local isMobileClient = forcedMobileOverride or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled)
-    local initialWindowWidth = isMobileClient and math.min(config.WindowWidth, minWindowWidth + 80) or config.WindowWidth
+    local camera = workspace.CurrentCamera
+    local viewportSize = camera and camera.ViewportSize or Vector2.new(config.WindowWidth, config.WindowHeight)
+    local mobileMinWindowWidth = math.max(300, math.min(380, viewportSize.X - 24))
+    local mobileMinWindowHeight = math.max(250, math.min(340, viewportSize.Y - 28))
+    local minWindowWidth = isMobileClient and mobileMinWindowWidth or desktopMinWindowWidth
+    local minWindowHeight = isMobileClient and mobileMinWindowHeight or desktopMinWindowHeight
+    local initialWindowWidth = isMobileClient and math.max(minWindowWidth, math.min(viewportSize.X - 18, 392)) or config.WindowWidth
     local initialWindowHeight = isMobileClient and minWindowHeight or config.WindowHeight
 
     -- Set config name for save/load
@@ -331,7 +337,7 @@ function Library:CreateWindow(opts)
     local HEADER_RIGHT_PADDING = 6
     local MOBILE_TOGGLE_SIZE = 18
     local MOBILE_TOGGLE_GAP = 8
-    local USER_PROFILE_WIDTH = isMobileClient and 186 or 150
+    local USER_PROFILE_WIDTH = isMobileClient and 174 or 150
     local USER_PROFILE_OFFSET_X = isMobileClient and 14 or -5
     local AVATAR_RIGHT_INSET = isMobileClient and (8 + MOBILE_TOGGLE_SIZE + MOBILE_TOGGLE_GAP) or 10
     local PROFILE_TEXT_RIGHT_INSET = isMobileClient and (AVATAR_RIGHT_INSET + 30) or 40
@@ -654,32 +660,53 @@ function Library:CreateWindow(opts)
     keySubmitStroke.Color = colors.Main
     keySubmitStroke.Transparency = 0.35
 
-    local mobileRestoreBtn
+    local mobileRestoreBar
     if isMobileClient then
-        mobileRestoreBtn = Instance.new("ImageButton", sg)
-        mobileRestoreBtn.Name = "MobileRestoreButton"
-        mobileRestoreBtn.AnchorPoint = Vector2.new(1, 0)
-        mobileRestoreBtn.Position = UDim2.new(1, -16, 0, 16)
-        mobileRestoreBtn.Size = UDim2.fromOffset(28, 28)
-        mobileRestoreBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
-        mobileRestoreBtn.BorderSizePixel = 0
-        mobileRestoreBtn.Image = "rbxassetid://118845250851570"
-        mobileRestoreBtn.ImageColor3 = colors.Text
-        mobileRestoreBtn.ZIndex = 150
-        mobileRestoreBtn.Visible = false
-        mobileRestoreBtn.AutoButtonColor = false
-        mobileRestoreBtn.Selectable = false
-        Instance.new("UICorner", mobileRestoreBtn).CornerRadius = UDim.new(0, 999)
+        mobileRestoreBar = Instance.new("TextButton", sg)
+        mobileRestoreBar.Name = "MobileRestoreBar"
+        mobileRestoreBar.AnchorPoint = Vector2.new(1, 0)
+        mobileRestoreBar.Position = UDim2.new(1, -14, 0, 14)
+        mobileRestoreBar.Size = UDim2.fromOffset(154, 34)
+        mobileRestoreBar.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+        mobileRestoreBar.BorderSizePixel = 0
+        mobileRestoreBar.Text = ""
+        mobileRestoreBar.ZIndex = 150
+        mobileRestoreBar.Visible = false
+        mobileRestoreBar.AutoButtonColor = false
+        mobileRestoreBar.Selectable = false
+        Instance.new("UICorner", mobileRestoreBar).CornerRadius = UDim.new(0, 8)
 
-        local mobileRestoreStroke = Instance.new("UIStroke", mobileRestoreBtn)
+        local mobileRestoreStroke = Instance.new("UIStroke", mobileRestoreBar)
         mobileRestoreStroke.Color = colors.Line
         mobileRestoreStroke.Transparency = 0.2
 
-        mobileRestoreBtn.MouseEnter:Connect(function()
-            Library:Animate(mobileRestoreBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(34, 34, 34) })
+        local restoreLabel = Instance.new("TextLabel", mobileRestoreBar)
+        restoreLabel.Name = "Label"
+        restoreLabel.BackgroundTransparency = 1
+        restoreLabel.Position = UDim2.new(0, 12, 0, 0)
+        restoreLabel.Size = UDim2.new(1, -42, 1, 0)
+        restoreLabel.Font = config.FontMedium
+        restoreLabel.Text = string.upper(tostring(name))
+        restoreLabel.TextColor3 = colors.Text
+        restoreLabel.TextSize = 11
+        restoreLabel.TextXAlignment = Enum.TextXAlignment.Left
+        restoreLabel.ZIndex = 151
+
+        local restoreIcon = Instance.new("ImageLabel", mobileRestoreBar)
+        restoreIcon.Name = "Icon"
+        restoreIcon.AnchorPoint = Vector2.new(1, 0.5)
+        restoreIcon.BackgroundTransparency = 1
+        restoreIcon.Position = UDim2.new(1, -10, 0.5, 0)
+        restoreIcon.Size = UDim2.new(0, 16, 0, 16)
+        restoreIcon.Image = "rbxassetid://118845250851570"
+        restoreIcon.ImageColor3 = colors.Text
+        restoreIcon.ZIndex = 151
+
+        mobileRestoreBar.MouseEnter:Connect(function()
+            Library:Animate(mobileRestoreBar, "Hover", { BackgroundColor3 = Color3.fromRGB(34, 34, 34) })
         end)
-        mobileRestoreBtn.MouseLeave:Connect(function()
-            Library:Animate(mobileRestoreBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(24, 24, 24) })
+        mobileRestoreBar.MouseLeave:Connect(function()
+            Library:Animate(mobileRestoreBar, "Hover", { BackgroundColor3 = Color3.fromRGB(24, 24, 24) })
         end)
     end
 
@@ -1548,8 +1575,8 @@ function Library:CreateWindow(opts)
     win._floatingPanels = {} -- panels that live outside clipFrame and need independent toggle states
 
     local function syncMobileRestoreButton()
-        if mobileRestoreBtn then
-            mobileRestoreBtn.Visible = startupReady and isMobileClient and not win.Visible
+        if mobileRestoreBar then
+            mobileRestoreBar.Visible = startupReady and isMobileClient and not win.Visible
         end
     end
 
@@ -1609,8 +1636,8 @@ function Library:CreateWindow(opts)
         end)
     end
 
-    if mobileRestoreBtn then
-        mobileRestoreBtn.Activated:Connect(function()
+    if mobileRestoreBar then
+        mobileRestoreBar.Activated:Connect(function()
             smoothToggle()
         end)
     end
@@ -2104,6 +2131,9 @@ function Library:CreateWindow(opts)
         local menuName = menuOpts.Name or menuOpts.Title or "TAB"
         local menuIcon = menuOpts.Icon or "eye"
         local numColumns = menuOpts.Columns or 3
+        if isMobileClient then
+            numColumns = math.max(1, math.min(numColumns, menuOpts.MobileColumns or 1))
+        end
 
         local menu = { Sections = {}, _columns = {}, _columnScrollers = {} }
 
