@@ -16,22 +16,57 @@ function Library:CreateWindow(opts)
     local expire = opts.Expire or "never"
     local keybind = opts.Keybind or self.Config.ToggleKey
     local configName = opts.ConfigName or nil
+    local keySystemEnabled = opts.KeySystem == true
+    local requiredKey = opts.Key
+    local keyStorageTag = opts.KeyStorageTag or "__key_system"
+    local keyLink = opts.GetKeyLink or opts.KeyLink
+    local onGetKey = opts.OnGetKey
+    local keySubmitText = opts.SubmitKeyText or "Unlock"
+    local keyLinkText = opts.GetKeyText or "Get Key"
     local colors = self.Colors
     local config = self.Config
     local rootCleanup = Cleaner.new()
 
     -- Set config name for save/load
     self._configName = configName
+    self._windowStorageName = configName or name
     self._configItems = {}
     self._configItemOrder = {}
     self._loadedConfigData = nil
     self._configReplayToken = 0
+
+    local keySystemActive = keySystemEnabled and type(requiredKey) == "string" and requiredKey ~= ""
+    local keyGateUnlocked = not keySystemActive
+    local keyContentBootstrapped = false
+
+    local function normalizeKeyInput(value)
+        local text = tostring(value or "")
+        text = string.gsub(text, "^%s+", "")
+        text = string.gsub(text, "%s+$", "")
+        return text
+    end
+
+    local function isAcceptedKey(value)
+        return keySystemActive and normalizeKeyInput(value) == requiredKey
+    end
+
+    if keySystemActive and type(Library.ReadData) == "function" then
+        local savedKeyData = Library:ReadData(keyStorageTag)
+        local savedKey = savedKeyData
+        if type(savedKeyData) == "table" then
+            savedKey = savedKeyData.key or savedKeyData.value
+        end
+        if isAcceptedKey(savedKey) then
+            keyGateUnlocked = true
+        end
+    end
 
     local win = {
         Menus = {},
         ActiveMenu = nil,
         Visible = true,
         _cleanup = rootCleanup,
+        KeyVerified = keyGateUnlocked,
     }
     local startupReady = false
     local setResizeCursor
@@ -456,6 +491,126 @@ function Library:CreateWindow(opts)
     menuContent.Position = UDim2.new(0, 0, 0, 0)
     menuContent.Size = UDim2.new(1, 0, 1, 0)
     menuContent.ZIndex = 1
+
+    local keyGateRoot = Instance.new("Frame", clipFrame)
+    keyGateRoot.Name = "KeyGateRoot"
+    keyGateRoot.BackgroundTransparency = 1
+    keyGateRoot.BorderSizePixel = 0
+    keyGateRoot.Position = UDim2.new(0, 0, 0, config.HeaderHeight + 10)
+    keyGateRoot.Size = UDim2.new(1, 0, 1, -(config.HeaderHeight + 10 + config.BottomHeight + 7))
+    keyGateRoot.Visible = false
+    keyGateRoot.ZIndex = 3
+
+    local keyGateCard = Instance.new("Frame", keyGateRoot)
+    keyGateCard.Name = "KeyGateCard"
+    keyGateCard.AnchorPoint = Vector2.new(0.5, 0.5)
+    keyGateCard.Position = UDim2.new(0.5, 0, 0.5, -10)
+    keyGateCard.Size = UDim2.fromOffset(360, 176)
+    keyGateCard.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    keyGateCard.BorderSizePixel = 0
+    keyGateCard.ZIndex = 4
+    Instance.new("UICorner", keyGateCard).CornerRadius = UDim.new(0, 6)
+
+    local keyGateStroke = Instance.new("UIStroke", keyGateCard)
+    keyGateStroke.Color = colors.Line
+    keyGateStroke.Transparency = 0.25
+
+    local keyGateTitle = Instance.new("TextLabel", keyGateCard)
+    keyGateTitle.BackgroundTransparency = 1
+    keyGateTitle.Position = UDim2.new(0, 18, 0, 14)
+    keyGateTitle.Size = UDim2.new(1, -36, 0, 22)
+    keyGateTitle.Font = config.Font
+    keyGateTitle.Text = "KEY SYSTEM"
+    keyGateTitle.TextColor3 = colors.Text
+    keyGateTitle.TextSize = 18
+    keyGateTitle.TextXAlignment = Enum.TextXAlignment.Left
+    keyGateTitle.ZIndex = 5
+
+    local keyGateSubtitle = Instance.new("TextLabel", keyGateCard)
+    keyGateSubtitle.BackgroundTransparency = 1
+    keyGateSubtitle.Position = UDim2.new(0, 18, 0, 38)
+    keyGateSubtitle.Size = UDim2.new(1, -36, 0, 18)
+    keyGateSubtitle.Font = config.FontMedium
+    keyGateSubtitle.Text = "Enter your key to unlock the window."
+    keyGateSubtitle.TextColor3 = colors.TextDim
+    keyGateSubtitle.TextSize = 11
+    keyGateSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+    keyGateSubtitle.ZIndex = 5
+
+    local keyInput = Instance.new("TextBox", keyGateCard)
+    keyInput.Name = "KeyInput"
+    keyInput.Position = UDim2.new(0, 18, 0, 72)
+    keyInput.Size = UDim2.new(1, -36, 0, 34)
+    keyInput.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    keyInput.BorderSizePixel = 0
+    keyInput.ClearTextOnFocus = false
+    keyInput.Font = config.FontMedium
+    keyInput.PlaceholderText = "Enter key here"
+    keyInput.PlaceholderColor3 = colors.TextMuted
+    keyInput.Text = ""
+    keyInput.TextColor3 = colors.Text
+    keyInput.TextSize = 13
+    keyInput.TextXAlignment = Enum.TextXAlignment.Left
+    keyInput.ZIndex = 5
+    Instance.new("UICorner", keyInput).CornerRadius = UDim.new(0, 4)
+
+    local keyInputPadding = Instance.new("UIPadding", keyInput)
+    keyInputPadding.PaddingLeft = UDim.new(0, 10)
+    keyInputPadding.PaddingRight = UDim.new(0, 10)
+
+    local keyInputStroke = Instance.new("UIStroke", keyInput)
+    keyInputStroke.Color = colors.Line
+    keyInputStroke.Transparency = 0.45
+
+    local keyStatus = Instance.new("TextLabel", keyGateCard)
+    keyStatus.BackgroundTransparency = 1
+    keyStatus.Position = UDim2.new(0, 18, 0, 112)
+    keyStatus.Size = UDim2.new(1, -36, 0, 18)
+    keyStatus.Font = config.FontMedium
+    keyStatus.Text = ""
+    keyStatus.TextColor3 = colors.TextDim
+    keyStatus.TextSize = 10
+    keyStatus.TextXAlignment = Enum.TextXAlignment.Left
+    keyStatus.ZIndex = 5
+
+    local keyGetButton = Instance.new("TextButton", keyGateCard)
+    keyGetButton.Name = "GetKeyButton"
+    keyGetButton.Position = UDim2.new(0, 18, 1, -50)
+    keyGetButton.Size = UDim2.new(0.48, -6, 0, 30)
+    keyGetButton.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+    keyGetButton.BorderSizePixel = 0
+    keyGetButton.Font = config.FontMedium
+    keyGetButton.Text = keyLinkText
+    keyGetButton.TextColor3 = colors.Text
+    keyGetButton.TextSize = 11
+    keyGetButton.ZIndex = 5
+    keyGetButton.AutoButtonColor = false
+    keyGetButton.Selectable = false
+    Instance.new("UICorner", keyGetButton).CornerRadius = UDim.new(0, 4)
+
+    local keyGetStroke = Instance.new("UIStroke", keyGetButton)
+    keyGetStroke.Color = colors.Line
+    keyGetStroke.Transparency = 0.4
+
+    local keySubmitButton = Instance.new("TextButton", keyGateCard)
+    keySubmitButton.Name = "SubmitKeyButton"
+    keySubmitButton.AnchorPoint = Vector2.new(1, 0)
+    keySubmitButton.Position = UDim2.new(1, -18, 1, -50)
+    keySubmitButton.Size = UDim2.new(0.48, -6, 0, 30)
+    keySubmitButton.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
+    keySubmitButton.BorderSizePixel = 0
+    keySubmitButton.Font = config.FontMedium
+    keySubmitButton.Text = keySubmitText
+    keySubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    keySubmitButton.TextSize = 11
+    keySubmitButton.ZIndex = 5
+    keySubmitButton.AutoButtonColor = false
+    keySubmitButton.Selectable = false
+    Instance.new("UICorner", keySubmitButton).CornerRadius = UDim.new(0, 4)
+
+    local keySubmitStroke = Instance.new("UIStroke", keySubmitButton)
+    keySubmitStroke.Color = colors.Main
+    keySubmitStroke.Transparency = 0.35
 
     local menuScale = Instance.new("UIScale", menuContent)
     local contentScaleOptions = {
@@ -1320,7 +1475,7 @@ function Library:CreateWindow(opts)
 
     local function syncFloatingPanels()
         for panel, state in pairs(win._floatingPanels) do
-            panel.Visible = startupReady and win.Visible and state.Active or false
+            panel.Visible = startupReady and win.Visible and keyGateUnlocked and state.Active or false
         end
     end
 
@@ -1692,6 +1847,148 @@ function Library:CreateWindow(opts)
             setGuiKeybind(val, false)
         end
     )
+
+    local function setKeyStatus(text, color)
+        keyStatus.Text = tostring(text or "")
+        keyStatus.TextColor3 = color or colors.TextDim
+    end
+
+    local function setKeyChromeLocked(locked)
+        if locked then
+            closeTransientPopups()
+            settingsOpen = false
+            searchOpen = false
+            uiScaleDropdownOpen = false
+            settingsPanel.Visible = false
+            searchPanel.Visible = false
+            if uiScalePanel then
+                uiScalePanel.Visible = false
+            end
+        end
+
+        menuBtnCont.Visible = not locked
+        userProfile.Visible = not locked
+        menuFrame.Visible = not locked
+        bottom.Visible = not locked
+        keyGateRoot.Visible = locked
+    end
+
+    local function copyToClipboard(text)
+        if type(setclipboard) == "function" then
+            return pcall(setclipboard, text)
+        end
+        if type(toclipboard) == "function" then
+            return pcall(toclipboard, text)
+        end
+        return false
+    end
+
+    local function runGetKeyAction()
+        local handled = false
+
+        if type(onGetKey) == "function" then
+            local ok = pcall(onGetKey)
+            handled = ok or handled
+        end
+
+        if type(keyLink) == "string" and keyLink ~= "" then
+            local copied = copyToClipboard(keyLink)
+            if copied then
+                setKeyStatus("Key link copied to clipboard.", colors.Main)
+            else
+                setKeyStatus(keyLink, colors.TextDim)
+            end
+            handled = true
+        end
+
+        if not handled then
+            setKeyStatus("No key link configured.", Color3.fromRGB(255, 160, 160))
+        end
+    end
+
+    local function bootstrapWindowContent()
+        if keyContentBootstrapped or win._destroyed then
+            return
+        end
+
+        keyContentBootstrapped = true
+
+        if configName then
+            pcall(function()
+                Library:LoadConfig()
+            end)
+        end
+
+        if win._destroyed then
+            return
+        end
+
+        refreshMenuScrolls()
+    end
+
+    local function setKeyVerified(verified)
+        keyGateUnlocked = verified == true
+        win.KeyVerified = keyGateUnlocked
+        setKeyChromeLocked(not keyGateUnlocked)
+
+        if keyGateUnlocked then
+            bootstrapWindowContent()
+            keyInput.Text = ""
+            setKeyStatus("", colors.TextDim)
+        end
+    end
+
+    local function tryUnlockWindow()
+        local submitted = normalizeKeyInput(keyInput.Text)
+        if not keySystemActive then
+            setKeyVerified(true)
+            return true
+        end
+
+        if not isAcceptedKey(submitted) then
+            setKeyStatus("Invalid key.", Color3.fromRGB(255, 160, 160))
+            Library:Spring(keyInputStroke, "Smooth", { Color = Color3.fromRGB(200, 90, 90), Transparency = 0.1 })
+            task.delay(0.3, function()
+                if keyInputStroke.Parent then
+                    Library:Spring(keyInputStroke, "Smooth", { Color = colors.Line, Transparency = 0.45 })
+                end
+            end)
+            return false
+        end
+
+        if type(Library.WriteData) == "function" then
+            Library:WriteData(keyStorageTag, {
+                key = submitted,
+                value = submitted,
+                verified = true,
+            })
+        end
+
+        setKeyVerified(true)
+        return true
+    end
+
+    keyGetButton.MouseEnter:Connect(function()
+        Library:Animate(keyGetButton, "Hover", { BackgroundColor3 = Color3.fromRGB(42, 42, 42) })
+    end)
+    keyGetButton.MouseLeave:Connect(function()
+        Library:Animate(keyGetButton, "Hover", { BackgroundColor3 = Color3.fromRGB(32, 32, 32) })
+    end)
+    keySubmitButton.MouseEnter:Connect(function()
+        Library:Animate(keySubmitButton, "Hover", { BackgroundColor3 = Color3.fromRGB(60, 30, 38) })
+    end)
+    keySubmitButton.MouseLeave:Connect(function()
+        Library:Animate(keySubmitButton, "Hover", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+    end)
+    keyGetButton.Activated:Connect(runGetKeyAction)
+    keySubmitButton.Activated:Connect(tryUnlockWindow)
+    keyInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            tryUnlockWindow()
+        end
+    end)
+
+    setKeyChromeLocked(keySystemActive and not keyGateUnlocked)
 
     -- ==============================
     -- AddMenu (creates tab + page)
@@ -4191,17 +4488,6 @@ function Library:CreateWindow(opts)
             return
         end
 
-        if configName then
-            pcall(function()
-                Library:LoadConfig()
-            end)
-        end
-
-        if win._destroyed then
-            return
-        end
-
-        refreshMenuScrolls()
         startupReady = true
 
         if win.Visible then
@@ -4209,6 +4495,17 @@ function Library:CreateWindow(opts)
             main.Size = fullWindowSize
             clipFrame.Size = fullClipSize
             updateResizeHover(UserInputService:GetMouseLocation())
+        end
+
+        if keyGateUnlocked then
+            bootstrapWindowContent()
+        else
+            setKeyChromeLocked(true)
+            task.defer(function()
+                if keyInput.Parent and main.Visible and win.Visible then
+                    keyInput:CaptureFocus()
+                end
+            end)
         end
 
         syncFloatingPanels()

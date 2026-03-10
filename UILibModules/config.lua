@@ -2,8 +2,22 @@ return function(Library, context)
     local HttpService = context.HttpService
     local SharedState = context.SharedState
 
+    local function sanitizePathSegment(value)
+        local text = tostring(value or "uilib")
+        text = text:gsub("[%c<>:\"/\\|%?%*]", "_")
+        text = text:gsub("%s+", "_")
+        text = text:gsub("_+", "_")
+        text = text:gsub("^_+", "")
+        text = text:gsub("_+$", "")
+        if text == "" then
+            text = "uilib"
+        end
+        return string.sub(text, 1, 120)
+    end
+
     Library._configItems = {}
     Library._configName = nil
+    Library._windowStorageName = nil
     Library._autoSave = false
     Library._autoSaveDelay = 2
     Library._dirty = false
@@ -24,6 +38,57 @@ return function(Library, context)
     function Library:_getConfigPath()
         if not self._configName then return nil end
         return CONFIG_FOLDER .. "/" .. self._configName .. ".json"
+    end
+
+    function Library:_getStorageBaseName()
+        return sanitizePathSegment(self._configName or self._windowStorageName or "uilib")
+    end
+
+    function Library:_getDataPath(tag)
+        if type(tag) ~= "string" or tag == "" then
+            return nil
+        end
+        return CONFIG_FOLDER .. "/" .. self:_getStorageBaseName() .. "_" .. sanitizePathSegment(tag) .. ".json"
+    end
+
+    function Library:ReadData(tag)
+        local path = self:_getDataPath(tag)
+        if not path or type(isfile) ~= "function" or not isfile(path) then
+            return nil
+        end
+
+        local ok, raw = pcall(readfile, path)
+        if not ok or type(raw) ~= "string" or raw == "" then
+            return nil
+        end
+
+        local okDecode, decoded = pcall(function()
+            return HttpService:JSONDecode(raw)
+        end)
+        if not okDecode then
+            return nil
+        end
+
+        return decoded
+    end
+
+    function Library:WriteData(tag, value)
+        local path = self:_getDataPath(tag)
+        if not path or type(writefile) ~= "function" then
+            return false
+        end
+
+        self:_ensureFolder()
+
+        local okEncode, encoded = pcall(function()
+            return HttpService:JSONEncode(value)
+        end)
+        if not okEncode or type(encoded) ~= "string" then
+            return false
+        end
+
+        local okWrite = pcall(writefile, path, encoded)
+        return okWrite == true
     end
 
     function Library:RegisterConfig(key, cType, getter, setter)
