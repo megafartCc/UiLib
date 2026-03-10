@@ -4,7 +4,8 @@
 ]]
 
 local function loadRemoteUiLib()
-    local baseUrl = "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules"
+    local uiLibCommit = "d67bc67"
+    local baseUrl = "https://raw.githubusercontent.com/megafartCc/UiLib/" .. uiLibCommit .. "/UILibModules"
     local moduleCache = {}
     local cacheBust = "cb=" .. tostring(os.clock()):gsub("%.", "")
 
@@ -58,6 +59,13 @@ pcall(function()
     end
 end)
 
+Library.Config.WindowWidth = 392
+Library.Config.WindowHeight = 320
+Library.Config.MinWindowWidth = 300
+Library.Config.MinWindowHeight = 250
+
+local PHONE_COLUMNS = 1
+
 local Window = Library:CreateWindow({
     Name = "FATALITY",
     Expire = "never",
@@ -66,12 +74,12 @@ local Window = Library:CreateWindow({
 })
 
 -- Create tabs
-local Rage = Window:AddMenu({ Name = "RAGE", Columns = 3 })
-local Legit = Window:AddMenu({ Name = "LEGIT", Columns = 3 })
-local Visual = Window:AddMenu({ Name = "VISUAL", Columns = 3 })
-local Misc = Window:AddMenu({ Name = "MISC", Columns = 3 })
-local Skins = Window:AddMenu({ Name = "SKINS", Columns = 2 })
-local Lua = Window:AddMenu({ Name = "LUA", Columns = 2 })
+local Rage = Window:AddMenu({ Name = "RAGE", Columns = PHONE_COLUMNS, MobileColumns = 1 })
+local Legit = Window:AddMenu({ Name = "LEGIT", Columns = PHONE_COLUMNS, MobileColumns = 1 })
+local Visual = Window:AddMenu({ Name = "VISUAL", Columns = PHONE_COLUMNS, MobileColumns = 1 })
+local Misc = Window:AddMenu({ Name = "MISC", Columns = PHONE_COLUMNS, MobileColumns = 1 })
+local Skins = Window:AddMenu({ Name = "SKINS", Columns = PHONE_COLUMNS, MobileColumns = 1 })
+local Lua = Window:AddMenu({ Name = "LUA", Columns = PHONE_COLUMNS, MobileColumns = 1 })
 
 -- Add sections to Rage page
 local Weapon  = Rage:AddSection({ Name = "WEAPON",  Column = 1 })
