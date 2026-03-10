@@ -4,6 +4,10 @@ return function(Library, context)
     local DROPDOWN_ARROW_OPEN = utf8.char(9650)
     local DROPDOWN_MAX_VISIBLE_OPTIONS = 8
 
+    local function callbacksSuppressed()
+        return type(Library._callbacksSuppressed) == "function" and Library:_callbacksSuppressed()
+    end
+
     local function createDropdownPanelContent(base, panel, optionCount, rowHeight)
         local showSearch = optionCount > DROPDOWN_MAX_VISIBLE_OPTIONS
         local visibleRows = math.min(optionCount, DROPDOWN_MAX_VISIBLE_OPTIONS)
@@ -425,7 +429,9 @@ return function(Library, context)
             saveKey = dSaveKey,
             setValue = function(val)
                 local resolved = applyDropdownValue(val)
-                dCallback(resolved)
+                if not callbacksSuppressed() then
+                    dCallback(resolved)
+                end
             end,
             updateDisabled = function(disabled)
                 dLabel.TextTransparency = disabled and 0.35 or 0
@@ -645,7 +651,9 @@ return function(Library, context)
             searchName = dName,
             setValue = function(val)
                 local resolved = applyDropdownValue(val)
-                dCallback(resolved)
+                if not callbacksSuppressed() then
+                    dCallback(resolved)
+                end
                 Library:_markDirty()
             end,
             updateDisabled = function(disabled)
@@ -687,7 +695,9 @@ return function(Library, context)
                 function() return dropdown.Value end,
                 function(val)
                     local resolved = applyDropdownValue(val)
-                    dCallback(resolved)
+                    if not callbacksSuppressed() then
+                        dCallback(resolved)
+                    end
                 end
             )
         end
@@ -834,8 +844,10 @@ return function(Library, context)
 
             multi.Values = selectedSet
             refreshMulti()
-            fireMultiDropdownCallback(dCallback, dOptions, selectedSet)
-            if multi._onChange then
+            if not callbacksSuppressed() then
+                fireMultiDropdownCallback(dCallback, dOptions, selectedSet)
+            end
+            if multi._onChange and not callbacksSuppressed() then
                 multi._onChange()
             end
 
@@ -923,8 +935,10 @@ return function(Library, context)
                 end
                 valText.Text = getDisplayText()
                 multi.Values = selectedSet
-                fireMultiDropdownCallback(dCallback, dOptions, selectedSet)
-                if multi._onChange then
+                if not callbacksSuppressed() then
+                    fireMultiDropdownCallback(dCallback, dOptions, selectedSet)
+                end
+                if multi._onChange and not callbacksSuppressed() then
                     multi._onChange()
                 end
                 Library:_markDirty()
@@ -1264,11 +1278,15 @@ return function(Library, context)
 
                 if val.value ~= nil then
                     local resolved = applyDropdownValue(val.value)
-                    dCallback(resolved)
+                    if not callbacksSuppressed() then
+                        dCallback(resolved)
+                    end
                 end
                 if val.enabled ~= nil then
                     applyToggleEnabled(val.enabled)
-                    dToggleCallback(dt.Enabled)
+                    if not callbacksSuppressed() then
+                        dToggleCallback(dt.Enabled)
+                    end
                 end
                 Library:_markDirty()
             end,
@@ -1331,11 +1349,15 @@ return function(Library, context)
                     end
                     if val.value ~= nil then
                         local resolved = applyDropdownValue(val.value)
-                        dCallback(resolved)
+                        if not callbacksSuppressed() then
+                            dCallback(resolved)
+                        end
                     end
                     if val.enabled ~= nil then
                         applyToggleEnabled(val.enabled)
-                        dToggleCallback(dt.Enabled)
+                        if not callbacksSuppressed() then
+                            dToggleCallback(dt.Enabled)
+                        end
                     end
                 end
             )

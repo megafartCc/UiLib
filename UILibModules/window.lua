@@ -33,6 +33,10 @@ function Library:CreateWindow(opts)
     local startupReady = false
     local setResizeCursor
 
+    local function callbacksSuppressed()
+        return type(Library._callbacksSuppressed) == "function" and Library:_callbacksSuppressed()
+    end
+
     local function track(taskObject, methodName, key)
         return rootCleanup:Add(taskObject, methodName, key)
     end
@@ -2093,7 +2097,9 @@ function Library:CreateWindow(opts)
                 local function setToggleValue(nextValue, shouldMarkDirty)
                     toggle.Value = nextValue and true or false
                     updateVisual()
-                    pcall(tCallback, toggle.Value)
+                    if not callbacksSuppressed() then
+                        pcall(tCallback, toggle.Value)
+                    end
                     if shouldMarkDirty then
                         Library:_markDirty()
                     end
@@ -2281,7 +2287,9 @@ function Library:CreateWindow(opts)
                         hexText.Text = "#" .. c:ToHex()
                         crosshair.Position = UDim2.new(sat, 0, 1 - val, 0)
                         hueSlide.Position = UDim2.new(0.5, 0, hue, 0)
-                        pcall(cpCallback, c)
+                        if not callbacksSuppressed() then
+                            pcall(cpCallback, c)
+                        end
                         if shouldMarkDirty then Library:_markDirty() end
                     end
 
@@ -2599,7 +2607,9 @@ function Library:CreateWindow(opts)
                     slider.Value = val
                     Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
                     valLabel.Text = tostring(val) .. sSuffix
-                    pcall(sCallback, val)
+                    if not callbacksSuppressed() then
+                        pcall(sCallback, val)
+                    end
                     Library:_markDirty()
                 end
 
@@ -2609,7 +2619,9 @@ function Library:CreateWindow(opts)
                     slider.Value = math.floor(val + 0.5)
                     Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
                     valLabel.Text = tostring(slider.Value) .. sSuffix
-                    pcall(sCallback, slider.Value)
+                    if not callbacksSuppressed() then
+                        pcall(sCallback, slider.Value)
+                    end
                     if shouldMarkDirty then
                         Library:_markDirty()
                     end
@@ -2790,7 +2802,9 @@ function Library:CreateWindow(opts)
                             return
                         end
                         persistState()
-                        pcall(mtCallback, isEnabled, selectedValues, selectedMap)
+                        if not callbacksSuppressed() then
+                            pcall(mtCallback, isEnabled, selectedValues, selectedMap)
+                        end
                     end,
                 })
                 selectedValues = multi:Get() or {}
@@ -2804,7 +2818,9 @@ function Library:CreateWindow(opts)
                             return
                         end
                         persistState()
-                        pcall(mtCallback, isEnabled, selectedValues)
+                        if not callbacksSuppressed() then
+                            pcall(mtCallback, isEnabled, selectedValues)
+                        end
                     end,
                 })
 
@@ -2977,7 +2993,9 @@ function Library:CreateWindow(opts)
                         Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                     end
 
-                    pcall(sToggleCallback, st.Enabled)
+                    if not callbacksSuppressed() then
+                        pcall(sToggleCallback, st.Enabled)
+                    end
                     if shouldMarkDirty then
                         Library:_markDirty()
                     end
@@ -2989,7 +3007,9 @@ function Library:CreateWindow(opts)
                     local relX = (st.Value - sMin) / (sMax - sMin)
                     Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
                     valLabel.Text = tostring(st.Value) .. sSuffix
-                    pcall(sCallback, st.Value)
+                    if not callbacksSuppressed() then
+                        pcall(sCallback, st.Value)
+                    end
                     if shouldMarkDirty then
                         Library:_markDirty()
                     end
@@ -3255,7 +3275,9 @@ function Library:CreateWindow(opts)
                         local nextText = tostring(value or "")
                         inputControl.Value = nextText
                         box.Text = nextText
-                        pcall(iCallback, nextText)
+                        if not callbacksSuppressed() then
+                            pcall(iCallback, nextText)
+                        end
                     end,
                     updateDisabled = function(disabled)
                         label.TextTransparency = disabled and 0.35 or 0
@@ -3419,7 +3441,9 @@ function Library:CreateWindow(opts)
                     hexText.Text = "#" .. c:ToHex()
                     crosshair.Position = UDim2.new(sat, 0, 1 - val, 0)
                     hueSlide.Position = UDim2.new(0.5, 0, hue, 0)
-                    pcall(cpCallback, c)
+                    if not callbacksSuppressed() then
+                        pcall(cpCallback, c)
+                    end
                     if shouldMarkDirty then
                         Library:_markDirty()
                     end

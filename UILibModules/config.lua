@@ -7,6 +7,7 @@ return function(Library, context)
     Library._autoSave = false
     Library._autoSaveDelay = 2
     Library._dirty = false
+    Library._controlSyncDepth = 0
 
     local CONFIG_FOLDER = "Eps1lonScript"
 
@@ -23,6 +24,21 @@ return function(Library, context)
 
     function Library:RegisterConfig(key, cType, getter, setter)
         self._configItems[key] = { type = cType, get = getter, set = setter }
+    end
+
+    function Library:_beginControlSync()
+        self._controlSyncDepth = (self._controlSyncDepth or 0) + 1
+    end
+
+    function Library:_endControlSync()
+        local depth = self._controlSyncDepth or 0
+        if depth > 0 then
+            self._controlSyncDepth = depth - 1
+        end
+    end
+
+    function Library:_callbacksSuppressed()
+        return (self._controlSyncDepth or 0) > 0
     end
 
     function Library:SaveConfig()
@@ -51,13 +67,16 @@ return function(Library, context)
         for key, entry in pairs(data) do
             local item = self._configItems[key]
             if item and entry.value ~= nil then
+                self:_beginControlSync()
                 pcall(item.set, entry.value)
+                self:_endControlSync()
             end
         end
     end
 
     function Library:_markDirty()
         if not self._autoSave then return end
+        if self:_callbacksSuppressed() then return end
         self._dirty = true
     end
 

@@ -181,9 +181,19 @@ return function(Library, context)
             return self:Get()
         end
 
-        function control:Set(value)
+        function control:Set(value, setOptions)
             if opts.setValue then
-                opts.setValue(value)
+                local suppressCallbacks = not (type(setOptions) == "table" and setOptions.fireCallbacks == true)
+                if suppressCallbacks and type(Library._beginControlSync) == "function" then
+                    Library:_beginControlSync()
+                end
+                local ok, err = pcall(opts.setValue, value, setOptions)
+                if suppressCallbacks and type(Library._endControlSync) == "function" then
+                    Library:_endControlSync()
+                end
+                if not ok then
+                    error(err, 0)
+                end
                 return self
             end
 
@@ -193,12 +203,12 @@ return function(Library, context)
             return self
         end
 
-        function control:SetValue(value)
-            return self:Set(value)
+        function control:SetValue(value, setOptions)
+            return self:Set(value, setOptions)
         end
 
-        function control:SetState(value)
-            return self:Set(value)
+        function control:SetState(value, setOptions)
+            return self:Set(value, setOptions)
         end
 
         function control:Refresh()
