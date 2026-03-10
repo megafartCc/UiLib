@@ -1059,6 +1059,13 @@ return function(Library, context)
 
         local dt = { Value = dDefault, Enabled = dEnabled }
 
+        local function fireDropdownToggleCallback()
+            if callbacksSuppressed() then
+                return
+            end
+            dCallback(dt.Value, dt.Enabled)
+        end
+
         local row = Instance.new("Frame", base.contentContainer)
         row.Name = "DropToggle_" .. dName
         row.BackgroundTransparency = 1
@@ -1125,6 +1132,7 @@ return function(Library, context)
         chkBtn.Activated:Connect(function()
             applyToggleEnabled(not dt.Enabled)
             dToggleCallback(dt.Enabled)
+            fireDropdownToggleCallback()
             Library:_markDirty()
         end)
 
@@ -1250,7 +1258,9 @@ return function(Library, context)
                 local resolved = applyDropdownValue(opt)
                 closeDropdown()
                 arrow.Text = DROPDOWN_ARROW_CLOSED
-                dCallback(resolved)
+                if not callbacksSuppressed() then
+                    dCallback(resolved, dt.Enabled)
+                end
                 Library:_markDirty()
             end)
 
@@ -1275,18 +1285,21 @@ return function(Library, context)
                 if type(val) ~= "table" then
                     return
                 end
+                local changed = false
 
                 if val.value ~= nil then
-                    local resolved = applyDropdownValue(val.value)
-                    if not callbacksSuppressed() then
-                        dCallback(resolved)
-                    end
+                    applyDropdownValue(val.value)
+                    changed = true
                 end
                 if val.enabled ~= nil then
                     applyToggleEnabled(val.enabled)
                     if not callbacksSuppressed() then
                         dToggleCallback(dt.Enabled)
                     end
+                    changed = true
+                end
+                if changed then
+                    fireDropdownToggleCallback()
                 end
                 Library:_markDirty()
             end,
@@ -1347,17 +1360,20 @@ return function(Library, context)
                     if type(val) ~= "table" then
                         return
                     end
+                    local changed = false
                     if val.value ~= nil then
-                        local resolved = applyDropdownValue(val.value)
-                        if not callbacksSuppressed() then
-                            dCallback(resolved)
-                        end
+                        applyDropdownValue(val.value)
+                        changed = true
                     end
                     if val.enabled ~= nil then
                         applyToggleEnabled(val.enabled)
                         if not callbacksSuppressed() then
                             dToggleCallback(dt.Enabled)
                         end
+                        changed = true
+                    end
+                    if changed then
+                        fireDropdownToggleCallback()
                     end
                 end
             )
