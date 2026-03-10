@@ -496,15 +496,15 @@ function Library:CreateWindow(opts)
     keyGateRoot.Name = "KeyGateRoot"
     keyGateRoot.BackgroundTransparency = 1
     keyGateRoot.BorderSizePixel = 0
-    keyGateRoot.Position = UDim2.new(0, 0, 0, config.HeaderHeight + 10)
-    keyGateRoot.Size = UDim2.new(1, 0, 1, -(config.HeaderHeight + 10 + config.BottomHeight + 7))
+    keyGateRoot.Position = UDim2.new(0, 0, 0, 0)
+    keyGateRoot.Size = UDim2.new(1, 0, 1, 0)
     keyGateRoot.Visible = false
     keyGateRoot.ZIndex = 3
 
     local keyGateCard = Instance.new("Frame", keyGateRoot)
     keyGateCard.Name = "KeyGateCard"
     keyGateCard.AnchorPoint = Vector2.new(0.5, 0.5)
-    keyGateCard.Position = UDim2.new(0.5, 0, 0.5, -10)
+    keyGateCard.Position = UDim2.new(0.5, 0, 0.5, 0)
     keyGateCard.Size = UDim2.fromOffset(360, 176)
     keyGateCard.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
     keyGateCard.BorderSizePixel = 0
@@ -576,7 +576,7 @@ function Library:CreateWindow(opts)
     local keyGetButton = Instance.new("TextButton", keyGateCard)
     keyGetButton.Name = "GetKeyButton"
     keyGetButton.Position = UDim2.new(0, 18, 1, -50)
-    keyGetButton.Size = UDim2.new(0.48, -6, 0, 30)
+    keyGetButton.Size = UDim2.new(0.5, -23, 0, 30)
     keyGetButton.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
     keyGetButton.BorderSizePixel = 0
     keyGetButton.Font = config.FontMedium
@@ -596,7 +596,7 @@ function Library:CreateWindow(opts)
     keySubmitButton.Name = "SubmitKeyButton"
     keySubmitButton.AnchorPoint = Vector2.new(1, 0)
     keySubmitButton.Position = UDim2.new(1, -18, 1, -50)
-    keySubmitButton.Size = UDim2.new(0.48, -6, 0, 30)
+    keySubmitButton.Size = UDim2.new(0.5, -23, 0, 30)
     keySubmitButton.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
     keySubmitButton.BorderSizePixel = 0
     keySubmitButton.Font = config.FontMedium
@@ -1227,6 +1227,10 @@ function Library:CreateWindow(opts)
             return nil
         end
 
+        if keySystemActive and not keyGateUnlocked then
+            return nil
+        end
+
         local boundsPos = main.AbsolutePosition
         local boundsSize = main.AbsoluteSize
         local x = position.X
@@ -1262,6 +1266,7 @@ function Library:CreateWindow(opts)
         return nil
     end
 
+    local lockedWindowSize = UDim2.fromOffset(392, 208)
     local fullWindowSize = UDim2.fromOffset(config.WindowWidth, config.WindowHeight)
     local fullClipSize = UDim2.new(1, 0, 1, 0)
 
@@ -1864,8 +1869,19 @@ function Library:CreateWindow(opts)
             if uiScalePanel then
                 uiScalePanel.Visible = false
             end
+            main.AnchorPoint = Vector2.new(0.5, 0.5)
+            main.Position = UDim2.new(0.5, 0, 0.5, 0)
+            main.Size = lockedWindowSize
+            main.BackgroundTransparency = 1
+            dropShadow.Visible = false
+        else
+            main.AnchorPoint = Vector2.new(0.5, 0)
+            main.BackgroundTransparency = 0
+            dropShadow.Visible = true
+            applyWindowBounds(windowBounds.left, windowBounds.top, windowBounds.width, windowBounds.height)
         end
 
+        header.Visible = not locked
         menuBtnCont.Visible = not locked
         userProfile.Visible = not locked
         menuFrame.Visible = not locked
