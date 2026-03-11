@@ -215,43 +215,42 @@ function Library:CreateWindow(opts)
     end
 
     if isMobileClient then
-        trackGlobal(UserInputService.InputBegan:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.Touch then
+        trackGlobal(UserInputService.TouchPan:Connect(function(touchPositions, totalTranslation, velocity, state, gameProcessedEvent)
+            local primaryTouch = touchPositions and touchPositions[1]
+            if not primaryTouch then
+                if state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+                    activeTouchScroll = nil
+                end
                 return
             end
 
-            local bestZone = findTouchScrollZone(input.Position)
-            if bestZone then
-                activeTouchScroll = {
-                    Input = input,
-                    Zone = bestZone,
-                    LastPosition = input.Position,
-                    Dragging = false,
-                }
-            end
-        end), "TouchScrollBegin")
-
-        trackGlobal(UserInputService.InputChanged:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.Touch then
+            if state == Enum.UserInputState.Begin then
+                local bestZone = findTouchScrollZone(primaryTouch)
+                if bestZone then
+                    activeTouchScroll = {
+                        Zone = bestZone,
+                        LastTranslation = Vector2.new(0, 0),
+                        Dragging = false,
+                    }
+                else
+                    activeTouchScroll = nil
+                end
                 return
             end
 
             local active = activeTouchScroll
-            if (not active or active.Input ~= input or not active.LastPosition) and input.Position then
-                local bestZone = findTouchScrollZone(input.Position)
+            if not active then
+                local bestZone = findTouchScrollZone(primaryTouch)
                 if bestZone then
                     active = {
-                        Input = input,
                         Zone = bestZone,
-                        LastPosition = input.Position,
+                        LastTranslation = Vector2.new(0, 0),
                         Dragging = false,
                     }
                     activeTouchScroll = active
+                else
+                    return
                 end
-            end
-
-            if not active or active.Input ~= input or not active.LastPosition then
-                return
             end
 
             local zone = active.Zone
@@ -260,39 +259,35 @@ function Library:CreateWindow(opts)
                 return
             end
 
-            local position = input.Position
-            local delta = position - active.LastPosition
-            local primaryDelta = zone.Axis == "X" and delta.X or delta.Y
-            local crossDelta = zone.Axis == "X" and delta.Y or delta.X
+            if state == Enum.UserInputState.Change then
+                local delta = totalTranslation - (active.LastTranslation or Vector2.new(0, 0))
+                local primaryDelta = zone.Axis == "X" and delta.X or delta.Y
+                local crossDelta = zone.Axis == "X" and delta.Y or delta.X
 
-            if not active.Dragging then
-                if math.abs(primaryDelta) < zone.Threshold or math.abs(primaryDelta) <= math.abs(crossDelta) then
-                    active.LastPosition = position
+                if not active.Dragging then
+                    if math.abs(primaryDelta) < zone.Threshold or math.abs(primaryDelta) <= math.abs(crossDelta) then
+                        active.LastTranslation = totalTranslation
+                        return
+                    end
+
+                    active.Dragging = true
+                end
+
+                if zone.CanScroll and zone.CanScroll(primaryTouch) == false then
+                    active.LastTranslation = totalTranslation
                     return
                 end
 
-                active.Dragging = true
-            end
-
-            if zone.CanScroll and zone.CanScroll(input) == false then
-                active.LastPosition = position
+                local scale = zone.GetScale and zone.GetScale() or 1
+                zone.ScrollState:ScrollBy((-primaryDelta) / math.max(scale, 0.01))
+                active.LastTranslation = totalTranslation
                 return
             end
 
-            local scale = zone.GetScale and zone.GetScale() or 1
-            zone.ScrollState:ScrollBy((-primaryDelta) / math.max(scale, 0.01))
-            active.LastPosition = position
-        end), "TouchScrollMove")
-
-        trackGlobal(UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.Touch then
-                return
-            end
-
-            if activeTouchScroll and activeTouchScroll.Input == input then
+            if state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
                 activeTouchScroll = nil
             end
-        end), "TouchScrollEnd")
+        end), "TouchScrollPan")
     end
 
     trackGlobal(RunService.RenderStepped:Connect(function(dt)
