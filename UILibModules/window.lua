@@ -4638,9 +4638,9 @@ function Library:CreateWindow(opts)
         end
 
         if keyGateUnlocked then
-            bootstrapWindowContent()
+            win._bootstrapWindowContent()
         else
-            setKeyChromeLocked(true)
+            win._setKeyChromeLocked(true)
             task.defer(function()
                 if keyUi.Input.Parent and main.Visible and win.Visible then
                     keyUi.Input:CaptureFocus()
