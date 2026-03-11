@@ -4,7 +4,7 @@
 ]]
 
 local function loadRemoteUiLib()
-    local uiLibCommit = "acf303a"
+    local uiLibCommit = "2237c8c"
     local baseUrl = "https://raw.githubusercontent.com/megafartCc/UiLib/" .. uiLibCommit .. "/UILibModules"
     local moduleCache = {}
     local cacheBust = "cb=" .. tostring(os.clock()):gsub("%.", "")
