@@ -194,24 +194,33 @@ function Library:CreateWindow(opts)
         })
     end
 
-    if isMobileClient then
-        trackGlobal(UserInputService.TouchStarted:Connect(function(input)
-            local bestZone = nil
-            local bestArea = math.huge
+    local function findTouchScrollZone(position)
+        local bestZone = nil
+        local bestArea = math.huge
 
-            for _, zone in ipairs(touchScrollZones) do
-                if pointInsideGui(zone.GuiObject, input.Position) then
-                    local size = zone.GuiObject.AbsoluteSize
-                    local area = size.X * size.Y
-                    if not bestZone
-                        or zone.Priority > bestZone.Priority
-                        or (zone.Priority == bestZone.Priority and area < bestArea) then
-                        bestZone = zone
-                        bestArea = area
-                    end
+        for _, zone in ipairs(touchScrollZones) do
+            if pointInsideGui(zone.GuiObject, position) then
+                local size = zone.GuiObject.AbsoluteSize
+                local area = size.X * size.Y
+                if not bestZone
+                    or zone.Priority > bestZone.Priority
+                    or (zone.Priority == bestZone.Priority and area < bestArea) then
+                    bestZone = zone
+                    bestArea = area
                 end
             end
+        end
 
+        return bestZone
+    end
+
+    if isMobileClient then
+        trackGlobal(UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.Touch then
+                return
+            end
+
+            local bestZone = findTouchScrollZone(input.Position)
             if bestZone then
                 activeTouchScroll = {
                     Input = input,
@@ -222,8 +231,25 @@ function Library:CreateWindow(opts)
             end
         end), "TouchScrollBegin")
 
-        trackGlobal(UserInputService.TouchMoved:Connect(function(input)
+        trackGlobal(UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.Touch then
+                return
+            end
+
             local active = activeTouchScroll
+            if (not active or active.Input ~= input or not active.LastPosition) and input.Position then
+                local bestZone = findTouchScrollZone(input.Position)
+                if bestZone then
+                    active = {
+                        Input = input,
+                        Zone = bestZone,
+                        LastPosition = input.Position,
+                        Dragging = false,
+                    }
+                    activeTouchScroll = active
+                end
+            end
+
             if not active or active.Input ~= input or not active.LastPosition then
                 return
             end
@@ -258,7 +284,11 @@ function Library:CreateWindow(opts)
             active.LastPosition = position
         end), "TouchScrollMove")
 
-        trackGlobal(UserInputService.TouchEnded:Connect(function(input)
+        trackGlobal(UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.Touch then
+                return
+            end
+
             if activeTouchScroll and activeTouchScroll.Input == input then
                 activeTouchScroll = nil
             end
