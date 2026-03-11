@@ -40,11 +40,9 @@ function Library:CreateWindow(opts)
     local isMobileClient = forcedMobileOverride or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled)
     local camera = workspace.CurrentCamera
     local viewportSize = camera and camera.ViewportSize or Vector2.new(config.WindowWidth, config.WindowHeight)
-    local mobileMinWindowWidth = math.max(300, math.min(380, viewportSize.X - 24))
-    local mobileMinWindowHeight = math.max(250, math.min(340, viewportSize.Y - 28))
-    local minWindowWidth = isMobileClient and mobileMinWindowWidth or desktopMinWindowWidth
-    local minWindowHeight = isMobileClient and mobileMinWindowHeight or desktopMinWindowHeight
-    local initialWindowWidth = isMobileClient and math.max(minWindowWidth, math.min(viewportSize.X - 18, 392)) or config.WindowWidth
+    local minWindowWidth = desktopMinWindowWidth
+    local minWindowHeight = desktopMinWindowHeight
+    local initialWindowWidth = isMobileClient and minWindowWidth or config.WindowWidth
     local initialWindowHeight = isMobileClient and minWindowHeight or config.WindowHeight
 
     -- Set config name for save/load
@@ -1988,7 +1986,7 @@ function Library:CreateWindow(opts)
         keyUi.StatusLabel.TextColor3 = color or colors.TextDim
     end
 
-    local function setKeyChromeLocked(locked)
+    win._setKeyChromeLocked = function(locked)
         if locked then
             closeTransientPopups()
             settingsOpen = false
@@ -2019,17 +2017,7 @@ function Library:CreateWindow(opts)
         keyUi.Root.Visible = locked
     end
 
-    local function copyToClipboard(text)
-        if type(setclipboard) == "function" then
-            return pcall(setclipboard, text)
-        end
-        if type(toclipboard) == "function" then
-            return pcall(toclipboard, text)
-        end
-        return false
-    end
-
-    local function runGetKeyAction()
+    keyUi.RunGetKeyAction = function()
         local handled = false
 
         if type(onGetKey) == "function" then
@@ -2038,7 +2026,13 @@ function Library:CreateWindow(opts)
         end
 
         if type(keyLink) == "string" and keyLink ~= "" then
-            local copied = copyToClipboard(keyLink)
+            local copied = false
+            if type(setclipboard) == "function" then
+                copied = pcall(setclipboard, keyLink)
+            elseif type(toclipboard) == "function" then
+                copied = pcall(toclipboard, keyLink)
+            end
+
             if copied then
                 setKeyStatus("Key link copied to clipboard.", colors.Main)
             else
@@ -2052,7 +2046,7 @@ function Library:CreateWindow(opts)
         end
     end
 
-    local function bootstrapWindowContent()
+    win._bootstrapWindowContent = function()
         if keyContentBootstrapped or win._destroyed then
             return
         end
@@ -2072,22 +2066,22 @@ function Library:CreateWindow(opts)
         refreshMenuScrolls()
     end
 
-    local function setKeyVerified(verified)
+    win._setKeyVerified = function(verified)
         keyGateUnlocked = verified == true
         win.KeyVerified = keyGateUnlocked
-        setKeyChromeLocked(not keyGateUnlocked)
+        win._setKeyChromeLocked(not keyGateUnlocked)
 
         if keyGateUnlocked then
-            bootstrapWindowContent()
+            win._bootstrapWindowContent()
             keyUi.Input.Text = ""
             setKeyStatus("", colors.TextDim)
         end
     end
 
-    local function tryUnlockWindow()
+    keyUi.TryUnlockWindow = function()
         local submitted = normalizeKeyInput(keyUi.Input.Text)
         if not keySystemActive then
-            setKeyVerified(true)
+            win._setKeyVerified(true)
             return true
         end
 
@@ -2110,7 +2104,7 @@ function Library:CreateWindow(opts)
             })
         end
 
-        setKeyVerified(true)
+        win._setKeyVerified(true)
         return true
     end
 
@@ -2126,15 +2120,15 @@ function Library:CreateWindow(opts)
     keyUi.SubmitButton.MouseLeave:Connect(function()
         Library:Animate(keyUi.SubmitButton, "Hover", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
     end)
-    keyUi.GetButton.Activated:Connect(runGetKeyAction)
-    keyUi.SubmitButton.Activated:Connect(tryUnlockWindow)
+    keyUi.GetButton.Activated:Connect(keyUi.RunGetKeyAction)
+    keyUi.SubmitButton.Activated:Connect(keyUi.TryUnlockWindow)
     keyUi.Input.FocusLost:Connect(function(enterPressed)
         if enterPressed then
-            tryUnlockWindow()
+            keyUi.TryUnlockWindow()
         end
     end)
 
-    setKeyChromeLocked(keySystemActive and not keyGateUnlocked)
+    win._setKeyChromeLocked(keySystemActive and not keyGateUnlocked)
 
     -- ==============================
     -- AddMenu (creates tab + page)
@@ -2144,9 +2138,6 @@ function Library:CreateWindow(opts)
         local menuName = menuOpts.Name or menuOpts.Title or "TAB"
         local menuIcon = menuOpts.Icon or "eye"
         local numColumns = menuOpts.Columns or 3
-        if isMobileClient then
-            numColumns = math.max(1, math.min(numColumns, menuOpts.MobileColumns or 1))
-        end
 
         local menu = { Sections = {}, _columns = {}, _columnScrollers = {} }
 

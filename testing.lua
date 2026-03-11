@@ -4,7 +4,7 @@
 ]]
 
 local function loadRemoteUiLib()
-    local uiLibCommit = "d67bc67"
+    local uiLibCommit = "main"
     local baseUrl = "https://raw.githubusercontent.com/megafartCc/UiLib/" .. uiLibCommit .. "/UILibModules"
     local moduleCache = {}
     local cacheBust = "cb=" .. tostring(os.clock()):gsub("%.", "")
@@ -59,27 +59,25 @@ pcall(function()
     end
 end)
 
-Library.Config.WindowWidth = 392
-Library.Config.WindowHeight = 320
-Library.Config.MinWindowWidth = 300
-Library.Config.MinWindowHeight = 250
-
-local PHONE_COLUMNS = 1
+Library.Config.WindowWidth = 860
+Library.Config.WindowHeight = 540
+Library.Config.MinWindowWidth = 520
+Library.Config.MinWindowHeight = 400
 
 local Window = Library:CreateWindow({
     Name = "FATALITY",
     Expire = "never",
     ConfigName = "fatality_test",  -- Saves to workspace/Eps1lonScript/fatality_test.json
-    ForceMobile = true, -- lets you preview the phone layout on PC
+    ForceMobile = true, -- lets you preview phone-only header/minimize behavior on PC
 })
 
 -- Create tabs
-local Rage = Window:AddMenu({ Name = "RAGE", Columns = PHONE_COLUMNS, MobileColumns = 1 })
-local Legit = Window:AddMenu({ Name = "LEGIT", Columns = PHONE_COLUMNS, MobileColumns = 1 })
-local Visual = Window:AddMenu({ Name = "VISUAL", Columns = PHONE_COLUMNS, MobileColumns = 1 })
-local Misc = Window:AddMenu({ Name = "MISC", Columns = PHONE_COLUMNS, MobileColumns = 1 })
-local Skins = Window:AddMenu({ Name = "SKINS", Columns = PHONE_COLUMNS, MobileColumns = 1 })
-local Lua = Window:AddMenu({ Name = "LUA", Columns = PHONE_COLUMNS, MobileColumns = 1 })
+local Rage = Window:AddMenu({ Name = "RAGE", Columns = 3 })
+local Legit = Window:AddMenu({ Name = "LEGIT", Columns = 3 })
+local Visual = Window:AddMenu({ Name = "VISUAL", Columns = 3 })
+local Misc = Window:AddMenu({ Name = "MISC", Columns = 3 })
+local Skins = Window:AddMenu({ Name = "SKINS", Columns = 3 })
+local Lua = Window:AddMenu({ Name = "LUA", Columns = 3 })
 
 -- Add sections to Rage page
 local Weapon  = Rage:AddSection({ Name = "WEAPON",  Column = 1 })
