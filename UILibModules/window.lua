@@ -339,7 +339,7 @@ function Library:CreateWindow(opts)
     local MOBILE_TOGGLE_SIZE = 18
     local MOBILE_TOGGLE_GAP = 6
     local USER_PROFILE_WIDTH = isMobileClient and 172 or 150
-    local USER_PROFILE_OFFSET_X = isMobileClient and -8 or -5
+    local USER_PROFILE_OFFSET_X = isMobileClient and -24 or -5
     local AVATAR_RIGHT_INSET = isMobileClient and (2 + MOBILE_TOGGLE_SIZE + MOBILE_TOGGLE_GAP) or 10
     local PROFILE_TEXT_RIGHT_INSET = isMobileClient and (AVATAR_RIGHT_INSET + 30) or 40
     local TABS_MIN_WIDTH = 120
