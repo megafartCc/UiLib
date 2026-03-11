@@ -332,11 +332,11 @@ function Library:CreateWindow(opts)
 
     local HEADER_LEFT_PADDING = 14
     local HEADER_TITLE_GAP = 0
-    local HEADER_RIGHT_PADDING = isMobileClient and 18 or 6
+    local HEADER_RIGHT_PADDING = isMobileClient and 22 or 6
     local MOBILE_TOGGLE_SIZE = 18
     local MOBILE_TOGGLE_GAP = 8
-    local USER_PROFILE_WIDTH = isMobileClient and 176 or 150
-    local USER_PROFILE_OFFSET_X = isMobileClient and -30 or -5
+    local USER_PROFILE_WIDTH = isMobileClient and 164 or 150
+    local USER_PROFILE_OFFSET_X = isMobileClient and -48 or -5
     local AVATAR_RIGHT_INSET = isMobileClient and (8 + MOBILE_TOGGLE_SIZE + MOBILE_TOGGLE_GAP) or 10
     local PROFILE_TEXT_RIGHT_INSET = isMobileClient and (AVATAR_RIGHT_INSET + 30) or 40
     local TABS_MIN_WIDTH = 120
