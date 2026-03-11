@@ -335,12 +335,12 @@ function Library:CreateWindow(opts)
 
     local HEADER_LEFT_PADDING = 14
     local HEADER_TITLE_GAP = 0
-    local HEADER_RIGHT_PADDING = isMobileClient and 8 or 6
+    local HEADER_RIGHT_PADDING = isMobileClient and 4 or 6
     local MOBILE_TOGGLE_SIZE = 18
     local MOBILE_TOGGLE_GAP = 6
     local USER_PROFILE_WIDTH = isMobileClient and 172 or 150
-    local USER_PROFILE_OFFSET_X = isMobileClient and -6 or -5
-    local AVATAR_RIGHT_INSET = isMobileClient and (4 + MOBILE_TOGGLE_SIZE + MOBILE_TOGGLE_GAP) or 10
+    local USER_PROFILE_OFFSET_X = isMobileClient and 0 or -5
+    local AVATAR_RIGHT_INSET = isMobileClient and (2 + MOBILE_TOGGLE_SIZE + MOBILE_TOGGLE_GAP) or 10
     local PROFILE_TEXT_RIGHT_INSET = isMobileClient and (AVATAR_RIGHT_INSET + 30) or 40
     local TABS_MIN_WIDTH = 120
 
@@ -503,7 +503,7 @@ function Library:CreateWindow(opts)
         local mobileMinimizeBtn = Instance.new("ImageButton", userProfile)
         mobileMinimizeBtn.Name = "MobileMinimizeButton"
         mobileMinimizeBtn.AnchorPoint = Vector2.new(1, 0.5)
-        mobileMinimizeBtn.Position = UDim2.new(1, -4, 0.5, 0)
+        mobileMinimizeBtn.Position = UDim2.new(1, -1, 0.5, 0)
         mobileMinimizeBtn.Size = UDim2.new(0, MOBILE_TOGGLE_SIZE, 0, MOBILE_TOGGLE_SIZE)
         mobileMinimizeBtn.BackgroundTransparency = 1
         mobileMinimizeBtn.BorderSizePixel = 0
