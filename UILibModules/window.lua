@@ -161,6 +161,73 @@ function Library:CreateWindow(opts)
         return state
     end
 
+    local function bindTouchScroll(guiObject, scrollState, opts)
+        if not isMobileClient or not guiObject or not scrollState then
+            return
+        end
+
+        opts = opts or {}
+
+        local axis = opts.Axis or "Y"
+        local threshold = opts.Threshold or 6
+        local activeInput = nil
+        local lastPosition = nil
+        local dragging = false
+
+        local function resetTouch(input)
+            if input and activeInput ~= input then
+                return
+            end
+
+            activeInput = nil
+            lastPosition = nil
+            dragging = false
+        end
+
+        trackGlobal(guiObject.InputBegan:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.Touch then
+                return
+            end
+
+            activeInput = input
+            lastPosition = input.Position
+            dragging = false
+        end), nextCleanupKey("TouchScrollBegin"))
+
+        trackGlobal(UserInputService.InputChanged:Connect(function(input)
+            if input ~= activeInput or not lastPosition then
+                return
+            end
+
+            local position = input.Position
+            local delta = position - lastPosition
+            local primaryDelta = axis == "X" and delta.X or delta.Y
+            local crossDelta = axis == "X" and delta.Y or delta.X
+
+            if not dragging then
+                if math.abs(primaryDelta) < threshold or math.abs(primaryDelta) <= math.abs(crossDelta) then
+                    lastPosition = position
+                    return
+                end
+
+                dragging = true
+            end
+
+            if opts.CanScroll and opts.CanScroll(input) == false then
+                lastPosition = position
+                return
+            end
+
+            local scale = opts.GetScale and opts.GetScale() or 1
+            scrollState:ScrollBy((-primaryDelta) / math.max(scale, 0.01))
+            lastPosition = position
+        end), nextCleanupKey("TouchScrollMove"))
+
+        trackGlobal(UserInputService.InputEnded:Connect(function(input)
+            resetTouch(input)
+        end), nextCleanupKey("TouchScrollEnd"))
+    end
+
     trackGlobal(RunService.RenderStepped:Connect(function(dt)
         for state in pairs(smoothScrollStates) do
             state:_clamp()
@@ -412,6 +479,9 @@ function Library:CreateWindow(opts)
         if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
         tabScrollState:ScrollBy(-input.Position.Z * TAB_SCROLL_STEP)
     end)
+    bindTouchScroll(menuBtnCont, tabScrollState, {
+        Axis = "X",
+    })
 
     -- ==============================
     -- USER PROFILE (right side of header)
@@ -1177,6 +1247,9 @@ function Library:CreateWindow(opts)
         if not isMouseInside(resultsFrame) then return end
         searchScrollState:ScrollBy(-input.Position.Z * SEARCH_SCROLL_STEP)
     end), "SearchScroll")
+    bindTouchScroll(resultsFrame, searchScrollState, {
+        Axis = "Y",
+    })
 
     local SEARCH_PANEL_HEIGHT = 250
     local searchOpen = false
@@ -2269,6 +2342,12 @@ function Library:CreateWindow(opts)
                 local scrollStep = BASE_SCROLL_STEP / math.max(currentContentScale, 0.01)
                 scrollState:ScrollBy(-input.Position.Z * scrollStep)
             end)
+            bindTouchScroll(col, scrollState, {
+                Axis = "Y",
+                GetScale = function()
+                    return math.max(currentContentScale, 0.01)
+                end,
+            })
 
             table.insert(menu._columnScrollers, refreshScroll)
             menu._columns[i] = inner -- sections parent to inner
