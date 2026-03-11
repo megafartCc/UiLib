@@ -40,11 +40,13 @@ function Library:CreateWindow(opts)
     local isMobileClient = forcedMobileOverride or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled)
     local camera = workspace.CurrentCamera
     local viewportSize = camera and camera.ViewportSize or Vector2.new(config.WindowWidth, config.WindowHeight)
-    local minWindowWidth = desktopMinWindowWidth
-    local minWindowHeight = desktopMinWindowHeight
+    local mobileMinWindowWidth = math.max(480, desktopMinWindowWidth - 40)
+    local mobileMinWindowHeight = math.max(config.HeaderHeight + config.BottomHeight + 120, desktopMinWindowHeight - 36)
+    local minWindowWidth = isMobileClient and mobileMinWindowWidth or desktopMinWindowWidth
+    local minWindowHeight = isMobileClient and mobileMinWindowHeight or desktopMinWindowHeight
     local initialWindowWidth = config.WindowWidth
     if isMobileClient then
-        initialWindowWidth = math.min(math.max(minWindowWidth + 36, 676), math.max(minWindowWidth, viewportSize.X - 20))
+        initialWindowWidth = math.min(math.max(minWindowWidth + 24, 628), math.max(minWindowWidth, viewportSize.X - 20))
     end
     local initialWindowHeight = isMobileClient and minWindowHeight or config.WindowHeight
 
