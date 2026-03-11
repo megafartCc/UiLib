@@ -59,6 +59,9 @@ return function(Library, context)
         optionsScroll.ScrollingDirection = Enum.ScrollingDirection.Y
         optionsScroll.CanvasPosition = Vector2.new(0, 0)
         optionsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        optionsScroll.AutomaticCanvasSize = Enum.AutomaticSize.None
+        optionsScroll.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
+        optionsScroll.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
 
         local optionsInner = Instance.new("Frame", optionsScroll)
         optionsInner.Name = "OptionsInner"
@@ -72,9 +75,28 @@ return function(Library, context)
         optionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
         local function refreshCanvas()
-            local contentHeight = optionsLayout.AbsoluteContentSize.Y
+            local contentHeight = 0
+            local visibleCount = 0
+
+            for _, child in ipairs(optionsInner:GetChildren()) do
+                if child:IsA("GuiObject") and child.Visible then
+                    visibleCount = visibleCount + 1
+                    local childHeight = child.AbsoluteSize.Y
+                    if childHeight <= 0 then
+                        childHeight = child.Size.Y.Offset > 0 and child.Size.Y.Offset or rowHeight
+                    end
+                    contentHeight = contentHeight + childHeight
+                end
+            end
+
+            if visibleCount > 1 then
+                contentHeight = contentHeight + (optionsLayout.Padding.Offset * (visibleCount - 1))
+            end
+
+            contentHeight = contentHeight + 4
             optionsInner.Size = UDim2.new(1, -3, 0, contentHeight)
             optionsScroll.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
+            optionsScroll.ScrollingEnabled = contentHeight > optionsScroll.AbsoluteSize.Y
         end
 
         optionsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshCanvas)
@@ -103,6 +125,7 @@ return function(Library, context)
             bindSearch = bindSearch,
             openHeight = openHeight,
             optionsParent = optionsInner,
+            optionsScroll = optionsScroll,
             refreshCanvas = refreshCanvas,
             searchBox = searchBox,
         }
@@ -464,6 +487,7 @@ return function(Library, context)
                     dPanelContent.searchBox.Text = ""
                 end
                 dPanelContent.refreshCanvas()
+                dPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
                 Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 selArrow.Text = DROPDOWN_ARROW_OPEN
             else
@@ -699,6 +723,7 @@ return function(Library, context)
                     dropPanelContent.searchBox.Text = ""
                 end
                 dropPanelContent.refreshCanvas()
+                dropPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
@@ -988,6 +1013,7 @@ return function(Library, context)
                     dropPanelContent.searchBox.Text = ""
                 end
                 dropPanelContent.refreshCanvas()
+                dropPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
@@ -1382,6 +1408,7 @@ return function(Library, context)
                     dropPanelContent.searchBox.Text = ""
                 end
                 dropPanelContent.refreshCanvas()
+                dropPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
                 Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
