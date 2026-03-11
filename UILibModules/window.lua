@@ -161,83 +161,108 @@ function Library:CreateWindow(opts)
         return state
     end
 
+    local touchScrollZones = {}
+    local activeTouchScroll = nil
+
+    local function pointInsideGui(guiObject, position)
+        if not guiObject or not guiObject.Parent or not guiObject.Visible then
+            return false
+        end
+
+        local absolutePosition = guiObject.AbsolutePosition
+        local absoluteSize = guiObject.AbsoluteSize
+        return position.X >= absolutePosition.X
+            and position.X <= absolutePosition.X + absoluteSize.X
+            and position.Y >= absolutePosition.Y
+            and position.Y <= absolutePosition.Y + absoluteSize.Y
+    end
+
     local function bindTouchScroll(guiObject, scrollState, opts)
         if not isMobileClient or not guiObject or not scrollState then
             return
         end
 
         opts = opts or {}
+        table.insert(touchScrollZones, {
+            GuiObject = guiObject,
+            ScrollState = scrollState,
+            Axis = opts.Axis or "Y",
+            Threshold = opts.Threshold or 6,
+            Priority = opts.Priority or 0,
+            CanScroll = opts.CanScroll,
+            GetScale = opts.GetScale,
+        })
+    end
 
-        local axis = opts.Axis or "Y"
-        local threshold = opts.Threshold or 6
-        local activeInput = nil
-        local lastPosition = nil
-        local dragging = false
-        local function pointInsideGui(position)
-            if not guiObject.Parent or not guiObject.Visible then
-                return false
-            end
-
-            local absolutePosition = guiObject.AbsolutePosition
-            local absoluteSize = guiObject.AbsoluteSize
-            return position.X >= absolutePosition.X
-                and position.X <= absolutePosition.X + absoluteSize.X
-                and position.Y >= absolutePosition.Y
-                and position.Y <= absolutePosition.Y + absoluteSize.Y
-        end
-
-        local function resetTouch(input)
-            if input and activeInput ~= input then
-                return
-            end
-
-            activeInput = nil
-            lastPosition = nil
-            dragging = false
-        end
-
+    if isMobileClient then
         trackGlobal(UserInputService.TouchStarted:Connect(function(input)
-            if not pointInsideGui(input.Position) then
-                return
+            local bestZone = nil
+            local bestArea = math.huge
+
+            for _, zone in ipairs(touchScrollZones) do
+                if pointInsideGui(zone.GuiObject, input.Position) then
+                    local size = zone.GuiObject.AbsoluteSize
+                    local area = size.X * size.Y
+                    if not bestZone
+                        or zone.Priority > bestZone.Priority
+                        or (zone.Priority == bestZone.Priority and area < bestArea) then
+                        bestZone = zone
+                        bestArea = area
+                    end
+                end
             end
 
-            activeInput = input
-            lastPosition = input.Position
-            dragging = false
-        end), nextCleanupKey("TouchScrollBegin"))
+            if bestZone then
+                activeTouchScroll = {
+                    Input = input,
+                    Zone = bestZone,
+                    LastPosition = input.Position,
+                    Dragging = false,
+                }
+            end
+        end), "TouchScrollBegin")
 
         trackGlobal(UserInputService.TouchMoved:Connect(function(input)
-            if input ~= activeInput or not lastPosition then
+            local active = activeTouchScroll
+            if not active or active.Input ~= input or not active.LastPosition then
+                return
+            end
+
+            local zone = active.Zone
+            if not zone or not zone.GuiObject or not zone.GuiObject.Parent then
+                activeTouchScroll = nil
                 return
             end
 
             local position = input.Position
-            local delta = position - lastPosition
-            local primaryDelta = axis == "X" and delta.X or delta.Y
-            local crossDelta = axis == "X" and delta.Y or delta.X
+            local delta = position - active.LastPosition
+            local primaryDelta = zone.Axis == "X" and delta.X or delta.Y
+            local crossDelta = zone.Axis == "X" and delta.Y or delta.X
 
-            if not dragging then
-                if math.abs(primaryDelta) < threshold or math.abs(primaryDelta) <= math.abs(crossDelta) then
-                    lastPosition = position
+            if not active.Dragging then
+                if math.abs(primaryDelta) < zone.Threshold or math.abs(primaryDelta) <= math.abs(crossDelta) then
+                    active.LastPosition = position
                     return
                 end
 
-                dragging = true
+                active.Dragging = true
             end
 
-            if opts.CanScroll and opts.CanScroll(input) == false then
-                lastPosition = position
+            if zone.CanScroll and zone.CanScroll(input) == false then
+                active.LastPosition = position
                 return
             end
 
-            local scale = opts.GetScale and opts.GetScale() or 1
-            scrollState:ScrollBy((-primaryDelta) / math.max(scale, 0.01))
-            lastPosition = position
-        end), nextCleanupKey("TouchScrollMove"))
+            local scale = zone.GetScale and zone.GetScale() or 1
+            zone.ScrollState:ScrollBy((-primaryDelta) / math.max(scale, 0.01))
+            active.LastPosition = position
+        end), "TouchScrollMove")
 
         trackGlobal(UserInputService.TouchEnded:Connect(function(input)
-            resetTouch(input)
-        end), nextCleanupKey("TouchScrollEnd"))
+            if activeTouchScroll and activeTouchScroll.Input == input then
+                activeTouchScroll = nil
+            end
+        end), "TouchScrollEnd")
     end
 
     trackGlobal(RunService.RenderStepped:Connect(function(dt)
@@ -493,6 +518,7 @@ function Library:CreateWindow(opts)
     end)
     bindTouchScroll(menuBtnCont, tabScrollState, {
         Axis = "X",
+        Priority = 5,
     })
 
     -- ==============================
@@ -1261,6 +1287,7 @@ function Library:CreateWindow(opts)
     end), "SearchScroll")
     bindTouchScroll(resultsFrame, searchScrollState, {
         Axis = "Y",
+        Priority = 30,
     })
 
     local SEARCH_PANEL_HEIGHT = 250
@@ -2359,6 +2386,7 @@ function Library:CreateWindow(opts)
                 GetScale = function()
                     return math.max(currentContentScale, 0.01)
                 end,
+                Priority = 10,
             })
 
             table.insert(menu._columnScrollers, refreshScroll)
