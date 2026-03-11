@@ -173,6 +173,18 @@ function Library:CreateWindow(opts)
         local activeInput = nil
         local lastPosition = nil
         local dragging = false
+        local function pointInsideGui(position)
+            if not guiObject.Parent or not guiObject.Visible then
+                return false
+            end
+
+            local absolutePosition = guiObject.AbsolutePosition
+            local absoluteSize = guiObject.AbsoluteSize
+            return position.X >= absolutePosition.X
+                and position.X <= absolutePosition.X + absoluteSize.X
+                and position.Y >= absolutePosition.Y
+                and position.Y <= absolutePosition.Y + absoluteSize.Y
+        end
 
         local function resetTouch(input)
             if input and activeInput ~= input then
@@ -184,8 +196,12 @@ function Library:CreateWindow(opts)
             dragging = false
         end
 
-        trackGlobal(guiObject.InputBegan:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.Touch then
+        trackGlobal(UserInputService.TouchStarted:Connect(function(input, gpe)
+            if gpe then
+                return
+            end
+
+            if not pointInsideGui(input.Position) then
                 return
             end
 
@@ -194,8 +210,12 @@ function Library:CreateWindow(opts)
             dragging = false
         end), nextCleanupKey("TouchScrollBegin"))
 
-        trackGlobal(UserInputService.InputChanged:Connect(function(input)
+        trackGlobal(UserInputService.TouchMoved:Connect(function(input, gpe)
             if input ~= activeInput or not lastPosition then
+                return
+            end
+
+            if gpe and not dragging then
                 return
             end
 
@@ -223,7 +243,7 @@ function Library:CreateWindow(opts)
             lastPosition = position
         end), nextCleanupKey("TouchScrollMove"))
 
-        trackGlobal(UserInputService.InputEnded:Connect(function(input)
+        trackGlobal(UserInputService.TouchEnded:Connect(function(input)
             resetTouch(input)
         end), nextCleanupKey("TouchScrollEnd"))
     end
