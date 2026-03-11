@@ -2361,14 +2361,17 @@ function Library:CreateWindow(opts)
                 col.ZIndex = 3
                 col.Active = true
                 col.ClipsDescendants = true
+                col.ScrollingEnabled = true
                 col.ScrollBarThickness = 0
                 col.ScrollBarImageTransparency = 1
                 col.ScrollingDirection = Enum.ScrollingDirection.Y
-                col.AutomaticCanvasSize = Enum.AutomaticSize.Y
+                col.AutomaticCanvasSize = Enum.AutomaticSize.None
                 col.CanvasSize = UDim2.new(0, 0, 0, 0)
                 col.TopImage = ""
                 col.MidImage = ""
                 col.BottomImage = ""
+                col.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
+                col.AutomaticSize = Enum.AutomaticSize.None
 
                 local colLayout = Instance.new("UIListLayout", col)
                 colLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -2379,7 +2382,15 @@ function Library:CreateWindow(opts)
                 colPad.PaddingTop = UDim.new(0, 4)
                 colPad.PaddingBottom = UDim.new(0, 4)
 
-                table.insert(menu._columnScrollers, function() end)
+                local function refreshScroll()
+                    local canvasHeight = colLayout.AbsoluteContentSize.Y + 12
+                    col.CanvasSize = UDim2.new(0, 0, 0, math.max(0, math.floor(canvasHeight + 0.5)))
+                end
+
+                trackGlobal(colLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshScroll), nextCleanupKey("MobileColumnCanvas"))
+                task.defer(refreshScroll)
+
+                table.insert(menu._columnScrollers, refreshScroll)
                 menu._columns[i] = col
             else
                 local col = Instance.new("Frame", pageFrame)
