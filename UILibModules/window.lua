@@ -37,9 +37,12 @@ function Library:CreateWindow(opts)
             end
         end)
     end
-    local isMobileClient = forcedMobileOverride or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled)
     local camera = workspace.CurrentCamera
     local viewportSize = camera and camera.ViewportSize or Vector2.new(config.WindowWidth, config.WindowHeight)
+    local hasTouchInput = UserInputService.TouchEnabled
+    local likelyMobileViewport = viewportSize.X <= 950 or viewportSize.Y <= 760
+    local isMobileClient = forcedMobileOverride
+        or (hasTouchInput and (not UserInputService.KeyboardEnabled or not UserInputService.MouseEnabled or likelyMobileViewport))
     local mobileMinWindowWidth = math.max(450, desktopMinWindowWidth - 64)
     local mobileMinWindowHeight = math.max(config.HeaderHeight + config.BottomHeight + 110, desktopMinWindowHeight - 56)
     local minWindowWidth = isMobileClient and mobileMinWindowWidth or desktopMinWindowWidth
