@@ -2348,74 +2348,99 @@ function Library:CreateWindow(opts)
         end
 
         for i = 1, numColumns do
-            local col = Instance.new("Frame", pageFrame)
-            col.Name = "Column_" .. i
-            col.BackgroundTransparency = 1
-            col.BorderSizePixel = 0
-            col.Position = UDim2.new(colWidth * (i - 1), 4, 0, 4)
-            col.Size = UDim2.new(colWidth, -8, 1, -4)
-            col.ZIndex = 3
-            col.ClipsDescendants = true
-            col.Active = true  -- sinks mouse input so camera doesn't zoom
+            if isMobileClient then
+                local col = Instance.new("ScrollingFrame", pageFrame)
+                col.Name = "Column_" .. i
+                col.BackgroundTransparency = 1
+                col.BorderSizePixel = 0
+                col.Position = UDim2.new(colWidth * (i - 1), 4, 0, 4)
+                col.Size = UDim2.new(colWidth, -8, 1, -4)
+                col.ZIndex = 3
+                col.Active = true
+                col.ClipsDescendants = true
+                col.ScrollBarThickness = 0
+                col.ScrollBarImageTransparency = 1
+                col.ScrollingDirection = Enum.ScrollingDirection.Y
+                col.AutomaticCanvasSize = Enum.AutomaticSize.Y
+                col.CanvasSize = UDim2.new(0, 0, 0, 0)
+                col.TopImage = ""
+                col.MidImage = ""
+                col.BottomImage = ""
 
-            -- Inner container that moves on scroll
-            local inner = Instance.new("Frame", col)
-            inner.Name = "Inner"
-            inner.BackgroundTransparency = 1
-            inner.BorderSizePixel = 0
-            inner.Position = UDim2.new(0, 0, 0, 0)
-            inner.Size = UDim2.new(1, 0, 0, 5000)
-            inner.ZIndex = 3
+                local colLayout = Instance.new("UIListLayout", col)
+                colLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                colLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                colLayout.Padding = UDim.new(0, 8)
 
-            local colLayout = Instance.new("UIListLayout", inner)
-            colLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            colLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-            colLayout.Padding = UDim.new(0, 8)
+                local colPad = Instance.new("UIPadding", col)
+                colPad.PaddingTop = UDim.new(0, 4)
+                colPad.PaddingBottom = UDim.new(0, 4)
 
-            -- Top padding so first section title isn't clipped
-            local colPad = Instance.new("UIPadding", inner)
-            colPad.PaddingTop = UDim.new(0, 4)
+                table.insert(menu._columnScrollers, function() end)
+                menu._columns[i] = col
+            else
+                local col = Instance.new("Frame", pageFrame)
+                col.Name = "Column_" .. i
+                col.BackgroundTransparency = 1
+                col.BorderSizePixel = 0
+                col.Position = UDim2.new(colWidth * (i - 1), 4, 0, 4)
+                col.Size = UDim2.new(colWidth, -8, 1, -4)
+                col.ZIndex = 3
+                col.ClipsDescendants = true
+                col.Active = true  -- sinks mouse input so camera doesn't zoom
 
-            -- Mouse wheel scroll (frame-level to consume input)
-            local BASE_SCROLL_STEP = 30
-            local scrollState = createSmoothScrollState({
-                Speed = 14,
-                GetMaxOffset = function()
-                    local contentH = colLayout.AbsoluteContentSize.Y + 8
-                    local visibleH = getVisibleColumnHeight()
-                    return math.max(0, contentH - visibleH)
-                end,
-                Apply = function(offset)
-                    inner.Position = UDim2.new(0, 0, 0, -math.floor(offset + 0.5))
-                end,
-            })
-            track(scrollState, "Destroy", nextCleanupKey("ColumnScrollState"))
+                -- Inner container that moves on scroll
+                local inner = Instance.new("Frame", col)
+                inner.Name = "Inner"
+                inner.BackgroundTransparency = 1
+                inner.BorderSizePixel = 0
+                inner.Position = UDim2.new(0, 0, 0, 0)
+                inner.Size = UDim2.new(1, 0, 0, 5000)
+                inner.ZIndex = 3
 
-            local function refreshScroll()
-                scrollState:Refresh(false)
+                local colLayout = Instance.new("UIListLayout", inner)
+                colLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                colLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                colLayout.Padding = UDim.new(0, 8)
+
+                -- Top padding so first section title isn't clipped
+                local colPad = Instance.new("UIPadding", inner)
+                colPad.PaddingTop = UDim.new(0, 4)
+
+                -- Mouse wheel scroll (frame-level to consume input)
+                local BASE_SCROLL_STEP = 30
+                local scrollState = createSmoothScrollState({
+                    Speed = 14,
+                    GetMaxOffset = function()
+                        local contentH = colLayout.AbsoluteContentSize.Y + 8
+                        local visibleH = getVisibleColumnHeight()
+                        return math.max(0, contentH - visibleH)
+                    end,
+                    Apply = function(offset)
+                        inner.Position = UDim2.new(0, 0, 0, -math.floor(offset + 0.5))
+                    end,
+                })
+                track(scrollState, "Destroy", nextCleanupKey("ColumnScrollState"))
+
+                local function refreshScroll()
+                    scrollState:Refresh(false)
+                end
+
+                col.InputChanged:Connect(function(input)
+                    if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
+                    if searchOpen and isMouseInside(searchPanel) then
+                        return
+                    end
+                    if popupManager.isMouseOverTransientPopup and popupManager.isMouseOverTransientPopup() then
+                        return
+                    end
+                    local scrollStep = BASE_SCROLL_STEP / math.max(currentContentScale, 0.01)
+                    scrollState:ScrollBy(-input.Position.Z * scrollStep)
+                end)
+
+                table.insert(menu._columnScrollers, refreshScroll)
+                menu._columns[i] = inner -- sections parent to inner
             end
-
-            col.InputChanged:Connect(function(input)
-                if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-                if searchOpen and isMouseInside(searchPanel) then
-                    return
-                end
-                if popupManager.isMouseOverTransientPopup and popupManager.isMouseOverTransientPopup() then
-                    return
-                end
-                local scrollStep = BASE_SCROLL_STEP / math.max(currentContentScale, 0.01)
-                scrollState:ScrollBy(-input.Position.Z * scrollStep)
-            end)
-            bindTouchScroll(col, scrollState, {
-                Axis = "Y",
-                GetScale = function()
-                    return math.max(currentContentScale, 0.01)
-                end,
-                Priority = 10,
-            })
-
-            table.insert(menu._columnScrollers, refreshScroll)
-            menu._columns[i] = inner -- sections parent to inner
         end
 
         function menu:_refreshScroll()
