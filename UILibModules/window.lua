@@ -196,11 +196,7 @@ function Library:CreateWindow(opts)
             dragging = false
         end
 
-        trackGlobal(UserInputService.TouchStarted:Connect(function(input, gpe)
-            if gpe then
-                return
-            end
-
+        trackGlobal(UserInputService.TouchStarted:Connect(function(input)
             if not pointInsideGui(input.Position) then
                 return
             end
@@ -210,12 +206,8 @@ function Library:CreateWindow(opts)
             dragging = false
         end), nextCleanupKey("TouchScrollBegin"))
 
-        trackGlobal(UserInputService.TouchMoved:Connect(function(input, gpe)
+        trackGlobal(UserInputService.TouchMoved:Connect(function(input)
             if input ~= activeInput or not lastPosition then
-                return
-            end
-
-            if gpe and not dragging then
                 return
             end
 
