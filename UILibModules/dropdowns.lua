@@ -781,10 +781,20 @@ return function(Library, context)
                     table.insert(selected, tostring(opt))
                 end
             end
-            if #selected == 0 then
+            local selectedCount = #selected
+            if selectedCount == 0 then
                 return "None"
             end
-            return table.concat(selected, ", ")
+            if selectedCount == #dOptions then
+                return "All"
+            end
+            if selectedCount == 1 then
+                return selected[1]
+            end
+            if selectedCount == 2 then
+                return table.concat(selected, ", ")
+            end
+            return string.format("%s, %s +%d", selected[1], selected[2], selectedCount - 2)
         end
 
         local row = Instance.new("Frame", base.contentContainer)
@@ -797,7 +807,7 @@ return function(Library, context)
 
         local label = Instance.new("TextLabel", row)
         label.BackgroundTransparency = 1
-        label.Size = UDim2.new(0.4, 0, 1, 0)
+        label.Size = UDim2.new(0.35, 0, 1, 0)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
@@ -808,7 +818,7 @@ return function(Library, context)
         local selectBtn = Instance.new("TextButton", row)
         selectBtn.AnchorPoint = Vector2.new(1, 0.5)
         selectBtn.Position = UDim2.new(1, 0, 0.5, 0)
-        selectBtn.Size = UDim2.new(0.55, 0, 0, 18)
+        selectBtn.Size = UDim2.new(0.6, 0, 0, 18)
         selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         selectBtn.BorderSizePixel = 0
         selectBtn.Text = ""
@@ -830,6 +840,7 @@ return function(Library, context)
         valText.Text = getDisplayText()
         valText.TextColor3 = base.colors.Text
         valText.TextSize = 11
+        valText.TextTruncate = Enum.TextTruncate.AtEnd
         valText.TextXAlignment = Enum.TextXAlignment.Left
         valText.ZIndex = 6
 
@@ -1059,11 +1070,6 @@ return function(Library, context)
             base.fitLabel(multi, label, {
                 BaseTextSize = 12,
                 MinTextSize = 10,
-                WidthPadding = 2,
-            })
-            base.fitLabel(multi, valText, {
-                BaseTextSize = 11,
-                MinTextSize = 9,
                 WidthPadding = 2,
             })
         end
