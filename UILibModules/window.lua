@@ -2203,6 +2203,8 @@ function Library:CreateWindow(opts)
         keyUi.Root.Visible = locked
     end
 
+    local ensureSettingsMenu
+
     keyUi.RunGetKeyAction = function()
         local handled = false
 
@@ -4896,7 +4898,7 @@ function Library:CreateWindow(opts)
     end
 
     local settingsMenu
-    local function ensureSettingsMenu()
+    ensureSettingsMenu = function()
         if settingsMenu then
             return settingsMenu
         end
