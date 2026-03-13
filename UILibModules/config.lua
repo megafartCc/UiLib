@@ -89,22 +89,28 @@ return function(Library, context)
     function Library:WriteData(tag, value)
         local path = self:_getDataPath(tag)
         if not path or type(writefile) ~= "function" then
-            return false
+            return false, "writefile unavailable"
         end
 
         if not self:_ensureFolder() then
-            return false
+            return false, "storage folder unavailable"
         end
 
         local okEncode, encoded = pcall(function()
             return HttpService:JSONEncode(value)
         end)
         if not okEncode or type(encoded) ~= "string" then
-            return false
+            return false, "json encode failed"
         end
 
-        local okWrite = pcall(writefile, path, encoded)
-        return okWrite == true
+        local okWrite, writeErr = pcall(writefile, path, encoded)
+        if not okWrite then
+            local message = tostring(writeErr or "writefile failed")
+            message = message:gsub("[%c\r\n]+", " ")
+            return false, message
+        end
+
+        return true, path
     end
 
     function Library:RegisterConfig(key, cType, getter, setter)
@@ -475,43 +481,68 @@ return function(Library, context)
             return tostring(left):lower() < tostring(right):lower()
         end)
 
-        self:WriteData(self:_getThemePresetIndexTag(), cleaned)
-        return cleaned
+        local success, writeResult = self:WriteData(self:_getThemePresetIndexTag(), cleaned)
+        if not success then
+            return nil, writeResult or "failed to write preset index"
+        end
+
+        return cleaned, writeResult
     end
 
     function Library:SaveThemePreset(name)
-        local tag = self:_getThemePresetTag(name)
-        if not tag then
-            return false
+        local trimmedName = tostring(name or ""):match("^%s*(.-)%s*$")
+        if trimmedName == "" then
+            return false, "enter a preset name"
         end
 
-        local success = self:WriteData(tag, {
-            Name = tostring(name),
+        local tag = self:_getThemePresetTag(name)
+        if not tag then
+            return false, "invalid preset name"
+        end
+
+        local success, writeResult = self:WriteData(tag, {
+            Name = trimmedName,
             Theme = getSerializedThemeSnapshot(self.Theme),
         })
-        if success then
-            local presets = self:_readThemePresetIndex()
-            table.insert(presets, tostring(name))
-            self:_writeThemePresetIndex(presets)
-        end
-        return success
-    end
-
-    function Library:LoadThemePreset(name)
-        local tag = self:_getThemePresetTag(name)
-        if not tag then
-            return false
+        if not success then
+            return false, writeResult or "failed to write preset"
         end
 
         local payload = self:ReadData(tag)
         if type(payload) ~= "table" or type(payload.Theme) ~= "table" then
-            return false
+            return false, "preset write verification failed"
+        end
+
+        local presets = self:_readThemePresetIndex()
+        table.insert(presets, trimmedName)
+        local cleaned, indexResult = self:_writeThemePresetIndex(presets)
+        if not cleaned then
+            return false, indexResult or "failed to update preset list"
+        end
+
+        return true, string.format("saved preset: %s", trimmedName)
+    end
+
+    function Library:LoadThemePreset(name)
+        local trimmedName = tostring(name or ""):match("^%s*(.-)%s*$")
+        if trimmedName == "" then
+            return false, "select a preset to load"
+        end
+
+        local tag = self:_getThemePresetTag(name)
+        if not tag then
+            return false, "invalid preset name"
+        end
+
+        local payload = self:ReadData(tag)
+        if type(payload) ~= "table" or type(payload.Theme) ~= "table" then
+            return false, string.format("preset not found: %s", trimmedName)
         end
 
         applyThemeSnapshot(self, payload.Theme)
         self:ApplyTheme()
         self:SaveTheme()
-        return true
+        return true, string.format("loaded preset: %s", trimmedName)
     end
 
     function Library:ListThemePresets()
@@ -545,7 +576,8 @@ return function(Library, context)
             end
         end
 
-        return self:_writeThemePresetIndex(presets)
+        local cleaned = self:_writeThemePresetIndex(presets)
+        return cleaned or presets
     end
 
     Library.Config = {

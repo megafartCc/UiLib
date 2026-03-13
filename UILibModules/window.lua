@@ -5063,8 +5063,57 @@ function Library:CreateWindow(opts)
             end,
         })
 
+        local presetStatusTone = "neutral"
+        local presetStatusMessage = "Ready"
+
+        local presetStatusRow = Instance.new("Frame", uiVisualConfigSection.Container)
+        presetStatusRow.Name = "PresetStatus"
+        presetStatusRow.BackgroundTransparency = 1
+        presetStatusRow.BorderSizePixel = 0
+        presetStatusRow.Size = UDim2.new(1, 0, 0, 18)
+        presetStatusRow.ZIndex = 5
+
+        local presetStatusLabel = Instance.new("TextLabel", presetStatusRow)
+        presetStatusLabel.Name = "StatusLabel"
+        presetStatusLabel.BackgroundTransparency = 1
+        presetStatusLabel.BorderSizePixel = 0
+        presetStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+        presetStatusLabel.Font = config.FontMedium
+        presetStatusLabel.Text = ""
+        presetStatusLabel.TextSize = 11
+        presetStatusLabel.TextWrapped = false
+        presetStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        presetStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
+        presetStatusLabel.ZIndex = 5
+
+        local function getPresetStatusColor()
+            if presetStatusTone == "error" then
+                return colors.Main
+            end
+            if presetStatusTone == "success" then
+                return colors.Text
+            end
+            return colors.TextDim
+        end
+
+        local function applyPresetStatus()
+            presetStatusLabel.Text = "Status: " .. tostring(presetStatusMessage or "Ready")
+            presetStatusLabel.TextColor3 = getPresetStatusColor()
+        end
+
+        local function setPresetStatus(message, tone)
+            presetStatusMessage = tostring(message or "Ready")
+            presetStatusTone = tone or "neutral"
+            applyPresetStatus()
+        end
+
+        onThemeChanged(function()
+            applyPresetStatus()
+        end)
+
         local function refreshPresetDropdown(selectedName)
             local presets = Library:ListThemePresets()
+            local hasPresets = #presets > 0
             if #presets == 0 then
                 presets = { "No Presets" }
             end
@@ -5075,6 +5124,7 @@ function Library:CreateWindow(opts)
             end
 
             presetDropdown:SetOptions(presets, targetValue)
+            return hasPresets
         end
 
         uiVisualConfigSection:AddButton({
@@ -5082,11 +5132,17 @@ function Library:CreateWindow(opts)
             Callback = function()
                 local presetName = getPresetName(presetNameInput:GetText()) or getPresetName(presetDropdown:Get())
                 if not presetName then
+                    setPresetStatus("enter a preset name", "error")
                     return
                 end
 
-                if Library:SaveThemePreset(presetName) then
+                local success, message = Library:SaveThemePreset(presetName)
+                if success then
+                    presetNameInput:SetText(presetName)
                     refreshPresetDropdown(presetName)
+                    setPresetStatus(message or ("saved preset: " .. presetName), "success")
+                else
+                    setPresetStatus(message or ("failed to save preset: " .. presetName), "error")
                 end
             end,
         })
@@ -5096,12 +5152,17 @@ function Library:CreateWindow(opts)
             Callback = function()
                 local presetName = getPresetName(presetNameInput:GetText()) or getPresetName(presetDropdown:Get())
                 if not presetName then
+                    setPresetStatus("select a preset to load", "error")
                     return
                 end
 
-                if Library:LoadThemePreset(presetName) then
+                local success, message = Library:LoadThemePreset(presetName)
+                if success then
                     presetNameInput:SetText(presetName)
                     refreshPresetDropdown(presetName)
+                    setPresetStatus(message or ("loaded preset: " .. presetName), "success")
+                else
+                    setPresetStatus(message or ("failed to load preset: " .. presetName), "error")
                 end
             end,
         })
@@ -5112,10 +5173,15 @@ function Library:CreateWindow(opts)
                 Library:ResetThemeDefaults()
                 presetNameInput:SetText("")
                 refreshPresetDropdown()
+                setPresetStatus("reset theme to default", "success")
             end,
         })
 
-        refreshPresetDropdown()
+        if refreshPresetDropdown() then
+            setPresetStatus("preset manager ready", "neutral")
+        else
+            setPresetStatus("no presets saved yet", "neutral")
+        end
 
         return settingsMenu
     end
