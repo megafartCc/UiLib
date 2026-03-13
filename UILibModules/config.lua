@@ -224,18 +224,165 @@ return function(Library, context)
         end)
     end
 
-    Library.Colors = {
-        Black        = Color3.fromRGB(16, 16, 16),
-        Main         = Color3.fromRGB(255, 106, 133),
-        Background   = Color3.fromRGB(19, 19, 19),
-        Header       = Color3.fromRGB(21, 21, 21),
-        Line         = Color3.fromRGB(29, 29, 29),
-        TabBg        = Color3.fromRGB(30, 30, 30),
-        TabBgActive  = Color3.fromRGB(38, 38, 38),
-        Text         = Color3.fromRGB(229, 229, 229),
-        TextDim      = Color3.fromRGB(150, 150, 150),
-        TextMuted    = Color3.fromRGB(100, 100, 100),
+    local defaultTheme = {
+        Black = Color3.fromRGB(16, 16, 16),
+        Main = Color3.fromRGB(255, 106, 133),
+        Background = Color3.fromRGB(19, 19, 19),
+        Header = Color3.fromRGB(21, 21, 21),
+        Bottom = Color3.fromRGB(21, 21, 21),
+        Line = Color3.fromRGB(29, 29, 29),
+        TabBg = Color3.fromRGB(30, 30, 30),
+        TabBgActive = Color3.fromRGB(38, 38, 38),
+        Text = Color3.fromRGB(229, 229, 229),
+        TextDim = Color3.fromRGB(150, 150, 150),
+        TextMuted = Color3.fromRGB(100, 100, 100),
+        TextStrong = Color3.fromRGB(255, 255, 255),
+        Section = Color3.fromRGB(24, 24, 24),
+        Panel = Color3.fromRGB(22, 22, 22),
+        Control = Color3.fromRGB(35, 35, 35),
+        ControlAlt = Color3.fromRGB(30, 30, 30),
+        ControlHover = Color3.fromRGB(50, 50, 50),
+        AccentSurface = Color3.fromRGB(45, 25, 30),
+        TitleStroke = Color3.fromRGB(205, 67, 218),
+        Shadow = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0,
+        HeaderTransparency = 0,
+        BottomTransparency = 0,
+        SectionTransparency = 0,
+        PanelTransparency = 0,
+        ControlTransparency = 0,
+        AccentTransparency = 0,
+        ShadowTransparency = 0.75,
     }
+
+    Library.Colors = {}
+    Library.Theme = {}
+    Library._themeBindings = {}
+    Library._themeCallbacks = {}
+
+    local function cloneThemeValue(value)
+        if typeof(value) == "Color3" then
+            return Color3.new(value.R, value.G, value.B)
+        end
+        return value
+    end
+
+    for key, value in pairs(defaultTheme) do
+        Library.Colors[key] = cloneThemeValue(value)
+        Library.Theme[key] = cloneThemeValue(value)
+    end
+
+    local function serializeThemeValue(value)
+        if typeof(value) == "Color3" then
+            return {
+                __type = "Color3",
+                R = value.R,
+                G = value.G,
+                B = value.B,
+            }
+        end
+        return value
+    end
+
+    local function deserializeThemeValue(value)
+        if type(value) == "table" and value.__type == "Color3" then
+            return Color3.new(tonumber(value.R) or 0, tonumber(value.G) or 0, tonumber(value.B) or 0)
+        end
+        return value
+    end
+
+    function Library:RegisterThemeBinding(instance, propertyName, themeKey, transform)
+        if not instance or type(propertyName) ~= "string" or type(themeKey) ~= "string" then
+            return
+        end
+
+        table.insert(self._themeBindings, {
+            Instance = instance,
+            Property = propertyName,
+            ThemeKey = themeKey,
+            Transform = transform,
+        })
+    end
+
+    function Library:RegisterThemeCallback(callback)
+        if type(callback) ~= "function" then
+            return
+        end
+
+        table.insert(self._themeCallbacks, callback)
+    end
+
+    function Library:ApplyTheme()
+        for index = #self._themeBindings, 1, -1 do
+            local binding = self._themeBindings[index]
+            local instance = binding and binding.Instance
+            if not binding or not instance or instance.Parent == nil then
+                table.remove(self._themeBindings, index)
+            else
+                local value = self.Theme[binding.ThemeKey]
+                if value ~= nil then
+                    local resolved = binding.Transform and binding.Transform(value, self.Theme) or value
+                    pcall(function()
+                        instance[binding.Property] = resolved
+                    end)
+                end
+            end
+        end
+
+        for _, callback in ipairs(self._themeCallbacks) do
+            pcall(callback, self.Theme)
+        end
+    end
+
+    function Library:SetThemeValue(themeKey, value, shouldPersist)
+        if type(themeKey) ~= "string" or self.Theme[themeKey] == nil then
+            return
+        end
+
+        self.Theme[themeKey] = cloneThemeValue(value)
+        self.Colors[themeKey] = cloneThemeValue(value)
+        self:ApplyTheme()
+
+        if shouldPersist ~= false then
+            self:SaveTheme()
+        end
+    end
+
+    function Library:GetThemeValue(themeKey)
+        return self.Theme[themeKey]
+    end
+
+    function Library:SaveTheme()
+        local payload = {}
+        for key, value in pairs(self.Theme) do
+            payload[key] = serializeThemeValue(value)
+        end
+        return self:WriteData("theme", payload)
+    end
+
+    function Library:LoadTheme()
+        local payload = self:ReadData("theme")
+        if type(payload) ~= "table" then
+            self:ApplyTheme()
+            return
+        end
+
+        for key, defaultValue in pairs(defaultTheme) do
+            local nextValue = payload[key]
+            if nextValue ~= nil then
+                nextValue = deserializeThemeValue(nextValue)
+                if typeof(defaultValue) == "Color3" and typeof(nextValue) == "Color3" then
+                    self.Theme[key] = nextValue
+                    self.Colors[key] = cloneThemeValue(nextValue)
+                elseif type(defaultValue) == "number" and type(nextValue) == "number" then
+                    self.Theme[key] = nextValue
+                    self.Colors[key] = nextValue
+                end
+            end
+        end
+
+        self:ApplyTheme()
+    end
 
     Library.Config = {
         WindowWidth    = 750,

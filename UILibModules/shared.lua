@@ -1,10 +1,7 @@
 return function(moduleRequire)
-    local SharedEnv = typeof(getgenv) == "function" and getgenv() or _G
-    local SharedState = SharedEnv.__FatalityUILibState
-    if type(SharedState) ~= "table" then
-        SharedState = {}
-        SharedEnv.__FatalityUILibState = SharedState
-    end
+    local SharedState = {
+        AutoSaveLoopStarted = false,
+    }
 
     local UserInputService = game:GetService("UserInputService")
     local RunService = game:GetService("RunService")
@@ -49,7 +46,6 @@ return function(moduleRequire)
     end
 
     return {
-        SharedEnv = SharedEnv,
         SharedState = SharedState,
         UserInputService = UserInputService,
         RunService = RunService,

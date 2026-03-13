@@ -101,6 +101,14 @@ function Library:CreateWindow(opts)
         return track(conn, "Disconnect", key)
     end
 
+    local function bindTheme(instance, propertyName, themeKey, transform)
+        Library:RegisterThemeBinding(instance, propertyName, themeKey, transform)
+    end
+
+    local function onThemeChanged(callback)
+        Library:RegisterThemeCallback(callback)
+    end
+
     local cleanupKeySeed = 0
     local function nextCleanupKey(prefix)
         cleanupKeySeed += 1
@@ -387,8 +395,8 @@ function Library:CreateWindow(opts)
     dropShadow.Size = UDim2.new(1, 47, 1, 47)
     dropShadow.ZIndex = -1
     dropShadow.Image = "rbxassetid://6014261993"
-    dropShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    dropShadow.ImageTransparency = 0.75
+    dropShadow.ImageColor3 = colors.Shadow
+    dropShadow.ImageTransparency = colors.ShadowTransparency
     dropShadow.ScaleType = Enum.ScaleType.Slice
     dropShadow.SliceCenter = Rect.new(49, 49, 450, 450)
 
@@ -415,6 +423,10 @@ function Library:CreateWindow(opts)
     main.ClipsDescendants = false
     main.Visible = false
     main.SelectionImageObject = blankSel
+    bindTheme(main, "BackgroundColor3", "Background")
+    bindTheme(main, "BackgroundTransparency", "BackgroundTransparency")
+    bindTheme(dropShadow, "ImageColor3", "Shadow")
+    bindTheme(dropShadow, "ImageTransparency", "ShadowTransparency")
 
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, 5)
@@ -432,6 +444,8 @@ function Library:CreateWindow(opts)
     header.BorderSizePixel = 0
     header.Size = UDim2.new(1, 0, 0, config.HeaderHeight)
     header.ZIndex = 2
+    bindTheme(header, "BackgroundColor3", "Header")
+    bindTheme(header, "BackgroundTransparency", "HeaderTransparency")
 
     Instance.new("UICorner", header).CornerRadius = UDim.new(0, 5)
 
@@ -444,6 +458,7 @@ function Library:CreateWindow(opts)
     headerLine.Position = UDim2.new(0, 0, 1, 0)
     headerLine.Size = UDim2.new(1, 0, 0, 1)
     headerLine.ZIndex = 3
+    bindTheme(headerLine, "BackgroundColor3", "Line")
 
     -- Header shadow gradient
     local headerShadow = Instance.new("Frame", header)
@@ -486,6 +501,8 @@ function Library:CreateWindow(opts)
     headerText.TextXAlignment = Enum.TextXAlignment.Left
     headerText.TextStrokeColor3 = Color3.fromRGB(205, 67, 218)
     headerText.TextStrokeTransparency = 0.64
+    bindTheme(headerText, "TextColor3", "Text")
+    bindTheme(headerText, "TextStrokeColor3", "TitleStroke")
 
     -- ==============================
     -- TAB CONTAINER (scrolling)
@@ -610,6 +627,7 @@ function Library:CreateWindow(opts)
     userName.TextSize = 13
     userName.TextStrokeTransparency = 0.7
     userName.TextXAlignment = Enum.TextXAlignment.Right
+    bindTheme(userName, "TextColor3", "TextStrong")
 
     -- Expire / Premium text
     local expireDays = Instance.new("TextLabel", userProfile)
@@ -627,6 +645,7 @@ function Library:CreateWindow(opts)
     expireDays.TextSize = 12
     expireDays.TextStrokeTransparency = 0.7
     expireDays.TextXAlignment = Enum.TextXAlignment.Right
+    bindTheme(expireDays, "TextColor3", "TextStrong")
 
     local mobileUi = {}
     if isMobileClient then
@@ -906,6 +925,8 @@ function Library:CreateWindow(opts)
     bottom.Position = UDim2.new(0, 0, 1, 0)
     bottom.Size = UDim2.new(1, 0, 0, config.BottomHeight)
     bottom.ZIndex = 2
+    bindTheme(bottom, "BackgroundColor3", "Bottom")
+    bindTheme(bottom, "BackgroundTransparency", "BottomTransparency")
 
     Instance.new("UICorner", bottom).CornerRadius = UDim.new(0, 4)
 
@@ -915,6 +936,7 @@ function Library:CreateWindow(opts)
     bottomLine.BorderSizePixel = 0
     bottomLine.Size = UDim2.new(1, 0, 0, 1)
     bottomLine.ZIndex = 3
+    bindTheme(bottomLine, "BackgroundColor3", "Line")
 
     -- Bottom shadow (upward gradient)
     local bottomShadow = Instance.new("Frame", bottom)
@@ -946,6 +968,7 @@ function Library:CreateWindow(opts)
     gearBtn.ImageColor3 = colors.TextDim
     gearBtn.ZIndex = 4
     gearBtn.AutoButtonColor = false
+    bindTheme(gearBtn, "ImageColor3", "TextDim")
 
     gearBtn.MouseEnter:Connect(function()
         Library:Animate(gearBtn, "Hover", { ImageColor3 = colors.Main })
@@ -967,10 +990,13 @@ function Library:CreateWindow(opts)
     settingsPanel.ClipsDescendants = true
     settingsPanel.Visible = false
     settingsPanel.ZIndex = 100
+    bindTheme(settingsPanel, "BackgroundColor3", "Panel")
+    bindTheme(settingsPanel, "BackgroundTransparency", "PanelTransparency")
     Instance.new("UICorner", settingsPanel).CornerRadius = UDim.new(0, 5)
     local spStroke = Instance.new("UIStroke", settingsPanel)
     spStroke.Color = colors.Line
     spStroke.Transparency = 0.3
+    bindTheme(spStroke, "Color", "Line")
 
     -- Settings header
     local spHeader = Instance.new("TextLabel", settingsPanel)
@@ -983,6 +1009,7 @@ function Library:CreateWindow(opts)
     spHeader.TextSize = 12
     spHeader.TextXAlignment = Enum.TextXAlignment.Left
     spHeader.ZIndex = 101
+    bindTheme(spHeader, "TextColor3", "TextStrong")
 
     -- Separator
     local spSep = Instance.new("Frame", settingsPanel)
@@ -991,6 +1018,7 @@ function Library:CreateWindow(opts)
     spSep.BackgroundColor3 = colors.Line
     spSep.BorderSizePixel = 0
     spSep.ZIndex = 101
+    bindTheme(spSep, "BackgroundColor3", "Line")
 
     -- Auto-save row
     local autoSaveRow = Instance.new("Frame", settingsPanel)
@@ -1008,6 +1036,7 @@ function Library:CreateWindow(opts)
     asLabel.TextSize = 11
     asLabel.TextXAlignment = Enum.TextXAlignment.Left
     asLabel.ZIndex = 101
+    bindTheme(asLabel, "TextColor3", "Text")
 
     local asChkFrame = Instance.new("Frame", autoSaveRow)
     asChkFrame.AnchorPoint = Vector2.new(1, 0.5)
@@ -1016,10 +1045,13 @@ function Library:CreateWindow(opts)
     asChkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     asChkFrame.BorderSizePixel = 0
     asChkFrame.ZIndex = 101
+    bindTheme(asChkFrame, "BackgroundColor3", "Control")
+    bindTheme(asChkFrame, "BackgroundTransparency", "ControlTransparency")
     Instance.new("UICorner", asChkFrame).CornerRadius = UDim.new(0, 3)
     local asChkStroke = Instance.new("UIStroke", asChkFrame)
     asChkStroke.Color = colors.Line
     asChkStroke.Transparency = 0.5
+    bindTheme(asChkStroke, "Color", "Line")
 
     local asCheckIcon = Instance.new("ImageLabel", asChkFrame)
     asCheckIcon.BackgroundTransparency = 1
@@ -1030,6 +1062,7 @@ function Library:CreateWindow(opts)
     asCheckIcon.ImageColor3 = colors.Main
     asCheckIcon.ImageTransparency = 1
     asCheckIcon.ZIndex = 102
+    bindTheme(asCheckIcon, "ImageColor3", "Main")
 
     local asBtn = Instance.new("TextButton", autoSaveRow)
     asBtn.BackgroundTransparency = 1
@@ -1085,6 +1118,9 @@ function Library:CreateWindow(opts)
     saveBtn.AutoButtonColor = false
     saveBtn.Selectable = false
     Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 3)
+    bindTheme(saveBtn, "BackgroundColor3", "Control")
+    bindTheme(saveBtn, "BackgroundTransparency", "ControlTransparency")
+    bindTheme(saveBtn, "TextColor3", "Text")
 
     saveBtn.MouseEnter:Connect(function()
         Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
@@ -1112,6 +1148,9 @@ function Library:CreateWindow(opts)
     loadBtn.AutoButtonColor = false
     loadBtn.Selectable = false
     Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 3)
+    bindTheme(loadBtn, "BackgroundColor3", "Control")
+    bindTheme(loadBtn, "BackgroundTransparency", "ControlTransparency")
+    bindTheme(loadBtn, "TextColor3", "Text")
 
     loadBtn.MouseEnter:Connect(function()
         Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
@@ -1164,6 +1203,10 @@ function Library:CreateWindow(opts)
     end)
 
     gearBtn.Activated:Connect(function()
+        if win._openSettingsRoute then
+            win._openSettingsRoute()
+            return
+        end
         setSettingsOpen(not settingsOpen)
     end)
 
@@ -1199,6 +1242,7 @@ function Library:CreateWindow(opts)
     searchBtn.ImageColor3 = colors.TextDim
     searchBtn.ZIndex = 4
     searchBtn.AutoButtonColor = false
+    bindTheme(searchBtn, "ImageColor3", "TextDim")
 
     searchBtn.MouseEnter:Connect(function()
         Library:Animate(searchBtn, "Hover", { ImageColor3 = colors.Main })
@@ -1221,6 +1265,8 @@ function Library:CreateWindow(opts)
     searchPanel.ClipsDescendants = true
     searchPanel.Visible = false
     searchPanel.ZIndex = 100
+    bindTheme(searchPanel, "BackgroundColor3", "Panel")
+    bindTheme(searchPanel, "BackgroundTransparency", "PanelTransparency")
     Instance.new("UICorner", searchPanel).CornerRadius = UDim.new(0, 5)
     local srStroke = Instance.new("UIStroke", searchPanel)
     srStroke.Color = colors.Line
@@ -2193,6 +2239,12 @@ function Library:CreateWindow(opts)
 
         keyContentBootstrapped = true
 
+        pcall(function()
+            Library:LoadTheme()
+        end)
+
+        ensureSettingsMenu()
+
         if configName then
             pcall(function()
                 Library:LoadConfig()
@@ -2289,11 +2341,13 @@ function Library:CreateWindow(opts)
         menuBtn.BorderSizePixel = 0
         menuBtn.Size = UDim2.new(0, 80, 0.85, 0)
         menuBtn.ZIndex = 5
+        bindTheme(menuBtn, "BackgroundColor3", "TabBg")
 
         Instance.new("UICorner", menuBtn).CornerRadius = UDim.new(0, 3)
 
         local btnStroke = Instance.new("UIStroke", menuBtn)
         btnStroke.Transparency = 1
+        bindTheme(btnStroke, "Color", "Line")
 
         -- Tab label text (centered, no icon)
         local menuLabel = Instance.new("TextLabel", menuBtn)
@@ -2311,6 +2365,7 @@ function Library:CreateWindow(opts)
         menuLabel.TextStrokeTransparency = 1
         menuLabel.TextTransparency = 0
         menuLabel.TextXAlignment = Enum.TextXAlignment.Center
+        bindTheme(menuLabel, "TextColor3", "TextDim")
 
         -- Click area (overlaid TextButton)
         local clickBtn = Instance.new("TextButton", menuBtn)
@@ -2465,7 +2520,7 @@ function Library:CreateWindow(opts)
             if selected then
                 Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 0 })
                 Library:Spring(btnStroke, "Smooth", { Transparency = 0.85 })
-                Library:Spring(menuLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                Library:Spring(menuLabel, "Smooth", { TextColor3 = colors.TextStrong })
                 pageFrame.Visible = true
                 menu:_refreshScroll()
             else
@@ -2522,12 +2577,14 @@ function Library:CreateWindow(opts)
             -- Section container (The dark panel)
             local secFrame = Instance.new("Frame", targetCol)
             secFrame.Name = "SectionBox_" .. secName
-            secFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+            secFrame.BackgroundColor3 = colors.Section
             secFrame.BorderSizePixel = 0
             secFrame.Size = UDim2.new(1, 0, 0, 30)
             secFrame.AutomaticSize = Enum.AutomaticSize.Y
             secFrame.ClipsDescendants = false
             secFrame.ZIndex = 4
+            bindTheme(secFrame, "BackgroundColor3", "Section")
+            bindTheme(secFrame, "BackgroundTransparency", "SectionTransparency")
 
             Instance.new("UICorner", secFrame).CornerRadius = UDim.new(0, 4)
 
@@ -2543,6 +2600,7 @@ function Library:CreateWindow(opts)
             secTitle.TextSize = 10
             secTitle.TextXAlignment = Enum.TextXAlignment.Left
             secTitle.ZIndex = 5
+            bindTheme(secTitle, "TextColor3", "Text")
 
             -- Inner container for elements (so UIListLayout doesn't affect title position)
             local contentContainer = Instance.new("Frame", secFrame)
@@ -2660,10 +2718,15 @@ function Library:CreateWindow(opts)
                     Size = UDim2.new(1, -22, 1, 0),
                     TextColor3 = colors.Text,
                     TextSize = 12,
+                    ThemeKey = "Text",
                 })
                 local checkFrame, checkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
                     Name = "Check",
                     ImageTransparency = tDefault and 0 or 1,
+                    ThemeBackgroundKey = "Control",
+                    ThemeTransparencyKey = "ControlTransparency",
+                    ThemeStrokeKey = "Line",
+                    ThemeImageKey = "Main",
                 })
                 local clickBtn = controlBase.createOverlayButton(row)
                 local checkBtn = controlBase.createOverlayButton(row, {
@@ -2707,16 +2770,19 @@ function Library:CreateWindow(opts)
                 local function updateVisual()
                     if toggle.Value then
                         Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
-                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = colors.AccentSurface, BackgroundTransparency = colors.AccentTransparency })
                         Library:Spring(checkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
                         if subContainer then subContainer.Visible = true end
                     else
                         Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
-                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = colors.Control, BackgroundTransparency = colors.ControlTransparency })
                         Library:Spring(checkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                         if subContainer then subContainer.Visible = false end
                     end
                 end
+                onThemeChanged(function()
+                    updateVisual()
+                end)
 
                 local function setToggleValue(nextValue, shouldMarkDirty)
                     toggle.Value = nextValue and true or false
@@ -3089,15 +3155,18 @@ function Library:CreateWindow(opts)
                     sLabel.TextSize = 11
                     sLabel.TextXAlignment = Enum.TextXAlignment.Left
                     sLabel.ZIndex = 5
+                    bindTheme(sLabel, "TextColor3", "TextDim")
 
                     local barBg = Instance.new("Frame", sRow)
                     barBg.AnchorPoint = Vector2.new(1, 0.5)
                     barBg.Position = UDim2.new(1, 0, 0.5, 0)
                     barBg.Size = UDim2.new(0.55, 0, 0, 14)
-                    barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                    barBg.BackgroundColor3 = colors.ControlAlt
                     barBg.BorderSizePixel = 0
                     barBg.ClipsDescendants = true
                     barBg.ZIndex = 5
+                    bindTheme(barBg, "BackgroundColor3", "ControlAlt")
+                    bindTheme(barBg, "BackgroundTransparency", "ControlTransparency")
                     Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 3)
 
                     local fill = Instance.new("Frame", barBg)
@@ -3105,6 +3174,8 @@ function Library:CreateWindow(opts)
                     fill.BorderSizePixel = 0
                     fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
                     fill.ZIndex = 6
+                    bindTheme(fill, "BackgroundColor3", "Main")
+                    bindTheme(fill, "BackgroundTransparency", "AccentTransparency")
                     Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
 
                     local sValLabel = Instance.new("TextLabel", barBg)
@@ -3112,9 +3183,10 @@ function Library:CreateWindow(opts)
                     sValLabel.Size = UDim2.new(1, 0, 1, 0)
                     sValLabel.Font = config.Font
                     sValLabel.Text = tostring(sDefault) .. sSuffix
-                    sValLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    sValLabel.TextColor3 = colors.TextStrong
                     sValLabel.TextSize = 11
                     sValLabel.ZIndex = 7
+                    bindTheme(sValLabel, "TextColor3", "TextStrong")
 
                     local dragging = false
                     local function updateSlider(inputX)
@@ -3194,6 +3266,7 @@ function Library:CreateWindow(opts)
                     Size = UDim2.new(0.4, 0, 1, 0),
                     TextColor3 = colors.Text,
                     TextSize = 12,
+                    ThemeKey = "Text",
                 })
 
                 -- Slider bar background (right side)
@@ -3202,10 +3275,12 @@ function Library:CreateWindow(opts)
                 barBg.AnchorPoint = Vector2.new(1, 0.5)
                 barBg.Position = UDim2.new(1, 0, 0.5, 0)
                 barBg.Size = UDim2.new(0.55, 0, 0, 16)
-                barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                barBg.BackgroundColor3 = colors.ControlAlt
                 barBg.BorderSizePixel = 0
                 barBg.ClipsDescendants = true
                 barBg.ZIndex = 5
+                bindTheme(barBg, "BackgroundColor3", "ControlAlt")
+                bindTheme(barBg, "BackgroundTransparency", "ControlTransparency")
 
                 Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 3)
 
@@ -3216,6 +3291,8 @@ function Library:CreateWindow(opts)
                 fill.BorderSizePixel = 0
                 fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
                 fill.ZIndex = 6
+                bindTheme(fill, "BackgroundColor3", "Main")
+                bindTheme(fill, "BackgroundTransparency", "AccentTransparency")
 
                 Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
 
@@ -3226,9 +3303,10 @@ function Library:CreateWindow(opts)
                 valLabel.Size = UDim2.new(1, 0, 1, 0)
                 valLabel.Font = config.Font
                 valLabel.Text = tostring(sDefault) .. sSuffix
-                valLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                valLabel.TextColor3 = colors.TextStrong
                 valLabel.TextSize = 12
                 valLabel.ZIndex = 7
+                bindTheme(valLabel, "TextColor3", "TextStrong")
 
                 -- Drag interaction
                 local dragging = false
@@ -3835,6 +3913,7 @@ function Library:CreateWindow(opts)
                     Size = UDim2.new(1, -24, 1, 0),
                     TextColor3 = colors.Text,
                     TextSize = 12,
+                    ThemeKey = "Text",
                 })
 
                 -- Button box (right side)
@@ -3842,6 +3921,9 @@ function Library:CreateWindow(opts)
                     ClassName = "TextButton",
                     StrokeColor = colors.Line,
                     StrokeTransparency = 0.5,
+                    ThemeBackgroundKey = "Control",
+                    ThemeTransparencyKey = "ControlTransparency",
+                    ThemeStrokeKey = "Line",
                 })
 
                 -- Icon inside box
@@ -3853,12 +3935,13 @@ function Library:CreateWindow(opts)
                 icon.Image = "rbxassetid://124717201027551"
                 icon.ImageColor3 = colors.TextDim
                 icon.ZIndex = 6
+                bindTheme(icon, "ImageColor3", "TextDim")
 
                 local function flashButton()
-                    Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Main })
+                    Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Main, BackgroundTransparency = colors.AccentTransparency })
                     task.delay(0.2, function()
                         if btnBox.Parent then
-                            Library:Spring(btnBox, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                            Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Control, BackgroundTransparency = colors.ControlTransparency })
                         end
                     end)
                 end
@@ -3925,13 +4008,14 @@ function Library:CreateWindow(opts)
                     Size = UDim2.new(0.35, 0, 1, 0),
                     TextColor3 = colors.Text,
                     TextSize = 12,
+                    ThemeKey = "Text",
                 })
 
                 local box = Instance.new("TextBox", row)
                 box.AnchorPoint = Vector2.new(1, 0.5)
                 box.Position = UDim2.new(1, 0, 0.5, 0)
                 box.Size = UDim2.new(0.62, 0, 0, 18)
-                box.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                box.BackgroundColor3 = colors.ControlAlt
                 box.BorderSizePixel = 0
                 box.TextXAlignment = Enum.TextXAlignment.Left
                 box.Font = config.FontMedium
@@ -3942,6 +4026,10 @@ function Library:CreateWindow(opts)
                 box.Text = iDefault
                 box.ZIndex = 6
                 Instance.new("UICorner", box).CornerRadius = UDim.new(0, 3)
+                bindTheme(box, "BackgroundColor3", "ControlAlt")
+                bindTheme(box, "BackgroundTransparency", "ControlTransparency")
+                bindTheme(box, "TextColor3", "Text")
+                bindTheme(box, "PlaceholderColor3", "TextMuted")
 
                 inputControl = controlBase.attachControlLifecycle(section, inputControl, {
                     clickTargets = { box },
@@ -4787,6 +4875,155 @@ function Library:CreateWindow(opts)
         end
 
         return menu
+    end
+
+    local settingsMenu
+    local function ensureSettingsMenu()
+        if settingsMenu then
+            return settingsMenu
+        end
+
+        settingsMenu = win:AddMenu({
+            Name = "SETTINGS",
+            Columns = 2,
+        })
+        win._settingsMenu = settingsMenu
+
+        local uiFunctionSection = settingsMenu:AddSection({
+            Name = "UI FUNCTION SETTINGS",
+            Column = 1,
+        })
+        local uiVisualColorSection = settingsMenu:AddSection({
+            Name = "UI VISUAL COLORS",
+            Column = 1,
+        })
+        local uiVisualTransparencySection = settingsMenu:AddSection({
+            Name = "UI VISUAL TRANSPARENCY",
+            Column = 2,
+        })
+
+        local uiScaleOptions = {}
+        for _, option in ipairs(contentScaleOptions) do
+            table.insert(uiScaleOptions, option.Label)
+        end
+
+        uiFunctionSection:AddToggle({
+            Name = "Auto Save UI",
+            Default = Library._autoSave,
+            Callback = function(enabled)
+                Library._autoSave = enabled and true or false
+                pcall(function()
+                    Library:SaveConfig()
+                    Library:SaveTheme()
+                end)
+            end,
+        })
+
+        uiFunctionSection:AddButton({
+            Name = "Save UI Config",
+            Callback = function()
+                pcall(function()
+                    Library:SaveConfig()
+                    Library:SaveTheme()
+                end)
+            end,
+        })
+
+        uiFunctionSection:AddButton({
+            Name = "Load UI Config",
+            Callback = function()
+                pcall(function()
+                    Library:LoadTheme()
+                    Library:LoadConfig()
+                end)
+            end,
+        })
+
+        uiFunctionSection:AddDropdown({
+            Name = "Content Scale",
+            Options = uiScaleOptions,
+            Default = getContentScaleOption(currentContentScale).Label,
+            Callback = function(selected)
+                setContentScale(selected)
+            end,
+        })
+
+        uiFunctionSection:AddDropdown({
+            Name = "Toggle Key",
+            Options = { "Insert", "RightShift", "LeftAlt", "RightAlt", "Home", "End" },
+            Default = config.ToggleKey.Name,
+            Callback = function(selected)
+                local keyCode = Enum.KeyCode[selected]
+                if keyCode then
+                    config.ToggleKey = keyCode
+                end
+            end,
+        })
+
+        local colorThemeControls = {
+            { Name = "Accent", Key = "Main" },
+            { Name = "Window Background", Key = "Background" },
+            { Name = "Top Bar", Key = "Header" },
+            { Name = "Bottom Bar", Key = "Bottom" },
+            { Name = "Section Background", Key = "Section" },
+            { Name = "Panel Background", Key = "Panel" },
+            { Name = "Control Background", Key = "Control" },
+            { Name = "Slider Background", Key = "ControlAlt" },
+            { Name = "Hover Background", Key = "ControlHover" },
+            { Name = "Check Background", Key = "AccentSurface" },
+            { Name = "Border / Line", Key = "Line" },
+            { Name = "Main Text", Key = "Text" },
+            { Name = "Dim Text", Key = "TextDim" },
+            { Name = "Muted Text", Key = "TextMuted" },
+            { Name = "Strong Text", Key = "TextStrong" },
+            { Name = "Title Stroke", Key = "TitleStroke" },
+        }
+
+        for _, entry in ipairs(colorThemeControls) do
+            uiVisualColorSection:AddColorPicker({
+                Name = entry.Name,
+                Default = Library:GetThemeValue(entry.Key),
+                Callback = function(value)
+                    Library:SetThemeValue(entry.Key, value)
+                end,
+            })
+        end
+
+        local transparencyThemeControls = {
+            { Name = "Window Transparency", Key = "BackgroundTransparency", Default = Library:GetThemeValue("BackgroundTransparency") or 0 },
+            { Name = "Top Bar Transparency", Key = "HeaderTransparency", Default = Library:GetThemeValue("HeaderTransparency") or 0 },
+            { Name = "Bottom Bar Transparency", Key = "BottomTransparency", Default = Library:GetThemeValue("BottomTransparency") or 0 },
+            { Name = "Section Transparency", Key = "SectionTransparency", Default = Library:GetThemeValue("SectionTransparency") or 0 },
+            { Name = "Panel Transparency", Key = "PanelTransparency", Default = Library:GetThemeValue("PanelTransparency") or 0 },
+            { Name = "Control Transparency", Key = "ControlTransparency", Default = Library:GetThemeValue("ControlTransparency") or 0 },
+            { Name = "Accent Transparency", Key = "AccentTransparency", Default = Library:GetThemeValue("AccentTransparency") or 0 },
+            { Name = "Shadow Transparency", Key = "ShadowTransparency", Default = Library:GetThemeValue("ShadowTransparency") or 0.75 },
+        }
+
+        for _, entry in ipairs(transparencyThemeControls) do
+            uiVisualTransparencySection:AddSlider({
+                Name = entry.Name,
+                Min = 0,
+                Max = 100,
+                Default = math.floor((entry.Default or 0) * 100 + 0.5),
+                Suffix = "%",
+                Callback = function(value)
+                    Library:SetThemeValue(entry.Key, value / 100)
+                end,
+            })
+        end
+
+        return settingsMenu
+    end
+
+    win._openSettingsRoute = function()
+        local settingsMenuRef = ensureSettingsMenu()
+        if win.ActiveMenu and win.ActiveMenu ~= settingsMenuRef then
+            win.ActiveMenu._select(false)
+        end
+        win.ActiveMenu = settingsMenuRef
+        settingsMenuRef._select(true)
+        setSettingsOpen(false)
     end
 
     refreshMenuScrolls = function()

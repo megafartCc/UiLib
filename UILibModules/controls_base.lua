@@ -44,6 +44,11 @@ return function(Library, context)
         label.TextXAlignment = opts.TextXAlignment or Enum.TextXAlignment.Left
         label.TextWrapped = false
         label.ZIndex = opts.ZIndex or 5
+
+        if opts.ThemeKey then
+            Library:RegisterThemeBinding(label, "TextColor3", opts.ThemeKey)
+        end
+
         return label
     end
 
@@ -139,6 +144,13 @@ return function(Library, context)
             box.Selectable = false
         end
 
+        if opts.ThemeBackgroundKey then
+            Library:RegisterThemeBinding(box, "BackgroundColor3", opts.ThemeBackgroundKey)
+        end
+        if opts.ThemeTransparencyKey then
+            Library:RegisterThemeBinding(box, "BackgroundTransparency", opts.ThemeTransparencyKey)
+        end
+
         Instance.new("UICorner", box).CornerRadius = UDim.new(0, opts.CornerRadius or 3)
 
         local stroke
@@ -146,6 +158,9 @@ return function(Library, context)
             stroke = Instance.new("UIStroke", box)
             stroke.Color = opts.StrokeColor
             stroke.Transparency = opts.StrokeTransparency
+            if opts.ThemeStrokeKey then
+                Library:RegisterThemeBinding(stroke, "Color", opts.ThemeStrokeKey)
+            end
         end
 
         return box, stroke
@@ -178,6 +193,9 @@ return function(Library, context)
             BackgroundColor3 = opts.BackgroundColor3 or Color3.fromRGB(35, 35, 35),
             StrokeColor = opts.StrokeColor or colors.Line,
             StrokeTransparency = opts.StrokeTransparency or 0.5,
+            ThemeBackgroundKey = opts.ThemeBackgroundKey,
+            ThemeTransparencyKey = opts.ThemeTransparencyKey,
+            ThemeStrokeKey = opts.ThemeStrokeKey,
         })
 
         local icon = Instance.new("ImageLabel", frame)
@@ -190,6 +208,10 @@ return function(Library, context)
         icon.ImageColor3 = opts.ImageColor3 or colors.Main
         icon.ImageTransparency = opts.ImageTransparency or 1
         icon.ZIndex = (opts.ZIndex or 5) + 1
+
+        if opts.ThemeImageKey then
+            Library:RegisterThemeBinding(icon, "ImageColor3", opts.ThemeImageKey)
+        end
 
         return frame, stroke, icon
     end

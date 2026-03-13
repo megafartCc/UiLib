@@ -1,6 +1,5 @@
 return function(moduleRequire)
     local Library = {}
-    Library.__index = Library
 
     local context = moduleRequire("shared.lua")(moduleRequire)
 
