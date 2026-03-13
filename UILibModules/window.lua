@@ -29,14 +29,6 @@ function Library:CreateWindow(opts)
     local desktopMinWindowWidth = math.max(config.MinWindowWidth or 640, 520)
     local desktopMinWindowHeight = math.max(config.MinWindowHeight or 400, config.HeaderHeight + config.BottomHeight + 120)
     local forcedMobileOverride = opts.ForceMobile == true
-    if not forcedMobileOverride then
-        pcall(function()
-            local env = type(getgenv) == "function" and getgenv() or _G
-            if type(env) == "table" and env.__UILIB_FORCE_MOBILE == true then
-                forcedMobileOverride = true
-            end
-        end)
-    end
     local camera = workspace.CurrentCamera
     local viewportSize = camera and camera.ViewportSize or Vector2.new(config.WindowWidth, config.WindowHeight)
     local hasTouchInput = UserInputService.TouchEnabled
