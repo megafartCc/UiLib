@@ -121,7 +121,7 @@ return function(Library, context)
             applyFilter()
         end
 
-        return {
+        local state = {
             bindSearch = bindSearch,
             openHeight = openHeight,
             optionsParent = optionsInner,
@@ -129,6 +129,14 @@ return function(Library, context)
             refreshCanvas = refreshCanvas,
             searchBox = searchBox,
         }
+
+        function state.setOptionCount(nextCount)
+            local count = math.max(0, tonumber(nextCount) or 0)
+            local rows = math.min(count, DROPDOWN_MAX_VISIBLE_OPTIONS)
+            state.openHeight = 6 + (rows * rowHeight) + (state.searchBox and 28 or 0)
+        end
+
+        return state
     end
 
     local function resolveDropdownValue(options, rawValue, allowFallback)
@@ -625,54 +633,73 @@ return function(Library, context)
         end
 
         registerTransientPopup(base, dropPanel, closeDropdown)
-        for idx, opt in ipairs(dOptions) do
-            local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
-            optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-            optBtn.BackgroundTransparency = 1
-            optBtn.BorderSizePixel = 0
-            optBtn.Size = UDim2.new(1, 0, 0, 24)
-            optBtn.Text = ""
-            optBtn.ZIndex = 51
-            optBtn.LayoutOrder = idx
-            optBtn.AutoButtonColor = false
-            optBtn.Selectable = false
-            optBtn:SetAttribute("OptionText", tostring(opt))
-
-            local optLabel = Instance.new("TextLabel", optBtn)
-            optLabel.BackgroundTransparency = 1
-            optLabel.Position = UDim2.new(0, 8, 0, 0)
-            optLabel.Size = UDim2.new(1, -16, 1, 0)
-            optLabel.Font = base.config.FontMedium
-            optLabel.Text = tostring(opt)
-            optLabel.TextColor3 = (dropdown.Value == opt) and base.colors.Main or base.colors.Text
-            optLabel.TextSize = 11
-            optLabel.TextXAlignment = Enum.TextXAlignment.Left
-            optLabel.ZIndex = 52
-
-            optBtn.MouseEnter:Connect(function()
-                Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 0.5 })
-                if dropdown.Value ~= opt then
-                    Library:Spring(optLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+        local function rebuildOptions()
+            for _, button in ipairs(optionButtons) do
+                if button and button.Parent then
+                    button:Destroy()
                 end
-            end)
-            optBtn.MouseLeave:Connect(function()
-                Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
-                if dropdown.Value ~= opt then
-                    Library:Spring(optLabel, "Smooth", { TextColor3 = base.colors.Text })
-                end
-            end)
-            optBtn.Activated:Connect(function()
-                local resolved = applyDropdownValue(opt)
-                closeDropdown()
-                arrow.Text = DROPDOWN_ARROW_CLOSED
-                dCallback(resolved)
-                Library:_markDirty()
-            end)
+            end
+            optionButtons = {}
 
-            table.insert(optionButtons, optBtn)
+            if type(dOptions) ~= "table" or #dOptions == 0 then
+                dOptions = { "No Presets" }
+            end
+
+            dropPanelContent.setOptionCount(#dOptions)
+            fullHeight = dropPanelContent.openHeight
+
+            for idx, opt in ipairs(dOptions) do
+                local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
+                optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                optBtn.BackgroundTransparency = 1
+                optBtn.BorderSizePixel = 0
+                optBtn.Size = UDim2.new(1, 0, 0, 24)
+                optBtn.Text = ""
+                optBtn.ZIndex = 51
+                optBtn.LayoutOrder = idx
+                optBtn.AutoButtonColor = false
+                optBtn.Selectable = false
+                optBtn:SetAttribute("OptionText", tostring(opt))
+
+                local optLabel = Instance.new("TextLabel", optBtn)
+                optLabel.BackgroundTransparency = 1
+                optLabel.Position = UDim2.new(0, 8, 0, 0)
+                optLabel.Size = UDim2.new(1, -16, 1, 0)
+                optLabel.Font = base.config.FontMedium
+                optLabel.Text = tostring(opt)
+                optLabel.TextColor3 = (dropdown.Value == opt) and base.colors.Main or base.colors.Text
+                optLabel.TextSize = 11
+                optLabel.TextXAlignment = Enum.TextXAlignment.Left
+                optLabel.ZIndex = 52
+
+                optBtn.MouseEnter:Connect(function()
+                    Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 0.5 })
+                    if dropdown.Value ~= opt then
+                        Library:Spring(optLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                    end
+                end)
+                optBtn.MouseLeave:Connect(function()
+                    Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
+                    if dropdown.Value ~= opt then
+                        Library:Spring(optLabel, "Smooth", { TextColor3 = base.colors.Text })
+                    end
+                end)
+                optBtn.Activated:Connect(function()
+                    local resolved = applyDropdownValue(opt)
+                    closeDropdown()
+                    arrow.Text = DROPDOWN_ARROW_CLOSED
+                    dCallback(resolved)
+                    Library:_markDirty()
+                end)
+
+                table.insert(optionButtons, optBtn)
+            end
+
+            applyDropdownValue(dropdown.Value)
+            dropPanelContent.bindSearch(optionButtons)
+            dropPanelContent.refreshCanvas()
         end
-        dropPanelContent.bindSearch(optionButtons)
-        dropPanelContent.refreshCanvas()
+        rebuildOptions()
 
         dropdown = finalizeControl(base, dropdown, {
             clickTargets = { selectBtn },
@@ -759,6 +786,22 @@ return function(Library, context)
             return dropdown
         end
         dropdown.SetText = dropdown.SetSelection
+        dropdown.SetOptions = function(options, selectedValue)
+            local nextOptions = {}
+            if type(options) == "table" then
+                for _, option in ipairs(options) do
+                    table.insert(nextOptions, option)
+                end
+            end
+            dOptions = nextOptions
+            applyDropdownValue(selectedValue ~= nil and selectedValue or dropdown.Value)
+            rebuildOptions()
+            return dropdown
+        end
+        dropdown.RefreshOptions = function()
+            rebuildOptions()
+            return dropdown
+        end
 
         return dropdown
     end

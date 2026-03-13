@@ -4901,6 +4901,10 @@ function Library:CreateWindow(opts)
             Name = "UI VISUAL TRANSPARENCY",
             Column = 2,
         })
+        local uiVisualConfigSection = settingsMenu:AddSection({
+            Name = "VISUAL SETTINGS CONFIG",
+            Column = 2,
+        })
 
         local uiScaleOptions = {}
         for _, option in ipairs(contentScaleOptions) do
@@ -5012,6 +5016,88 @@ function Library:CreateWindow(opts)
                 end,
             })
         end
+
+        local function getPresetName(rawValue)
+            local text = tostring(rawValue or ""):match("^%s*(.-)%s*$")
+            if text == "" or text == "No Presets" then
+                return nil
+            end
+            return text
+        end
+
+        local presetNameInput = uiVisualConfigSection:AddInputBox({
+            Name = "Preset Name",
+            Placeholder = "my_theme",
+            Default = "",
+            SaveKey = false,
+        })
+
+        local presetDropdown = uiVisualConfigSection:AddDropdown({
+            Name = "Saved Presets",
+            Options = { "No Presets" },
+            Default = "No Presets",
+            SaveKey = false,
+            Callback = function(selected)
+                local presetName = getPresetName(selected)
+                if presetName then
+                    presetNameInput:SetText(presetName)
+                end
+            end,
+        })
+
+        local function refreshPresetDropdown(selectedName)
+            local presets = Library:ListThemePresets()
+            if #presets == 0 then
+                presets = { "No Presets" }
+            end
+
+            local targetValue = getPresetName(selectedName)
+            if targetValue == nil then
+                targetValue = presets[1]
+            end
+
+            presetDropdown:SetOptions(presets, targetValue)
+        end
+
+        uiVisualConfigSection:AddButton({
+            Name = "Save Preset",
+            Callback = function()
+                local presetName = getPresetName(presetNameInput:GetText()) or getPresetName(presetDropdown:Get())
+                if not presetName then
+                    return
+                end
+
+                if Library:SaveThemePreset(presetName) then
+                    refreshPresetDropdown(presetName)
+                end
+            end,
+        })
+
+        uiVisualConfigSection:AddButton({
+            Name = "Load Preset",
+            Callback = function()
+                local presetName = getPresetName(presetNameInput:GetText()) or getPresetName(presetDropdown:Get())
+                if not presetName then
+                    return
+                end
+
+                if Library:LoadThemePreset(presetName) then
+                    presetNameInput:SetText(presetName)
+                    refreshPresetDropdown(presetName)
+                end
+            end,
+        })
+
+        uiVisualConfigSection:AddButton({
+            Name = "Reset to Default",
+            Callback = function()
+                Library:ResetThemeDefaults()
+                presetNameInput:SetText("")
+                refreshPresetDropdown()
+            end,
+        })
+
+        refreshPresetDropdown()
 
         return settingsMenu
     end

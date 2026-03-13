@@ -284,6 +284,34 @@ return function(Library, context)
         return value
     end
 
+    local function getSerializedThemeSnapshot(themeTable)
+        local payload = {}
+        for key, value in pairs(themeTable) do
+            payload[key] = serializeThemeValue(value)
+        end
+        return payload
+    end
+
+    local function applyThemeSnapshot(target, payload)
+        if type(payload) ~= "table" then
+            return
+        end
+
+        for key, defaultValue in pairs(defaultTheme) do
+            local nextValue = payload[key]
+            if nextValue ~= nil then
+                nextValue = deserializeThemeValue(nextValue)
+                if typeof(defaultValue) == "Color3" and typeof(nextValue) == "Color3" then
+                    target.Theme[key] = nextValue
+                    target.Colors[key] = cloneThemeValue(nextValue)
+                elseif type(defaultValue) == "number" and type(nextValue) == "number" then
+                    target.Theme[key] = nextValue
+                    target.Colors[key] = nextValue
+                end
+            end
+        end
+    end
+
     local function deserializeThemeValue(value)
         if type(value) == "table" and value.__type == "Color3" then
             return Color3.new(tonumber(value.R) or 0, tonumber(value.G) or 0, tonumber(value.B) or 0)
@@ -353,11 +381,7 @@ return function(Library, context)
     end
 
     function Library:SaveTheme()
-        local payload = {}
-        for key, value in pairs(self.Theme) do
-            payload[key] = serializeThemeValue(value)
-        end
-        return self:WriteData("theme", payload)
+        return self:WriteData("theme", getSerializedThemeSnapshot(self.Theme))
     end
 
     function Library:LoadTheme()
@@ -367,21 +391,93 @@ return function(Library, context)
             return
         end
 
-        for key, defaultValue in pairs(defaultTheme) do
-            local nextValue = payload[key]
-            if nextValue ~= nil then
-                nextValue = deserializeThemeValue(nextValue)
-                if typeof(defaultValue) == "Color3" and typeof(nextValue) == "Color3" then
-                    self.Theme[key] = nextValue
-                    self.Colors[key] = cloneThemeValue(nextValue)
-                elseif type(defaultValue) == "number" and type(nextValue) == "number" then
-                    self.Theme[key] = nextValue
-                    self.Colors[key] = nextValue
+        applyThemeSnapshot(self, payload)
+        self:ApplyTheme()
+    end
+
+    function Library:ResetThemeDefaults(shouldPersist)
+        for key, value in pairs(defaultTheme) do
+            self.Theme[key] = cloneThemeValue(value)
+            self.Colors[key] = cloneThemeValue(value)
+        end
+
+        self:ApplyTheme()
+
+        if shouldPersist ~= false then
+            self:SaveTheme()
+        end
+    end
+
+    function Library:_getThemePresetTag(name)
+        local sanitized = sanitizePathSegment(name)
+        if sanitized == "" then
+            return nil
+        end
+        return "theme_preset_" .. sanitized
+    end
+
+    function Library:SaveThemePreset(name)
+        local tag = self:_getThemePresetTag(name)
+        if not tag then
+            return false
+        end
+
+        return self:WriteData(tag, {
+            Name = tostring(name),
+            Theme = getSerializedThemeSnapshot(self.Theme),
+        })
+    end
+
+    function Library:LoadThemePreset(name)
+        local tag = self:_getThemePresetTag(name)
+        if not tag then
+            return false
+        end
+
+        local payload = self:ReadData(tag)
+        if type(payload) ~= "table" or type(payload.Theme) ~= "table" then
+            return false
+        end
+
+        applyThemeSnapshot(self, payload.Theme)
+        self:ApplyTheme()
+        self:SaveTheme()
+        return true
+    end
+
+    function Library:ListThemePresets()
+        if type(listfiles) ~= "function" then
+            return {}
+        end
+
+        self:_ensureFolder()
+
+        local ok, files = pcall(listfiles, CONFIG_FOLDER)
+        if not ok or type(files) ~= "table" then
+            return {}
+        end
+
+        local prefix = self:_getStorageBaseName() .. "_theme_preset_"
+        local presets = {}
+        local seen = {}
+
+        for _, filePath in ipairs(files) do
+            local normalized = tostring(filePath):gsub("\\", "/")
+            local fileName = normalized:match("([^/]+)$")
+            if fileName and fileName:sub(1, #prefix) == prefix and fileName:sub(-5) == ".json" then
+                local presetName = fileName:sub(#prefix + 1, -6)
+                if presetName ~= "" and not seen[presetName] then
+                    seen[presetName] = true
+                    table.insert(presets, presetName)
                 end
             end
         end
 
-        self:ApplyTheme()
+        table.sort(presets, function(left, right)
+            return tostring(left):lower() < tostring(right):lower()
+        end)
+
+        return presets
     end
 
     Library.Config = {
