@@ -30,9 +30,23 @@ return function(Library, context)
     local CONFIG_FOLDER = "Eps1lonScript"
 
     function Library:_ensureFolder()
-        if not isfolder(CONFIG_FOLDER) then
-            makefolder(CONFIG_FOLDER)
+        if type(isfolder) == "function" then
+            local ok, exists = pcall(isfolder, CONFIG_FOLDER)
+            if ok and exists then
+                return true
+            end
         end
+
+        if type(makefolder) == "function" then
+            pcall(makefolder, CONFIG_FOLDER)
+        end
+
+        if type(isfolder) == "function" then
+            local ok, exists = pcall(isfolder, CONFIG_FOLDER)
+            return ok and exists
+        end
+
+        return true
     end
 
     function Library:_getConfigPath()
@@ -78,7 +92,9 @@ return function(Library, context)
             return false
         end
 
-        self:_ensureFolder()
+        if not self:_ensureFolder() then
+            return false
+        end
 
         local okEncode, encoded = pcall(function()
             return HttpService:JSONEncode(value)
