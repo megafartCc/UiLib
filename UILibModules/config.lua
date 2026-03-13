@@ -416,16 +416,69 @@ return function(Library, context)
         return "theme_preset_" .. sanitized
     end
 
+    function Library:_getThemePresetIndexTag()
+        return "theme_presets_index"
+    end
+
+    function Library:_readThemePresetIndex()
+        local payload = self:ReadData(self:_getThemePresetIndexTag())
+        if type(payload) ~= "table" then
+            return {}
+        end
+
+        local names = {}
+        local seen = {}
+        for _, value in ipairs(payload) do
+            local text = tostring(value or ""):match("^%s*(.-)%s*$")
+            if text ~= "" then
+                local normalizedKey = text:lower()
+                if not seen[normalizedKey] then
+                    seen[normalizedKey] = true
+                    table.insert(names, text)
+                end
+            end
+        end
+        return names
+    end
+
+    function Library:_writeThemePresetIndex(names)
+        local cleaned = {}
+        local seen = {}
+        for _, value in ipairs(names or {}) do
+            local text = tostring(value or ""):match("^%s*(.-)%s*$")
+            if text ~= "" then
+                local normalizedKey = text:lower()
+                if not seen[normalizedKey] then
+                    seen[normalizedKey] = true
+                    table.insert(cleaned, text)
+                end
+            end
+        end
+
+        table.sort(cleaned, function(left, right)
+            return tostring(left):lower() < tostring(right):lower()
+        end)
+
+        self:WriteData(self:_getThemePresetIndexTag(), cleaned)
+        return cleaned
+    end
+
     function Library:SaveThemePreset(name)
         local tag = self:_getThemePresetTag(name)
         if not tag then
             return false
         end
 
-        return self:WriteData(tag, {
+        local success = self:WriteData(tag, {
             Name = tostring(name),
             Theme = getSerializedThemeSnapshot(self.Theme),
         })
+        if success then
+            local presets = self:_readThemePresetIndex()
+            table.insert(presets, tostring(name))
+            self:_writeThemePresetIndex(presets)
+        end
+        return success
     end
 
     function Library:LoadThemePreset(name)
@@ -446,6 +499,11 @@ return function(Library, context)
     end
 
     function Library:ListThemePresets()
+        local presets = self:_readThemePresetIndex()
+        if #presets > 0 then
+            return presets
+        end
+
         if type(listfiles) ~= "function" then
             return {}
         end
@@ -458,26 +516,20 @@ return function(Library, context)
         end
 
         local prefix = self:_getStorageBaseName() .. "_theme_preset_"
-        local presets = {}
-        local seen = {}
-
         for _, filePath in ipairs(files) do
             local normalized = tostring(filePath):gsub("\\", "/")
             local fileName = normalized:match("([^/]+)$")
             if fileName and fileName:sub(1, #prefix) == prefix and fileName:sub(-5) == ".json" then
-                local presetName = fileName:sub(#prefix + 1, -6)
-                if presetName ~= "" and not seen[presetName] then
-                    seen[presetName] = true
+                local presetTagName = fileName:sub(#prefix + 1, -6)
+                local payload = self:ReadData("theme_preset_" .. presetTagName)
+                local presetName = type(payload) == "table" and tostring(payload.Name or "") or presetTagName
+                if presetName ~= "" then
                     table.insert(presets, presetName)
                 end
             end
         end
 
-        table.sort(presets, function(left, right)
-            return tostring(left):lower() < tostring(right):lower()
-        end)
-
-        return presets
+        return self:_writeThemePresetIndex(presets)
     end
 
     Library.Config = {
