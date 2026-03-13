@@ -3937,6 +3937,13 @@ function Library:CreateWindow(opts)
                 icon.ZIndex = 6
                 bindTheme(icon, "ImageColor3", "TextDim")
 
+                local rowBtn = controlBase.createOverlayButton(row, {
+                    Name = "ButtonRow",
+                    ZIndex = 7,
+                })
+                btnBox.ZIndex = 8
+                icon.ZIndex = 9
+
                 local function flashButton()
                     Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Main, BackgroundTransparency = colors.AccentTransparency })
                     task.delay(0.2, function()
@@ -3947,39 +3954,50 @@ function Library:CreateWindow(opts)
                 end
 
                 buttonControl = controlBase.attachControlLifecycle(section, buttonControl, {
-                    clickTargets = { btnBox },
+                    clickTargets = { btnBox, rowBtn },
                     root = row,
                     saveKey = btnOpts.SaveKey,
                     searchName = bName,
                     updateDisabled = function(disabled)
                         label.TextTransparency = disabled and 0.35 or 0
                         btnBox.Active = not disabled
+                        rowBtn.Active = not disabled
                         icon.ImageTransparency = disabled and 0.4 or 0
                     end,
                 })
 
                 -- Hover
-                buttonControl:TrackConnection(btnBox.MouseEnter:Connect(function()
+                local function onHoverEnter()
                     if buttonControl.Disabled then
                         return
                     end
                     Library:Spring(boxStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
                     Library:Spring(icon, "Smooth", { ImageColor3 = colors.Main })
-                end), "ButtonHoverEnter")
-                buttonControl:TrackConnection(btnBox.MouseLeave:Connect(function()
+                    Library:Spring(label, "Smooth", { TextColor3 = colors.Main })
+                end
+                local function onHoverLeave()
                     Library:Spring(boxStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                     Library:Spring(icon, "Smooth", { ImageColor3 = colors.TextDim })
-                end), "ButtonHoverLeave")
+                    Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
+                end
+
+                buttonControl:TrackConnection(btnBox.MouseEnter:Connect(onHoverEnter), "ButtonHoverEnter")
+                buttonControl:TrackConnection(rowBtn.MouseEnter:Connect(onHoverEnter), "ButtonRowHoverEnter")
+                buttonControl:TrackConnection(btnBox.MouseLeave:Connect(onHoverLeave), "ButtonHoverLeave")
+                buttonControl:TrackConnection(rowBtn.MouseLeave:Connect(onHoverLeave), "ButtonRowHoverLeave")
 
                 -- Click
-                buttonControl:TrackConnection(btnBox.Activated:Connect(function()
+                local function activateButton()
                     if buttonControl.Disabled then
                         return
                     end
 
                     flashButton()
                     pcall(bCallback)
-                end), "ButtonActivated")
+                end
+
+                buttonControl:TrackConnection(btnBox.Activated:Connect(activateButton), "ButtonActivated")
+                buttonControl:TrackConnection(rowBtn.Activated:Connect(activateButton), "ButtonRowActivated")
                 controlBase.bindAdaptiveLabel(buttonControl, label, {
                     BaseTextSize = 12,
                     MinTextSize = 10,
