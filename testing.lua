@@ -52,13 +52,6 @@ end
 
 local Library = loadRemoteUiLib()
 
-pcall(function()
-    local env = type(getgenv) == "function" and getgenv() or _G
-    if type(env) == "table" then
-        env.__UILIB_FORCE_MOBILE = true
-    end
-end)
-
 Library.Config.WindowWidth = 860
 Library.Config.WindowHeight = 540
 Library.Config.MinWindowWidth = 520
