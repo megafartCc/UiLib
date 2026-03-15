@@ -3168,8 +3168,71 @@ function Library:CreateWindow(opts)
                     local sDefault = math.clamp(sliderOpts.Default or sMin, sMin, sMax)
                     local sSuffix = sliderOpts.Suffix or "%"
                     local sCallback = sliderOpts.Callback or function() end
+                    local sStep = tonumber(sliderOpts.Step or sliderOpts.Increment)
+                    local sPrecision = sliderOpts.Precision
+                    if sPrecision == nil then
+                        sPrecision = sliderOpts.Decimals
+                    end
+                    if sPrecision == nil then
+                        sPrecision = sliderOpts.Decimal
+                    end
 
-                    local slider = { Value = sDefault }
+                    local function countDecimals(value)
+                        if type(value) ~= "number" then
+                            return 0
+                        end
+                        local text = tostring(value)
+                        if text:find("[eE]") then
+                            text = string.format("%.10f", value):gsub("0+$", ""):gsub("%.$", "")
+                        end
+                        local decimals = text:match("%.(%d+)")
+                        return decimals and #decimals or 0
+                    end
+
+                    local function inferPrecision()
+                        if type(sPrecision) == "number" then
+                            return math.clamp(math.floor(sPrecision + 0.5), 0, 6)
+                        end
+                        if sStep and sStep > 0 then
+                            return math.clamp(countDecimals(sStep), 0, 6)
+                        end
+                        local inferred = math.max(countDecimals(sMin), countDecimals(sMax), countDecimals(sDefault))
+                        if inferred > 0 then
+                            return math.clamp(inferred, 0, 6)
+                        end
+                        if math.abs((sMax - sMin)) <= 1 then
+                            return 2
+                        end
+                        return 0
+                    end
+
+                    local precision = inferPrecision()
+                    if sStep and sStep <= 0 then
+                        sStep = nil
+                    end
+
+                    local function quantizeValue(value)
+                        local v = math.clamp(tonumber(value) or sMin, sMin, sMax)
+                        if sStep then
+                            v = sMin + math.floor(((v - sMin) / sStep) + 0.5) * sStep
+                        end
+                        if precision > 0 then
+                            local m = 10 ^ precision
+                            v = math.floor(v * m + 0.5) / m
+                        else
+                            v = math.floor(v + 0.5)
+                        end
+                        return math.clamp(v, sMin, sMax)
+                    end
+
+                    local function formatValue(value)
+                        if precision > 0 then
+                            return (string.format("%." .. precision .. "f", value):gsub("(%..-)0+$", "%1"):gsub("%.$", ""))
+                        end
+                        return tostring(math.floor(value + 0.5))
+                    end
+
+                    local slider = { Value = quantizeValue(sDefault) }
 
                     local sRow = Instance.new("Frame", ensureSubContainer())
                     sRow.Name = "SubSlider_" .. sName
@@ -3204,7 +3267,9 @@ function Library:CreateWindow(opts)
                     local fill = Instance.new("Frame", barBg)
                     fill.BackgroundColor3 = colors.Main
                     fill.BorderSizePixel = 0
-                    fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
+                    local initialRange = (sMax - sMin)
+                    local initialAlpha = (initialRange ~= 0) and ((slider.Value - sMin) / initialRange) or 0
+                    fill.Size = UDim2.new(initialAlpha, 0, 1, 0)
                     fill.ZIndex = 6
                     bindTheme(fill, "BackgroundColor3", "Main")
                     bindTheme(fill, "BackgroundTransparency", "AccentTransparency")
@@ -3214,7 +3279,7 @@ function Library:CreateWindow(opts)
                     sValLabel.BackgroundTransparency = 1
                     sValLabel.Size = UDim2.new(1, 0, 1, 0)
                     sValLabel.Font = config.Font
-                    sValLabel.Text = tostring(sDefault) .. sSuffix
+                    sValLabel.Text = formatValue(slider.Value) .. sSuffix
                     sValLabel.TextColor3 = colors.TextStrong
                     sValLabel.TextSize = 11
                     sValLabel.ZIndex = 7
@@ -3224,10 +3289,12 @@ function Library:CreateWindow(opts)
                     local function updateSlider(inputX)
                         local bx, bw = barBg.AbsolutePosition.X, barBg.AbsoluteSize.X
                         local relX = math.clamp((inputX - bx) / bw, 0, 1)
-                        local val = math.floor(sMin + (sMax - sMin) * relX + 0.5)
+                        local val = quantizeValue(sMin + (sMax - sMin) * relX)
                         slider.Value = val
-                        Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
-                        sValLabel.Text = tostring(val) .. sSuffix
+                        local range = (sMax - sMin)
+                        local alpha = (range ~= 0) and ((val - sMin) / range) or 0
+                        Library:Spring(fill, "Responsive", { Size = UDim2.new(alpha, 0, 1, 0) })
+                        sValLabel.Text = formatValue(val) .. sSuffix
                         sCallback(val)
                         Library:_markDirty()
                     end
@@ -3293,8 +3360,71 @@ function Library:CreateWindow(opts)
                 local sCallback = sliderOpts.Callback or function() end
                 local sSaveKey = sliderOpts.SaveKey
                 local sConfigKey, sConfigAliases = resolveSectionConfigKey(sSaveKey, sName)
+                local sStep = tonumber(sliderOpts.Step or sliderOpts.Increment)
+                local sPrecision = sliderOpts.Precision
+                if sPrecision == nil then
+                    sPrecision = sliderOpts.Decimals
+                end
+                if sPrecision == nil then
+                    sPrecision = sliderOpts.Decimal
+                end
 
-                local slider = { Value = sDefault }
+                local function countDecimals(value)
+                    if type(value) ~= "number" then
+                        return 0
+                    end
+                    local text = tostring(value)
+                    if text:find("[eE]") then
+                        text = string.format("%.10f", value):gsub("0+$", ""):gsub("%.$", "")
+                    end
+                    local decimals = text:match("%.(%d+)")
+                    return decimals and #decimals or 0
+                end
+
+                local function inferPrecision()
+                    if type(sPrecision) == "number" then
+                        return math.clamp(math.floor(sPrecision + 0.5), 0, 6)
+                    end
+                    if sStep and sStep > 0 then
+                        return math.clamp(countDecimals(sStep), 0, 6)
+                    end
+                    local inferred = math.max(countDecimals(sMin), countDecimals(sMax), countDecimals(sDefault))
+                    if inferred > 0 then
+                        return math.clamp(inferred, 0, 6)
+                    end
+                    if math.abs((sMax - sMin)) <= 1 then
+                        return 2
+                    end
+                    return 0
+                end
+
+                local precision = inferPrecision()
+                if sStep and sStep <= 0 then
+                    sStep = nil
+                end
+
+                local function quantizeValue(value)
+                    local v = math.clamp(tonumber(value) or sMin, sMin, sMax)
+                    if sStep then
+                        v = sMin + math.floor(((v - sMin) / sStep) + 0.5) * sStep
+                    end
+                    if precision > 0 then
+                        local m = 10 ^ precision
+                        v = math.floor(v * m + 0.5) / m
+                    else
+                        v = math.floor(v + 0.5)
+                    end
+                    return math.clamp(v, sMin, sMax)
+                end
+
+                local function formatValue(value)
+                    if precision > 0 then
+                        return (string.format("%." .. precision .. "f", value):gsub("(%..-)0+$", "%1"):gsub("%.$", ""))
+                    end
+                    return tostring(math.floor(value + 0.5))
+                end
+
+                local slider = { Value = quantizeValue(sDefault) }
 
                 local row = controlBase.createRow(contentContainer, "Slider_" .. sName)
                 local label = controlBase.createLabel(row, sName, {
@@ -3325,7 +3455,9 @@ function Library:CreateWindow(opts)
                 fill.Name = "Fill"
                 fill.BackgroundColor3 = colors.Main
                 fill.BorderSizePixel = 0
-                fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
+                local initialRange = (sMax - sMin)
+                local initialAlpha = (initialRange ~= 0) and ((slider.Value - sMin) / initialRange) or 0
+                fill.Size = UDim2.new(initialAlpha, 0, 1, 0)
                 fill.ZIndex = 6
                 bindTheme(fill, "BackgroundColor3", "Main")
                 bindTheme(fill, "BackgroundTransparency", "AccentTransparency")
@@ -3338,7 +3470,7 @@ function Library:CreateWindow(opts)
                 valLabel.BackgroundTransparency = 1
                 valLabel.Size = UDim2.new(1, 0, 1, 0)
                 valLabel.Font = config.Font
-                valLabel.Text = tostring(sDefault) .. sSuffix
+                valLabel.Text = formatValue(slider.Value) .. sSuffix
                 valLabel.TextColor3 = colors.TextStrong
                 valLabel.TextSize = 12
                 valLabel.ZIndex = 7
@@ -3352,10 +3484,12 @@ function Library:CreateWindow(opts)
                     local barAbsSize = barBg.AbsoluteSize.X
                     local relX = math.clamp((inputX - barAbsPos) / barAbsSize, 0, 1)
                     local rawVal = sMin + (sMax - sMin) * relX
-                    local val = math.floor(rawVal + 0.5)
+                    local val = quantizeValue(rawVal)
                     slider.Value = val
-                    Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
-                    valLabel.Text = tostring(val) .. sSuffix
+                    local range = (sMax - sMin)
+                    local alpha = (range ~= 0) and ((val - sMin) / range) or 0
+                    Library:Spring(fill, "Responsive", { Size = UDim2.new(alpha, 0, 1, 0) })
+                    valLabel.Text = formatValue(val) .. sSuffix
                     if not callbacksSuppressed() then
                         pcall(sCallback, val)
                     end
@@ -3363,11 +3497,12 @@ function Library:CreateWindow(opts)
                 end
 
                 local function setSliderValue(val, shouldMarkDirty)
-                    val = math.clamp(tonumber(val) or sMin, sMin, sMax)
-                    local relX = (val - sMin) / (sMax - sMin)
-                    slider.Value = math.floor(val + 0.5)
+                    val = quantizeValue(val)
+                    local range = (sMax - sMin)
+                    local relX = (range ~= 0) and ((val - sMin) / range) or 0
+                    slider.Value = val
                     Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
-                    valLabel.Text = tostring(slider.Value) .. sSuffix
+                    valLabel.Text = formatValue(slider.Value) .. sSuffix
                     if not callbacksSuppressed() then
                         pcall(sCallback, slider.Value)
                     end
@@ -3682,6 +3817,14 @@ function Library:CreateWindow(opts)
                 local sMax = opts.Max or 100
                 local sDefault = math.clamp(opts.Default or sMin, sMin, sMax)
                 local sSuffix = opts.Suffix or "%"
+                local sStep = tonumber(opts.Step or opts.Increment)
+                local sPrecision = opts.Precision
+                if sPrecision == nil then
+                    sPrecision = opts.Decimals
+                end
+                if sPrecision == nil then
+                    sPrecision = opts.Decimal
+                end
                 local sEnabled = opts.Enabled
                 if sEnabled == nil then
                     if opts.DefaultToggle ~= nil then
@@ -3695,7 +3838,62 @@ function Library:CreateWindow(opts)
                 local sSaveKey = opts.SaveKey
                 local sConfigKey, sConfigAliases = resolveSectionConfigKey(sSaveKey, sName)
 
-                local st = { Value = sDefault, Enabled = sEnabled }
+                local function countDecimals(value)
+                    if type(value) ~= "number" then
+                        return 0
+                    end
+                    local text = tostring(value)
+                    if text:find("[eE]") then
+                        text = string.format("%.10f", value):gsub("0+$", ""):gsub("%.$", "")
+                    end
+                    local decimals = text:match("%.(%d+)")
+                    return decimals and #decimals or 0
+                end
+
+                local function inferPrecision()
+                    if type(sPrecision) == "number" then
+                        return math.clamp(math.floor(sPrecision + 0.5), 0, 6)
+                    end
+                    if sStep and sStep > 0 then
+                        return math.clamp(countDecimals(sStep), 0, 6)
+                    end
+                    local inferred = math.max(countDecimals(sMin), countDecimals(sMax), countDecimals(sDefault))
+                    if inferred > 0 then
+                        return math.clamp(inferred, 0, 6)
+                    end
+                    if math.abs((sMax - sMin)) <= 1 then
+                        return 2
+                    end
+                    return 0
+                end
+
+                local precision = inferPrecision()
+                if sStep and sStep <= 0 then
+                    sStep = nil
+                end
+
+                local function quantizeValue(value)
+                    local v = math.clamp(tonumber(value) or sMin, sMin, sMax)
+                    if sStep then
+                        v = sMin + math.floor(((v - sMin) / sStep) + 0.5) * sStep
+                    end
+                    if precision > 0 then
+                        local m = 10 ^ precision
+                        v = math.floor(v * m + 0.5) / m
+                    else
+                        v = math.floor(v + 0.5)
+                    end
+                    return math.clamp(v, sMin, sMax)
+                end
+
+                local function formatValue(value)
+                    if precision > 0 then
+                        return (string.format("%." .. precision .. "f", value):gsub("(%..-)0+$", "%1"):gsub("%.$", ""))
+                    end
+                    return tostring(math.floor(value + 0.5))
+                end
+
+                local st = { Value = quantizeValue(sDefault), Enabled = sEnabled }
 
                 local row = controlBase.createRow(contentContainer, "SliderToggle_" .. sName)
                 local label = controlBase.createLabel(row, sName, {
@@ -3751,7 +3949,9 @@ function Library:CreateWindow(opts)
                 local fill = Instance.new("Frame", barBg)
                 fill.BackgroundColor3 = colors.Main
                 fill.BorderSizePixel = 0
-                fill.Size = UDim2.new((sDefault - sMin) / (sMax - sMin), 0, 1, 0)
+                local initialRange = (sMax - sMin)
+                local initialAlpha = (initialRange ~= 0) and ((st.Value - sMin) / initialRange) or 0
+                fill.Size = UDim2.new(initialAlpha, 0, 1, 0)
                 fill.ZIndex = 6
                 Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
 
@@ -3759,7 +3959,7 @@ function Library:CreateWindow(opts)
                 valLabel.BackgroundTransparency = 1
                 valLabel.Size = UDim2.new(1, 0, 1, 0)
                 valLabel.Font = config.Font
-                valLabel.Text = tostring(sDefault) .. sSuffix
+                valLabel.Text = formatValue(st.Value) .. sSuffix
                 valLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 valLabel.TextSize = 12
                 valLabel.ZIndex = 7
@@ -3786,11 +3986,11 @@ function Library:CreateWindow(opts)
                 end
 
                 local function setSliderValue(val, shouldMarkDirty)
-                    val = math.clamp(tonumber(val) or sMin, sMin, sMax)
-                    st.Value = math.floor(val + 0.5)
-                    local relX = (st.Value - sMin) / (sMax - sMin)
+                    st.Value = quantizeValue(val)
+                    local range = (sMax - sMin)
+                    local relX = (range ~= 0) and ((st.Value - sMin) / range) or 0
                     Library:Spring(fill, "Responsive", { Size = UDim2.new(relX, 0, 1, 0) })
-                    valLabel.Text = tostring(st.Value) .. sSuffix
+                    valLabel.Text = formatValue(st.Value) .. sSuffix
                     if not callbacksSuppressed() then
                         pcall(sCallback, st.Value)
                     end
