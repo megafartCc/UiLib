@@ -675,12 +675,15 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- MENU CONTENT AREA
     -- ==============================
+    local menuFrameTopInset = 7
+    local menuFrameBottomInset = 7
+
     local menuFrame = Instance.new("Frame", clipFrame)
     menuFrame.Name = randomStr()
     menuFrame.BackgroundTransparency = 1
     menuFrame.BorderSizePixel = 0
-    menuFrame.Position = UDim2.new(0, 0, 0, config.HeaderHeight + 10)
-    menuFrame.Size = UDim2.new(1, 0, 1, -(config.HeaderHeight + 10 + config.BottomHeight + 7))
+    menuFrame.Position = UDim2.new(0, 0, 0, config.HeaderHeight + menuFrameTopInset)
+    menuFrame.Size = UDim2.new(1, 0, 1, -(config.HeaderHeight + menuFrameTopInset + config.BottomHeight + menuFrameBottomInset))
     menuFrame.ZIndex = 1
     menuFrame.ClipsDescendants = true
 
