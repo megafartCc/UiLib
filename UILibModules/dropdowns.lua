@@ -232,6 +232,49 @@ return function(Library, context)
         end
     end
 
+    local function resolveDropdownOpenBounds(base)
+        local main = base and base.win and base.win._main
+        if main and main.Parent then
+            local mainPos = main.AbsolutePosition
+            local mainSize = main.AbsoluteSize
+            local topInset = (base.config and base.config.HeaderHeight or 40) + 6
+            local bottomInset = (base.config and base.config.BottomHeight or 25) + 6
+            return mainPos.Y + topInset, mainPos.Y + math.max(0, mainSize.Y - bottomInset)
+        end
+
+        local camera = workspace.CurrentCamera
+        local viewportY = (camera and camera.ViewportSize and camera.ViewportSize.Y) or 1080
+        return 6, math.max(6, viewportY - 6)
+    end
+
+    local function resolveDropdownTargetHeight(base, button, panel, requestedHeight)
+        local desiredHeight = math.max(0, tonumber(requestedHeight) or 0)
+        local topBound, bottomBound = resolveDropdownOpenBounds(base)
+
+        local buttonPos = button.AbsolutePosition
+        local buttonSize = button.AbsoluteSize
+        local belowSpace = math.max(0, bottomBound - (buttonPos.Y + buttonSize.Y + 2))
+        local aboveSpace = math.max(0, (buttonPos.Y - 2) - topBound)
+
+        local openUp = belowSpace < desiredHeight and aboveSpace > belowSpace
+        local available = openUp and aboveSpace or belowSpace
+        if available <= 0 then
+            available = math.max(aboveSpace, belowSpace)
+        end
+
+        local targetHeight = math.floor(math.max(0, math.min(desiredHeight, available)))
+
+        if openUp then
+            panel.AnchorPoint = Vector2.new(0, 1)
+            panel.Position = UDim2.new(0, 0, 0, -2)
+        else
+            panel.AnchorPoint = Vector2.new(0, 0)
+            panel.Position = UDim2.new(0, 0, 1, 2)
+        end
+
+        return targetHeight
+    end
+
     local function bindOutsideClose(base, isOpenFn, panel, button, closeFn, keyPrefix)
         if base.bindOutsideClose then
             return base.bindOutsideClose({
@@ -496,7 +539,8 @@ return function(Library, context)
                 end
                 dPanelContent.refreshCanvas()
                 dPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
-                Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                local targetHeight = resolveDropdownTargetHeight(base, selBtn, dPanel, fullHeight)
+                Library:Spring(dPanel, "Smooth", { Size = UDim2.new(1, 0, 0, targetHeight) })
                 selArrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()
@@ -751,7 +795,8 @@ return function(Library, context)
                 end
                 dropPanelContent.refreshCanvas()
                 dropPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
-                Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                local targetHeight = resolveDropdownTargetHeight(base, selectBtn, dropPanel, fullHeight)
+                Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, targetHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()
@@ -1068,7 +1113,8 @@ return function(Library, context)
                 end
                 dropPanelContent.refreshCanvas()
                 dropPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
-                Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                local targetHeight = resolveDropdownTargetHeight(base, selectBtn, dropPanel, fullHeight)
+                Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, targetHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()
@@ -1458,7 +1504,8 @@ return function(Library, context)
                 end
                 dropPanelContent.refreshCanvas()
                 dropPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
-                Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, fullHeight) })
+                local targetHeight = resolveDropdownTargetHeight(base, selectBtn, dropPanel, fullHeight)
+                Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, targetHeight) })
                 arrow.Text = DROPDOWN_ARROW_OPEN
             else
                 closeDropdown()

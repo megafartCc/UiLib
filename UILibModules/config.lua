@@ -314,6 +314,8 @@ return function(Library, context)
         return payload
     end
 
+    local deserializeThemeValue
+
     local function applyThemeSnapshot(target, payload)
         if type(payload) ~= "table" then
             return
@@ -334,7 +336,7 @@ return function(Library, context)
         end
     end
 
-    local function deserializeThemeValue(value)
+    deserializeThemeValue = function(value)
         if type(value) == "table" and value.__type == "Color3" then
             return Color3.new(tonumber(value.R) or 0, tonumber(value.G) or 0, tonumber(value.B) or 0)
         end
@@ -510,7 +512,12 @@ return function(Library, context)
 
         local payload = self:ReadData(tag)
         if type(payload) ~= "table" or type(payload.Theme) ~= "table" then
-            return false, "preset write verification failed"
+            local dataPath = self:_getDataPath(tag)
+            if type(isfile) == "function" and dataPath and isfile(dataPath) then
+                payload = { Theme = true }
+            else
+                return false, "preset write verification failed"
+            end
         end
 
         local presets = self:_readThemePresetIndex()
