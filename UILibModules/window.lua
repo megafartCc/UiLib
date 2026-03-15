@@ -5038,8 +5038,20 @@ function Library:CreateWindow(opts)
         end
 
         local function getPresetName(rawValue)
+            local valueType = type(rawValue)
+            if valueType == "table" then
+                rawValue = rawValue.Name or rawValue.name or rawValue.label or rawValue.Label
+                valueType = type(rawValue)
+            end
+            if valueType ~= "string" and valueType ~= "number" then
+                return nil
+            end
+
             local text = tostring(rawValue or ""):match("^%s*(.-)%s*$")
             if text == "" or text == "No Presets" then
+                return nil
+            end
+            if text:sub(1, 6):lower() == "table:" then
                 return nil
             end
             return text
@@ -5114,13 +5126,28 @@ function Library:CreateWindow(opts)
         end)
 
         local function refreshPresetDropdown(selectedName)
-            local presets = Library:ListThemePresets()
+            local presets = {}
+            local seen = {}
+            for _, value in ipairs(Library:ListThemePresets()) do
+                local presetName = getPresetName(value)
+                if presetName then
+                    local key = presetName:lower()
+                    if not seen[key] then
+                        seen[key] = true
+                        table.insert(presets, presetName)
+                    end
+                end
+            end
             local hasPresets = #presets > 0
             if #presets == 0 then
                 presets = { "No Presets" }
             end
 
             local targetValue = getPresetName(selectedName)
+            if targetValue and not seen[targetValue:lower()] then
+                table.insert(presets, 1, targetValue)
+                hasPresets = true
+            end
             if targetValue == nil then
                 targetValue = presets[1]
             end

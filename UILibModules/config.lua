@@ -444,6 +444,33 @@ return function(Library, context)
         return "theme_presets_index"
     end
 
+    local function normalizePresetName(value)
+        local valueType = type(value)
+        if valueType == "table" then
+            value = value.Name or value.name or value.label or value.Label
+            valueType = type(value)
+        end
+
+        if valueType ~= "string" and valueType ~= "number" then
+            return nil
+        end
+
+        local text = tostring(value or ""):match("^%s*(.-)%s*$")
+        if text == "" then
+            return nil
+        end
+
+        if text == "No Presets" then
+            return nil
+        end
+
+        if text:sub(1, 6):lower() == "table:" then
+            return nil
+        end
+
+        return text
+    end
+
     function Library:_readThemePresetIndex()
         local payload = self:ReadData(self:_getThemePresetIndexTag())
         if type(payload) ~= "table" then
@@ -453,8 +480,8 @@ return function(Library, context)
         local names = {}
         local seen = {}
         for _, value in ipairs(payload) do
-            local text = tostring(value or ""):match("^%s*(.-)%s*$")
-            if text ~= "" then
+            local text = normalizePresetName(value)
+            if text then
                 local normalizedKey = text:lower()
                 if not seen[normalizedKey] then
                     seen[normalizedKey] = true
@@ -469,8 +496,8 @@ return function(Library, context)
         local cleaned = {}
         local seen = {}
         for _, value in ipairs(names or {}) do
-            local text = tostring(value or ""):match("^%s*(.-)%s*$")
-            if text ~= "" then
+            local text = normalizePresetName(value)
+            if text then
                 local normalizedKey = text:lower()
                 if not seen[normalizedKey] then
                     seen[normalizedKey] = true
@@ -576,8 +603,8 @@ return function(Library, context)
             if fileName and fileName:sub(1, #prefix) == prefix and fileName:sub(-5) == ".json" then
                 local presetTagName = fileName:sub(#prefix + 1, -6)
                 local payload = self:ReadData("theme_preset_" .. presetTagName)
-                local presetName = type(payload) == "table" and tostring(payload.Name or "") or presetTagName
-                if presetName ~= "" then
+                local presetName = normalizePresetName(type(payload) == "table" and payload.Name or presetTagName)
+                if presetName then
                     table.insert(presets, presetName)
                 end
             end
