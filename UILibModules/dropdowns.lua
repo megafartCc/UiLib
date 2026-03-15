@@ -206,14 +206,24 @@ return function(Library, context)
         return values
     end
 
-    local function getDropdownConfigKey(requestedKey, sectionName, dropdownName)
+    local function getDropdownConfigKey(requestedKey, sectionName, dropdownName, menuName)
         if requestedKey == false then
-            return nil
+            return nil, nil
         end
         if requestedKey ~= nil then
-            return requestedKey
+            return requestedKey, nil
         end
-        return string.format("%s.%s", tostring(sectionName or "Section"), tostring(dropdownName or "Dropdown"))
+
+        local legacyKey = string.format("%s.%s", tostring(sectionName or "Section"), tostring(dropdownName or "Dropdown"))
+        local menuText = tostring(menuName or "")
+        if menuText ~= "" then
+            local scopedKey = string.format("%s.%s", menuText, legacyKey)
+            if scopedKey ~= legacyKey then
+                return scopedKey, { legacyKey }
+            end
+        end
+
+        return legacyKey, nil
     end
 
     local function fireMultiDropdownCallback(callback, options, selectedSet)
@@ -339,7 +349,8 @@ return function(Library, context)
         local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
         local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
         local dCallback = dropOpts.Callback or function() end
-        local dSaveKey = getDropdownConfigKey(dropOpts.SaveKey, base.secName, dName)
+        local dConfigScope = base.configScope or base.secName
+        local dSaveKey, dSaveAliases = getDropdownConfigKey(dropOpts.SaveKey, dConfigScope, dName, base.menuName)
 
         local dropdown = { Value = dDefault }
 
@@ -484,6 +495,7 @@ return function(Library, context)
                 closeDropdown()
                 selArrow.Text = DROPDOWN_ARROW_CLOSED
                 dCallback(resolved)
+                Library:_markDirty()
             end)
 
             table.insert(optBtns, optBtn)
@@ -506,6 +518,7 @@ return function(Library, context)
                 if not callbacksSuppressed() then
                     dCallback(resolved)
                 end
+                Library:_markDirty()
             end,
             updateDisabled = function(disabled)
                 dLabel.TextTransparency = disabled and 0.35 or 0
@@ -564,6 +577,21 @@ return function(Library, context)
         end
         dropdown.SetText = dropdown.SetSelection
 
+        if dSaveKey then
+            Library:RegisterConfig(dSaveKey, "dropdown",
+                function()
+                    return dropdown.Value
+                end,
+                function(val)
+                    local resolved = applyDropdownValue(val)
+                    if not callbacksSuppressed() then
+                        dCallback(resolved)
+                    end
+                end,
+                { Aliases = dSaveAliases }
+            )
+        end
+
         return dropdown
     end
 
@@ -573,7 +601,8 @@ return function(Library, context)
         local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
         local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
         local dCallback = dropOpts.Callback or function() end
-        local dSaveKey = getDropdownConfigKey(dropOpts.SaveKey, base.secName, dName)
+        local dConfigScope = base.configScope or base.secName
+        local dSaveKey, dSaveAliases = getDropdownConfigKey(dropOpts.SaveKey, dConfigScope, dName, base.menuName)
 
         local dropdown = { Value = dDefault }
 
@@ -819,7 +848,8 @@ return function(Library, context)
                     if not callbacksSuppressed() then
                         dCallback(resolved)
                     end
-                end
+                end,
+                { Aliases = dSaveAliases }
             )
         end
 
@@ -857,7 +887,8 @@ return function(Library, context)
         local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
         local dDefaults = dropOpts.Default or {}
         local dCallback = dropOpts.Callback or function() end
-        local dSaveKey = getDropdownConfigKey(dropOpts.SaveKey, base.secName, dName)
+        local dConfigScope = base.configScope or base.secName
+        local dSaveKey, dSaveAliases = getDropdownConfigKey(dropOpts.SaveKey, dConfigScope, dName, base.menuName)
 
         local selectedSet = buildSelectedSet(dOptions, dDefaults)
         local multi = { Values = selectedSet }
@@ -1134,7 +1165,8 @@ return function(Library, context)
                 function() return getSelectedValues(dOptions, selectedSet) end,
                 function(val)
                     applySelectedValues(val, false)
-                end
+                end,
+                { Aliases = dSaveAliases }
             )
         end
 
@@ -1208,7 +1240,8 @@ return function(Library, context)
         end
         local dCallback = opts.Callback or function() end
         local dToggleCallback = opts.OnToggle or opts.OnToggleChange or function() end
-        local dSaveKey = getDropdownConfigKey(opts.SaveKey, base.secName, dName)
+        local dConfigScope = base.configScope or base.secName
+        local dSaveKey, dSaveAliases = getDropdownConfigKey(opts.SaveKey, dConfigScope, dName, base.menuName)
 
         local dt = { Value = dDefault, Enabled = dEnabled }
 
@@ -1542,7 +1575,8 @@ return function(Library, context)
                     if changed then
                         fireDropdownToggleCallback()
                     end
-                end
+                end,
+                { Aliases = dSaveAliases }
             )
         end
 

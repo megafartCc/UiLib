@@ -26,6 +26,7 @@ return function(Library, context)
     Library._configItemOrder = {}
     Library._loadedConfigData = nil
     Library._configReplayToken = 0
+    Library._configMutationSerial = 0
 
     local CONFIG_FOLDER = "Eps1lonScript"
 
@@ -113,13 +114,52 @@ return function(Library, context)
         return true, path
     end
 
-    function Library:RegisterConfig(key, cType, getter, setter)
+    function Library:_resolveLoadedConfigEntry(key, item)
+        local data = self._loadedConfigData
+        if type(data) ~= "table" then
+            return nil
+        end
+
+        local direct = data[key]
+        if type(direct) == "table" and direct.value ~= nil then
+            return direct
+        end
+
+        local aliases = item and item.aliases
+        if type(aliases) == "table" then
+            for _, alias in ipairs(aliases) do
+                if type(alias) == "string" and alias ~= "" then
+                    local aliasEntry = data[alias]
+                    if type(aliasEntry) == "table" and aliasEntry.value ~= nil then
+                        return aliasEntry
+                    end
+                end
+            end
+        end
+
+        return nil
+    end
+
+    function Library:RegisterConfig(key, cType, getter, setter, registerOptions)
+        registerOptions = registerOptions or {}
+        local aliases = {}
+        local seenAliases = {}
+        local sourceAliases = registerOptions.Aliases or registerOptions.aliases
+        if type(sourceAliases) == "table" then
+            for _, alias in ipairs(sourceAliases) do
+                if type(alias) == "string" and alias ~= "" and alias ~= key and not seenAliases[alias] then
+                    seenAliases[alias] = true
+                    table.insert(aliases, alias)
+                end
+            end
+        end
+
         if self._configItems[key] == nil then
             table.insert(self._configItemOrder, key)
         end
-        self._configItems[key] = { type = cType, get = getter, set = setter }
+        self._configItems[key] = { type = cType, get = getter, set = setter, aliases = aliases }
 
-        local loadedEntry = self._loadedConfigData and self._loadedConfigData[key]
+        local loadedEntry = self:_resolveLoadedConfigEntry(key, self._configItems[key])
         if loadedEntry and loadedEntry.value ~= nil then
             self:_beginControlSync()
             pcall(setter, loadedEntry.value)
@@ -161,9 +201,13 @@ return function(Library, context)
     function Library:_scheduleConfigReplay()
         self._configReplayToken = (self._configReplayToken or 0) + 1
         local replayToken = self._configReplayToken
+        local mutationSerial = self._configMutationSerial or 0
 
         task.delay(0.2, function()
             if self._configReplayToken ~= replayToken then
+                return
+            end
+            if (self._configMutationSerial or 0) ~= mutationSerial then
                 return
             end
 
@@ -175,9 +219,11 @@ return function(Library, context)
             self:_beginConfigReplay()
             for _, key in ipairs(self._configItemOrder) do
                 local item = self._configItems[key]
-                local entry = data[key]
+                local entry = self:_resolveLoadedConfigEntry(key, item)
                 if item and entry and entry.value ~= nil then
+                    self:_beginControlSync()
                     pcall(item.set, entry.value)
+                    self:_endControlSync()
                 end
             end
             self:_endConfigReplay()
@@ -209,8 +255,8 @@ return function(Library, context)
         if not ok2 or type(data) ~= "table" then return end
         self._loadedConfigData = data
         for _, key in ipairs(self._configItemOrder) do
-            local entry = data[key]
             local item = self._configItems[key]
+            local entry = self:_resolveLoadedConfigEntry(key, item)
             if item and entry and entry.value ~= nil then
                 self:_beginControlSync()
                 pcall(item.set, entry.value)
@@ -221,9 +267,10 @@ return function(Library, context)
     end
 
     function Library:_markDirty()
-        if not self._autoSave then return end
         if self:_callbacksSuppressed() then return end
         if self:_isConfigReplaying() then return end
+        self._configMutationSerial = (self._configMutationSerial or 0) + 1
+        if not self._autoSave then return end
         self._dirty = true
     end
 

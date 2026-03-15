@@ -2702,6 +2702,26 @@ function Library:CreateWindow(opts)
                 win = win,
             }
 
+            local function getLegacySectionConfigKey(controlName)
+                return string.format("%s.%s", tostring(secName or "Section"), tostring(controlName or "Control"))
+            end
+
+            local function resolveSectionConfigKey(requestedKey, controlName)
+                if requestedKey == false then
+                    return nil, nil
+                end
+                if requestedKey ~= nil then
+                    return requestedKey, nil
+                end
+
+                local legacyKey = getLegacySectionConfigKey(controlName)
+                local scopedKey = string.format("%s.%s.%s", tostring(menuName or "Menu"), tostring(secName or "Section"), tostring(controlName or "Control"))
+                if scopedKey ~= legacyKey then
+                    return scopedKey, { legacyKey }
+                end
+                return legacyKey, nil
+            end
+
             -- ==============================
             -- AddToggle (checkbox style)
             -- ==============================
@@ -2711,6 +2731,7 @@ function Library:CreateWindow(opts)
                 local tDefault = toggleOpts.Default or false
                 local tCallback = toggleOpts.Callback or function() end
                 local tSaveKey = toggleOpts.SaveKey
+                local tConfigKey, tConfigAliases = resolveSectionConfigKey(tSaveKey, tName)
 
                 local toggle = { Value = tDefault }
 
@@ -2807,7 +2828,7 @@ function Library:CreateWindow(opts)
                     end,
                     refresh = updateVisual,
                     root = row,
-                    saveKey = tSaveKey,
+                    saveKey = tConfigKey,
                     searchName = tName,
                     setValue = function(val)
                         setToggleValue(val == true, true)
@@ -2867,6 +2888,7 @@ function Library:CreateWindow(opts)
                     local cpDefault = cpOpts.Default or Color3.fromRGB(255, 255, 255)
                     local cpCallback = cpOpts.Callback or function() end
                     local cpSaveKey = cpOpts.SaveKey
+                    local cpConfigKey, cpConfigAliases = resolveSectionConfigKey(cpSaveKey, tName .. "_" .. cpName)
 
                     local cpicker = { Value = cpDefault }
                     local hue, sat, val = cpDefault:ToHSV()
@@ -3033,6 +3055,7 @@ function Library:CreateWindow(opts)
                         onDestroy = function() cpOpen = false end,
                         refresh = function() setColorValue(cpicker.Value, false) end,
                         root = row,
+                        saveKey = cpConfigKey,
                         searchName = cpName,
                         setValue = function(value) setColorValue(value, true) end,
                         updateDisabled = function(disabled)
@@ -3099,10 +3122,13 @@ function Library:CreateWindow(opts)
                         end), dragKey)
                     end), "ColorPickerHueInputTgl")
 
-                    Library:RegisterConfig(section._secName .. "." .. tName .. "_" .. cpName, "colorpicker",
-                        function() return cpicker.Value end,
-                        function(val) setColorValue(val, false) end
-                    )
+                    if cpConfigKey then
+                        Library:RegisterConfig(cpConfigKey, "colorpicker",
+                            function() return cpicker.Value end,
+                            function(val) setColorValue(val, false) end,
+                            { Aliases = cpConfigAliases }
+                        )
+                    end
 
                     return cpicker
                 end
@@ -3115,15 +3141,19 @@ function Library:CreateWindow(opts)
                         bindOutsideClose = popupManager.bindOutsideClose,
                         closeTransientPopups = closeTransientPopups,
                         colors = colors,
+                        configScope = string.format("%s.%s", tostring(secName or "Section"), tostring(tName or "Toggle")),
                         config = config,
                         ensureSubContainer = ensureSubContainer,
                         makeControl = function(control, opts)
                             return controlBase.attachControlLifecycle(section, control, opts)
                         end,
+                        menuName = menuName,
                         nextCleanupKey = nextCleanupKey,
                         registerTransientPopup = registerTransientPopup,
+                        secName = secName,
                         section = section,
                         trackGlobal = sectionTrackGlobal,
+                        win = win,
                     }, dropOpts)
                 end
 
@@ -3237,12 +3267,15 @@ function Library:CreateWindow(opts)
                 end
 
                 -- Register for config save/load
-                Library:RegisterConfig(secName .. "." .. tName, "toggle",
-                    function() return toggle.Value end,
-                    function(val)
-                        setToggleValue(val == true, false)
-                    end
-                )
+                if tConfigKey then
+                    Library:RegisterConfig(tConfigKey, "toggle",
+                        function() return toggle.Value end,
+                        function(val)
+                            setToggleValue(val == true, false)
+                        end,
+                        { Aliases = tConfigAliases }
+                    )
+                end
 
                 return toggle
             end
@@ -3259,6 +3292,7 @@ function Library:CreateWindow(opts)
                 local sSuffix = sliderOpts.Suffix or "%"
                 local sCallback = sliderOpts.Callback or function() end
                 local sSaveKey = sliderOpts.SaveKey
+                local sConfigKey, sConfigAliases = resolveSectionConfigKey(sSaveKey, sName)
 
                 local slider = { Value = sDefault }
 
@@ -3359,7 +3393,7 @@ function Library:CreateWindow(opts)
                         setSliderValue(slider.Value, false)
                     end,
                     root = row,
-                    saveKey = sSaveKey,
+                    saveKey = sConfigKey,
                     searchName = sName,
                     setValue = function(val)
                         setSliderValue(val, true)
@@ -3398,12 +3432,15 @@ function Library:CreateWindow(opts)
                 })
 
                 -- Register for config save/load
-                Library:RegisterConfig(secName .. "." .. sName, "slider",
-                    function() return slider.Value end,
-                    function(val)
-                        setSliderValue(val, false)
-                    end
-                )
+                if sConfigKey then
+                    Library:RegisterConfig(sConfigKey, "slider",
+                        function() return slider.Value end,
+                        function(val)
+                            setSliderValue(val, false)
+                        end,
+                        { Aliases = sConfigAliases }
+                    )
+                end
 
                 return slider
             end
@@ -3656,6 +3693,7 @@ function Library:CreateWindow(opts)
                 local sCallback = opts.Callback or opts.OnSliderChange or function() end
                 local sToggleCallback = opts.OnToggle or opts.OnToggleChange or function() end
                 local sSaveKey = opts.SaveKey
+                local sConfigKey, sConfigAliases = resolveSectionConfigKey(sSaveKey, sName)
 
                 local st = { Value = sDefault, Enabled = sEnabled }
 
@@ -3787,7 +3825,7 @@ function Library:CreateWindow(opts)
                         applyEnabled(st.Enabled, false)
                     end,
                     root = row,
-                    saveKey = sSaveKey,
+                    saveKey = sConfigKey,
                     searchName = sName,
                     setValue = function(val)
                         if type(val) ~= "table" then
@@ -3870,18 +3908,21 @@ function Library:CreateWindow(opts)
                 end), nextCleanupKey("SliderToggleDrag"))
 
                 -- Register for config save/load
-                Library:RegisterConfig(secName .. "." .. sName, "slidertoggle",
-                    function() return { value = st.Value, enabled = st.Enabled } end,
-                    function(val)
-                        if type(val) ~= "table" then return end
-                        if val.value ~= nil then
-                            setSliderValue(val.value, false)
-                        end
-                        if val.enabled ~= nil then
-                            applyEnabled(val.enabled, false)
-                        end
-                    end
-                )
+                if sConfigKey then
+                    Library:RegisterConfig(sConfigKey, "slidertoggle",
+                        function() return { value = st.Value, enabled = st.Enabled } end,
+                        function(val)
+                            if type(val) ~= "table" then return end
+                            if val.value ~= nil then
+                                setSliderValue(val.value, false)
+                            end
+                            if val.enabled ~= nil then
+                                applyEnabled(val.enabled, false)
+                            end
+                        end,
+                        { Aliases = sConfigAliases }
+                    )
+                end
 
                 return st
             end
@@ -4017,9 +4058,41 @@ function Library:CreateWindow(opts)
             function section:AddInputBox(inputOpts)
                 inputOpts = inputOpts or {}
                 local iName = inputOpts.Name or inputOpts.Title or "Input"
-                local iDefault = tostring(inputOpts.Default or inputOpts.Placeholder or "")
                 local iCallback = inputOpts.Callback or function() end
                 local iSaveKey = inputOpts.SaveKey
+                local iConfigKey, iConfigAliases = resolveSectionConfigKey(iSaveKey, iName)
+
+                local function normalizeInputText(value, fallbackText)
+                    if value == nil then
+                        return fallbackText or ""
+                    end
+                    local valueType = typeof(value)
+                    if valueType == "string" then
+                        return value
+                    end
+                    if valueType == "number" or valueType == "boolean" then
+                        return tostring(value)
+                    end
+                    if valueType == "table" then
+                        local candidate = value.Text
+                        if candidate == nil then
+                            candidate = value.text
+                        end
+                        if candidate == nil then
+                            candidate = value.Value
+                        end
+                        if candidate == nil then
+                            candidate = value.value
+                        end
+                        if candidate ~= nil then
+                            return normalizeInputText(candidate, fallbackText)
+                        end
+                        return fallbackText or ""
+                    end
+                    return fallbackText or ""
+                end
+
+                local iDefault = normalizeInputText(inputOpts.Default, normalizeInputText(inputOpts.Placeholder, ""))
 
                 local inputControl = { Value = iDefault }
                 local row = controlBase.createRow(contentContainer, "Input_" .. iName)
@@ -4051,24 +4124,38 @@ function Library:CreateWindow(opts)
                 bindTheme(box, "TextColor3", "Text")
                 bindTheme(box, "PlaceholderColor3", "TextMuted")
 
+                local function applyInputValue(rawValue, fireCallback, shouldMarkDirty)
+                    local nextText = normalizeInputText(rawValue, "")
+                    local changed = inputControl.Value ~= nextText or box.Text ~= nextText
+
+                    inputControl.Value = nextText
+                    if box.Text ~= nextText then
+                        box.Text = nextText
+                    end
+
+                    if fireCallback and not callbacksSuppressed() then
+                        pcall(iCallback, nextText)
+                    end
+                    if changed and shouldMarkDirty then
+                        Library:_markDirty()
+                    end
+
+                    return changed
+                end
+
                 inputControl = controlBase.attachControlLifecycle(section, inputControl, {
                     clickTargets = { box },
                     getValue = function()
-                        return box.Text
+                        return inputControl.Value
                     end,
                     refresh = function()
-                        box.Text = tostring(inputControl.Value or "")
+                        applyInputValue(inputControl.Value, false, false)
                     end,
                     root = row,
-                    saveKey = iSaveKey,
+                    saveKey = iConfigKey,
                     searchName = iName,
                     setValue = function(value)
-                        local nextText = tostring(value or "")
-                        inputControl.Value = nextText
-                        box.Text = nextText
-                        if not callbacksSuppressed() then
-                            pcall(iCallback, nextText)
-                        end
+                        applyInputValue(value, true, true)
                     end,
                     updateDisabled = function(disabled)
                         label.TextTransparency = disabled and 0.35 or 0
@@ -4087,14 +4174,28 @@ function Library:CreateWindow(opts)
                 end
 
                 inputControl:TrackConnection(box.FocusLost:Connect(function()
-                    inputControl.Value = box.Text
-                    pcall(iCallback, box.Text)
+                    if inputControl.Disabled then
+                        return
+                    end
+                    applyInputValue(box.Text, true, true)
                 end), "InputBoxFocusLost")
                 controlBase.bindAdaptiveLabel(inputControl, label, {
                     BaseTextSize = 12,
                     MinTextSize = 10,
                     WidthPadding = 2,
                 })
+
+                if iConfigKey then
+                    Library:RegisterConfig(iConfigKey, "input",
+                        function()
+                            return inputControl.Value
+                        end,
+                        function(value)
+                            applyInputValue(value, false, false)
+                        end,
+                        { Aliases = iConfigAliases }
+                    )
+                end
 
                 return inputControl
             end
@@ -4109,6 +4210,7 @@ function Library:CreateWindow(opts)
                 local cpDefault = cpOpts.Default or Color3.fromRGB(255, 255, 255)
                 local cpCallback = cpOpts.Callback or function() end
                 local cpSaveKey = cpOpts.SaveKey
+                local cpConfigKey, cpConfigAliases = resolveSectionConfigKey(cpSaveKey, cpName)
 
                 local cpicker = { Value = cpDefault }
 
@@ -4302,6 +4404,7 @@ function Library:CreateWindow(opts)
                         setColorValue(cpicker.Value, false)
                     end,
                     root = row,
+                    saveKey = cpConfigKey,
                     searchName = cpName,
                     setValue = function(value)
                         setColorValue(value, true)
@@ -4392,15 +4495,16 @@ function Library:CreateWindow(opts)
                 end), "ColorPickerHueInput")
 
                 -- Config save/load
-                if cpSaveKey then
-                    Library:RegisterConfig(cpSaveKey, "colorpicker",
+                if cpConfigKey then
+                    Library:RegisterConfig(cpConfigKey, "colorpicker",
                         function()
                             local c = cpicker.Value
                             return { R = math.floor(c.R * 255), G = math.floor(c.G * 255), B = math.floor(c.B * 255) }
                         end,
                         function(v)
                             setColorValue(v, false)
-                        end
+                        end,
+                        { Aliases = cpConfigAliases }
                     )
                 end
                 controlBase.bindAdaptiveLabel(cpicker, label, {
