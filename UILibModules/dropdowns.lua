@@ -161,6 +161,83 @@ return function(Library, context)
         return allowFallback and options[1] or nil
     end
 
+    local function normalizeDropdownOptions(rawOptions, fallbackOptions)
+        local out = {}
+        local seen = {}
+
+        local function pushOption(value)
+            if value == nil then
+                return
+            end
+
+            local normalized = value
+            if type(normalized) == "string" then
+                normalized = normalized:gsub("^%s+", ""):gsub("%s+$", "")
+                if normalized == "" then
+                    return
+                end
+            end
+
+            local key = type(normalized) .. ":" .. tostring(normalized)
+            if seen[key] then
+                return
+            end
+
+            seen[key] = true
+            table.insert(out, normalized)
+        end
+
+        local function collectFromTable(values)
+            local numericKeys = {}
+            for key in pairs(values) do
+                if type(key) == "number" and key % 1 == 0 then
+                    table.insert(numericKeys, key)
+                end
+            end
+
+            if #numericKeys > 0 then
+                table.sort(numericKeys)
+                for _, key in ipairs(numericKeys) do
+                    pushOption(values[key])
+                end
+            end
+
+            if #out == 0 then
+                for key, value in pairs(values) do
+                    if not (type(key) == "number" and key % 1 == 0) then
+                        if type(value) == "boolean" then
+                            if value then
+                                pushOption(key)
+                            end
+                        else
+                            pushOption(value)
+                        end
+                    end
+                end
+            end
+        end
+
+        if type(rawOptions) == "table" then
+            collectFromTable(rawOptions)
+        else
+            pushOption(rawOptions)
+        end
+
+        if #out == 0 then
+            if type(fallbackOptions) == "table" then
+                collectFromTable(fallbackOptions)
+            else
+                pushOption(fallbackOptions)
+            end
+        end
+
+        if #out == 0 then
+            out = { "No Presets" }
+        end
+
+        return out
+    end
+
     local function buildSelectedSet(options, rawValue)
         local selected = {}
         if type(rawValue) ~= "table" then
@@ -346,8 +423,11 @@ return function(Library, context)
     local function addToggleDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
         local dName = dropOpts.Name or dropOpts.Title or "Dropdown"
-        local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
+        local dOptions = normalizeDropdownOptions(dropOpts.Options or dropOpts.Items, { "Option 1", "Option 2" })
         local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
+        if dDefault == nil then
+            dDefault = dOptions[1]
+        end
         local dCallback = dropOpts.Callback or function() end
         local dConfigScope = base.configScope or base.secName
         local dSaveKey, dSaveAliases = getDropdownConfigKey(dropOpts.SaveKey, dConfigScope, dName, base.menuName)
@@ -598,8 +678,11 @@ return function(Library, context)
     local function addStandaloneDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
         local dName = dropOpts.Name or dropOpts.Title or "Dropdown"
-        local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
+        local dOptions = normalizeDropdownOptions(dropOpts.Options or dropOpts.Items, { "Option 1", "Option 2" })
         local dDefault = resolveDropdownValue(dOptions, dropOpts.Default, true)
+        if dDefault == nil then
+            dDefault = dOptions[1]
+        end
         local dCallback = dropOpts.Callback or function() end
         local dConfigScope = base.configScope or base.secName
         local dSaveKey, dSaveAliases = getDropdownConfigKey(dropOpts.SaveKey, dConfigScope, dName, base.menuName)
@@ -714,9 +797,7 @@ return function(Library, context)
             end
             optionButtons = {}
 
-            if type(dOptions) ~= "table" or #dOptions == 0 then
-                dOptions = { "No Presets" }
-            end
+            dOptions = normalizeDropdownOptions(dOptions, { "No Presets" })
 
             dropPanelContent.setOptionCount(#dOptions)
             fullHeight = dropPanelContent.openHeight
@@ -862,13 +943,7 @@ return function(Library, context)
         end
         dropdown.SetText = dropdown.SetSelection
         dropdown.SetOptions = function(options, selectedValue)
-            local nextOptions = {}
-            if type(options) == "table" then
-                for _, option in ipairs(options) do
-                    table.insert(nextOptions, option)
-                end
-            end
-            dOptions = nextOptions
+            dOptions = normalizeDropdownOptions(options, dOptions)
             applyDropdownValue(selectedValue ~= nil and selectedValue or dropdown.Value)
             rebuildOptions()
             return dropdown
@@ -884,7 +959,7 @@ return function(Library, context)
     local function addMultiDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
         local dName = dropOpts.Name or dropOpts.Title or "Multi Select"
-        local dOptions = dropOpts.Options or dropOpts.Items or {"Option 1", "Option 2"}
+        local dOptions = normalizeDropdownOptions(dropOpts.Options or dropOpts.Items, { "Option 1", "Option 2" })
         local dDefaults = dropOpts.Default or {}
         local dCallback = dropOpts.Callback or function() end
         local dConfigScope = base.configScope or base.secName
@@ -1228,8 +1303,11 @@ return function(Library, context)
     local function addDropdownToggle(base, opts)
         opts = opts or {}
         local dName = opts.Name or opts.Title or "Dropdown"
-        local dOptions = opts.Options or opts.Items or {"Option 1", "Option 2"}
+        local dOptions = normalizeDropdownOptions(opts.Options or opts.Items, { "Option 1", "Option 2" })
         local dDefault = resolveDropdownValue(dOptions, opts.Default, true)
+        if dDefault == nil then
+            dDefault = dOptions[1]
+        end
         local dEnabled = opts.Enabled
         if dEnabled == nil then
             if opts.DefaultToggle ~= nil then
