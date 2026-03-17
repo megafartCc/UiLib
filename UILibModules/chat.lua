@@ -197,6 +197,29 @@ return function(Library, context)
                     })
                 end
 
+                local function fetchConnectionStats(options)
+                    if type(panelSdk.connectionStats) ~= "function" then
+                        return false, { error = "connection_stats_unavailable" }
+                    end
+
+                    options = type(options) == "table" and options or {}
+                    return panelSdk.connectionStats(panelUrl, panelSlug, panelKey, {
+                        jobid = tostring(options.jobid or game.JobId or ""),
+                        includeSelf = options.includeSelf ~= false and options.include_self ~= false,
+                    })
+                end
+
+                local function fetchSharedServers(options)
+                    if type(panelSdk.sharedServers) ~= "function" then
+                        return false, { error = "shared_servers_unavailable" }
+                    end
+
+                    options = type(options) == "table" and options or {}
+                    return panelSdk.sharedServers(panelUrl, panelSlug, panelKey, {
+                        includeSelf = options.includeSelf == true or options.include_self == true,
+                    })
+                end
+
                 return {
                     Send = function(text, room)
                         return panelSdk.chatSend(panelUrl, panelSlug, panelKey, text, {
@@ -212,6 +235,12 @@ return function(Library, context)
                     end,
                     SharedUsers = function(options)
                         return fetchSharedUsers(options)
+                    end,
+                    Connections = function(options)
+                        return fetchConnectionStats(options)
+                    end,
+                    Servers = function(options)
+                        return fetchSharedServers(options)
                     end,
                     Profile = function(userName, userId)
                         local okPeers, peersResponse = fetchSharedUsers({
@@ -482,6 +511,7 @@ return function(Library, context)
 
         local lastPresenceCount = 0
         local lastSharedUsers = {}
+        local lastServerUsers = {}
         local function setPresenceVisual(rawCount)
             local count = math.max(0, tonumber(rawCount) or 0)
             lastPresenceCount = count
@@ -539,6 +569,68 @@ return function(Library, context)
             return count
         end
 
+        local function extractConnectionCount(payload)
+            if type(payload) ~= "table" then
+                return nil
+            end
+            local raw = payload.total_active or payload.totalActive or payload.count
+            local value = tonumber(raw)
+            if value and value >= 0 then
+                return math.floor(value + 0.5)
+            end
+            return nil
+        end
+
+        local function extractServerUsers(payload)
+            if type(payload) ~= "table" then
+                return {}
+            end
+
+            local servers = payload.servers
+            if type(servers) ~= "table" then
+                return {}
+            end
+
+            local out = {}
+            local seen = {}
+            local localUserId = tostring(Client and Client.UserId or "")
+            for _, server in ipairs(servers) do
+                if type(server) == "table" then
+                    local serverUsers = server.users
+                    local jobId = tostring(server.jobid or server.server_jobid or "")
+                    local placeId = tostring(server.placeid or server.placeId or "")
+                    local joinUrl = tostring(server.join_url or "")
+                    local count = tonumber(server.count) or (type(serverUsers) == "table" and #serverUsers or 0)
+                    local serverTag = jobId ~= "" and string.sub(jobId, 1, 8) or "unknown"
+                    local serverLabel = string.format("Server %s - %d online", serverTag, math.max(0, count))
+
+                    if type(serverUsers) == "table" then
+                        for _, serverUser in ipairs(serverUsers) do
+                            if type(serverUser) == "table" then
+                                local entryUserId = tostring(serverUser.userid or serverUser.userId or "")
+                                local dedupeKey = entryUserId ~= "" and ("id:" .. entryUserId)
+                                    or ("name:" .. string.lower(tostring(serverUser.user or serverUser.username or serverUser.name or "")))
+
+                                if dedupeKey ~= "" and not seen[dedupeKey] and entryUserId ~= localUserId then
+                                    seen[dedupeKey] = true
+                                    table.insert(out, {
+                                        user = serverUser.user or serverUser.username or serverUser.name or "unknown",
+                                        userid = entryUserId,
+                                        jobid = jobId,
+                                        placeid = placeId,
+                                        join_url = joinUrl,
+                                        game = serverLabel,
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            return out
+        end
+
         local refreshServerListPanel = function()
         end
 
@@ -549,34 +641,85 @@ return function(Library, context)
 
             local provider = chatProvider
             local sharedFn = type(provider) == "table" and (provider.SharedUsers or provider.sharedUsers or provider.Peers or provider.peers) or nil
-            if type(sharedFn) ~= "function" then
+            local connectionsFn = type(provider) == "table" and (provider.Connections or provider.connectionStats) or nil
+            local serversFn = type(provider) == "table" and (provider.Servers or provider.sharedServers) or nil
+            if type(sharedFn) ~= "function" and type(connectionsFn) ~= "function" and type(serversFn) ~= "function" then
                 setPresenceVisual(0)
+                lastSharedUsers = {}
+                lastServerUsers = {}
+                refreshServerListPanel()
                 return
             end
 
             presenceBusy = true
             task.spawn(function()
-                local okCall, okResult, response = callProviderFunction(provider, sharedFn, {
-                    jobid = game.JobId or "",
-                    includeSelf = false,
-                })
-                presenceBusy = false
+                local gotPresence = false
+                local gotServerUsers = false
 
-                if not okCall or okResult == false then
+                if type(connectionsFn) == "function" then
+                    local okConnCall, okConnResult, connResponse = callProviderFunction(provider, connectionsFn, {
+                        jobid = game.JobId or "",
+                        includeSelf = true,
+                    })
+                    if okConnCall and okConnResult ~= false then
+                        local connPayload = connResponse
+                        if type(connPayload) ~= "table" and type(okConnResult) == "table" then
+                            connPayload = okConnResult
+                        end
+                        local totalCount = extractConnectionCount(connPayload)
+                        if totalCount ~= nil then
+                            setPresenceVisual(totalCount)
+                            gotPresence = true
+                        end
+                    end
+                end
+
+                if type(serversFn) == "function" then
+                    local okServerCall, okServerResult, serverResponse = callProviderFunction(provider, serversFn, {
+                        includeSelf = false,
+                    })
+                    if okServerCall and okServerResult ~= false then
+                        local serverPayload = serverResponse
+                        if type(serverPayload) ~= "table" and type(okServerResult) == "table" then
+                            serverPayload = okServerResult
+                        end
+                        lastServerUsers = extractServerUsers(serverPayload)
+                        if #lastServerUsers > 0 then
+                            gotServerUsers = true
+                        end
+                    end
+                end
+
+                if type(sharedFn) == "function" and (not gotPresence or not gotServerUsers) then
+                    local okCall, okResult, response = callProviderFunction(provider, sharedFn, {
+                        jobid = game.JobId or "",
+                        includeSelf = false,
+                    })
+                    if okCall and okResult ~= false then
+                        local payload = response
+                        if type(payload) ~= "table" and type(okResult) == "table" then
+                            payload = okResult
+                        end
+
+                        lastSharedUsers = extractSharedUsers(payload)
+                        if not gotPresence then
+                            setPresenceVisual(countSharedUsersFromPayload(payload))
+                            gotPresence = true
+                        end
+                        if not gotServerUsers then
+                            lastServerUsers = {}
+                        end
+                    end
+                end
+
+                if not gotPresence then
                     setPresenceVisual(0)
-                    lastSharedUsers = {}
-                    refreshServerListPanel()
-                    return
                 end
-
-                local payload = response
-                if type(payload) ~= "table" and type(okResult) == "table" then
-                    payload = okResult
+                if not gotServerUsers and #lastSharedUsers == 0 then
+                    lastServerUsers = {}
                 end
-
-                lastSharedUsers = extractSharedUsers(payload)
-                setPresenceVisual(countSharedUsersFromPayload(payload))
                 refreshServerListPanel()
+                presenceBusy = false
             end)
         end
 
@@ -797,7 +940,8 @@ return function(Library, context)
 
         refreshServerListPanel = function()
             clearServerListRows()
-            table.sort(lastSharedUsers, function(a, b)
+            local listForRows = (#lastServerUsers > 0) and lastServerUsers or lastSharedUsers
+            table.sort(listForRows, function(a, b)
                 local nameA = string.lower(tostring(a.user or a.username or a.name or ""))
                 local nameB = string.lower(tostring(b.user or b.username or b.name or ""))
                 return nameA < nameB
@@ -806,7 +950,7 @@ return function(Library, context)
             local count = 0
             local localId = tostring(Client and Client.UserId or "")
             local localName = string.lower(tostring(Client and Client.Name or ""))
-            for _, entry in ipairs(lastSharedUsers) do
+            for _, entry in ipairs(listForRows) do
                 local entryId = tostring(entry.userid or entry.userId or entry.user_id or "")
                 local entryName = string.lower(tostring(entry.user or entry.username or entry.name or ""))
                 if entryId ~= localId and entryName ~= localName then
@@ -1285,6 +1429,7 @@ return function(Library, context)
             chatRows = {}
             userMetaByName = {}
             lastSharedUsers = {}
+            lastServerUsers = {}
             activeProfileData = nil
             setProfileOpen(false)
             setServerListOpen(false)
