@@ -499,7 +499,7 @@ return function(Library, context)
         presenceCountLabel.Name = "ChatPresenceCount"
         presenceCountLabel.AnchorPoint = Vector2.new(0, 0.5)
         presenceCountLabel.Position = UDim2.new(0.5, 16, 0.5, 0)
-        presenceCountLabel.Size = UDim2.fromOffset(18, 12)
+        presenceCountLabel.Size = UDim2.fromOffset(30, 12)
         presenceCountLabel.BackgroundTransparency = 1
         presenceCountLabel.BorderSizePixel = 0
         presenceCountLabel.Font = config.FontMedium
