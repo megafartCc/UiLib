@@ -2836,8 +2836,6 @@ function Library:CreateWindow(opts)
         keyUi.Root.Visible = locked
     end
 
-    local ensureSettingsMenu
-
     keyUi.RunGetKeyAction = function()
         local handled = false
 
@@ -2878,7 +2876,7 @@ function Library:CreateWindow(opts)
             Library:LoadTheme()
         end)
 
-        ensureSettingsMenu()
+        win:_ensureSettingsMenu()
 
         if configName then
             pcall(function()
@@ -5834,17 +5832,16 @@ function Library:CreateWindow(opts)
         return menu
     end
 
-    local settingsMenu
-    ensureSettingsMenu = function()
-        if settingsMenu then
-            return settingsMenu
+    function win:_ensureSettingsMenu()
+        if self._settingsMenu then
+            return self._settingsMenu
         end
 
-        settingsMenu = win:AddMenu({
+        local settingsMenu = self:AddMenu({
             Name = "SETTINGS",
             Columns = 2,
         })
-        win._settingsMenu = settingsMenu
+        self._settingsMenu = settingsMenu
 
         local uiFunctionSection = settingsMenu:AddSection({
             Name = "UI FUNCTION SETTINGS",
@@ -6162,7 +6159,7 @@ function Library:CreateWindow(opts)
     end
 
     win._openSettingsRoute = function()
-        local settingsMenuRef = ensureSettingsMenu()
+        local settingsMenuRef = win:_ensureSettingsMenu()
         if win.ActiveMenu and win.ActiveMenu ~= settingsMenuRef then
             win.ActiveMenu._select(false)
         end
