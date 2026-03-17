@@ -693,29 +693,7 @@ return function(Library, context)
             return fallback
         end
 
-        local function debugSerialize(value)
-            local valueType = type(value)
-            if valueType == "table" then
-                local okEncode, encoded = pcall(function()
-                    return HttpService:JSONEncode(value)
-                end)
-                if okEncode and type(encoded) == "string" then
-                    return encoded
-                end
-                return "<table>"
-            end
-            if valueType == "nil" then
-                return "nil"
-            end
-            return tostring(value)
-        end
-
-        local chatDebugEnabled = chatOpts.Debug ~= false
-        local function debugWarn(stage, a, b, c)
-            if not chatDebugEnabled then
-                return
-            end
-            warn("[UiLibChatDebug] " .. tostring(stage) .. " | a=" .. debugSerialize(a) .. " | b=" .. debugSerialize(b) .. " | c=" .. debugSerialize(c))
+        local function debugWarn()
         end
 
         ensureProviderHeartbeat = function()
