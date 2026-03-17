@@ -1580,7 +1580,7 @@ function Library:CreateWindow(opts)
                 end
             end
             if type(envTable) ~= "table" then
-                envTable = _G
+                envTable = nil
             end
 
             local panelSdk = chatOpts.PanelSDK or chatOpts.SDK or (type(envTable) == "table" and (envTable.PanelSDK or envTable.panelSdk))
