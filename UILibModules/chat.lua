@@ -457,8 +457,7 @@ return function(Library, context)
                     end,
                     Profile = function(userName, userId)
                         local okPeers, peersResponse = fetchSharedUsers({
-                            jobid = game.JobId or "",
-                            includeSelf = false,
+                            includeSelf = true,
                         })
                         if not okPeers or type(peersResponse) ~= "table" then
                             return false, peersResponse
@@ -479,7 +478,9 @@ return function(Library, context)
                                         userid = entryId ~= "" and entryId or userId,
                                         placeid = tonumber(entry.placeid or entry.placeId or game.PlaceId) or game.PlaceId,
                                         jobid = tostring(entry.jobid or entry.gameId or game.JobId or ""),
-                                        game = entry.game or entry.placeName or "This server",
+                                        game = entry.game or entry.script_name or entry.script_slug or entry.placeName or "unknown",
+                                        script_name = entry.script_name or entry.scriptName or "",
+                                        script_slug = entry.script_slug or entry.scriptSlug or "",
                                     }
                                 end
                             end
@@ -962,8 +963,12 @@ return function(Library, context)
                     local placeId = tostring(server.placeid or server.placeId or "")
                     local joinUrl = tostring(server.join_url or "")
                     local count = tonumber(server.count) or (type(serverUsers) == "table" and #serverUsers or 0)
-                    local serverTag = jobId ~= "" and string.sub(jobId, 1, 8) or "unknown"
-                    local serverLabel = string.format("Server %s - %d online", serverTag, math.max(0, count))
+                    local scriptSlug = tostring(server.script_slug or server.scriptSlug or "")
+                    local scriptName = tostring(server.script_name or server.scriptName or "")
+                    local serverGame = tostring(server.game or scriptName or scriptSlug or server.placeName or "")
+                    if serverGame == "" and placeId ~= "" then
+                        serverGame = "Place " .. placeId
+                    end
 
                     if type(serverUsers) == "table" then
                         for _, serverUser in ipairs(serverUsers) do
@@ -980,7 +985,10 @@ return function(Library, context)
                                         jobid = jobId,
                                         placeid = placeId,
                                         join_url = joinUrl,
-                                        game = serverLabel,
+                                        count = math.max(0, tonumber(count) or 0),
+                                        script_slug = scriptSlug,
+                                        script_name = scriptName,
+                                        game = serverGame,
                                     })
                                 end
                             end
@@ -1204,7 +1212,7 @@ return function(Library, context)
             local row = Instance.new("Frame", serverListInner)
             row.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
             row.BorderSizePixel = 0
-            row.Size = UDim2.new(1, 0, 0, 28)
+            row.Size = UDim2.new(1, 0, 0, 40)
             row.LayoutOrder = order
             row.ZIndex = 15
             bindTheme(row, "BackgroundColor3", "Control")
@@ -1212,9 +1220,14 @@ return function(Library, context)
             Instance.new("UICorner", row).CornerRadius = UDim.new(0, 3)
 
             local name = tostring(entry.user or entry.username or entry.name or "unknown")
-            local placeText = tostring(entry.game or entry.placeName or ("Place " .. tostring(entry.placeid or entry.placeId or "?")))
             local jobId = tostring(entry.jobid or entry.gameId or "")
             local placeId = tonumber(entry.placeid or entry.placeId or 0) or 0
+            local gameText = tostring(entry.game or entry.script_name or entry.script_slug or entry.placeName or "")
+            if gameText == "" then
+                gameText = "Place " .. tostring(entry.placeid or entry.placeId or "?")
+            end
+            local lineGameText = "Game: " .. gameText
+            local lineJobText = "JobId: " .. (jobId ~= "" and jobId or "unknown")
             local joinUrl = tostring(entry.join_url or entry.joinUrl or "")
             if joinUrl ~= "" then
                 local parsedPlaceId, parsedJobId = string.match(joinUrl, "placeID=(%d+)&gameInstanceId=([%w%-_]+)")
@@ -1237,26 +1250,41 @@ return function(Library, context)
             local nameLabel = Instance.new("TextLabel", row)
             nameLabel.BackgroundTransparency = 1
             nameLabel.Position = UDim2.new(0, 6, 0, 2)
-            nameLabel.Size = UDim2.new(0.48, 0, 0, 11)
+            nameLabel.Size = UDim2.new(1, -62, 0, 12)
             nameLabel.Font = config.FontMedium
             nameLabel.Text = name
             nameLabel.TextColor3 = colors.Main
             nameLabel.TextSize = 10
             nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
             nameLabel.ZIndex = 16
             bindTheme(nameLabel, "TextColor3", "Main")
 
             local placeLabel = Instance.new("TextLabel", row)
             placeLabel.BackgroundTransparency = 1
-            placeLabel.Position = UDim2.new(0, 6, 0, 13)
-            placeLabel.Size = UDim2.new(0.52, 0, 0, 11)
+            placeLabel.Position = UDim2.new(0, 6, 0, 14)
+            placeLabel.Size = UDim2.new(1, -62, 0, 10)
             placeLabel.Font = config.FontMedium
-            placeLabel.Text = placeText
+            placeLabel.Text = lineGameText
             placeLabel.TextColor3 = colors.TextDim
             placeLabel.TextSize = 9
             placeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            placeLabel.TextTruncate = Enum.TextTruncate.AtEnd
             placeLabel.ZIndex = 16
             bindTheme(placeLabel, "TextColor3", "TextDim")
+
+            local jobLabel = Instance.new("TextLabel", row)
+            jobLabel.BackgroundTransparency = 1
+            jobLabel.Position = UDim2.new(0, 6, 0, 25)
+            jobLabel.Size = UDim2.new(1, -62, 0, 10)
+            jobLabel.Font = config.FontMedium
+            jobLabel.Text = lineJobText
+            jobLabel.TextColor3 = colors.TextDim
+            jobLabel.TextSize = 9
+            jobLabel.TextXAlignment = Enum.TextXAlignment.Left
+            jobLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            jobLabel.ZIndex = 16
+            bindTheme(jobLabel, "TextColor3", "TextDim")
 
             local joinBtn = Instance.new("TextButton", row)
             joinBtn.AnchorPoint = Vector2.new(1, 0.5)
@@ -1333,6 +1361,18 @@ return function(Library, context)
             for _, entry in ipairs(listForRows) do
                 local entryId = tostring(entry.userid or entry.userId or entry.user_id or "")
                 local entryName = string.lower(tostring(entry.user or entry.username or entry.name or ""))
+                if entryName ~= "" then
+                    local existingMeta = userMetaByName[entryName]
+                    userMetaByName[entryName] = {
+                        user = entry.user or entry.username or entry.name or (existingMeta and existingMeta.user) or "unknown",
+                        userid = entryId ~= "" and entryId or ((existingMeta and existingMeta.userid) or ""),
+                        game = entry.game or entry.placeName or (existingMeta and existingMeta.game) or "",
+                        script_name = entry.script_name or entry.scriptName or (existingMeta and existingMeta.script_name) or "",
+                        script_slug = entry.script_slug or entry.scriptSlug or (existingMeta and existingMeta.script_slug) or "",
+                        placeid = entry.placeid or entry.placeId or (existingMeta and existingMeta.placeid) or 0,
+                        jobid = entry.jobid or entry.gameId or (existingMeta and existingMeta.jobid) or "",
+                    }
+                end
                 if entryId ~= localId and entryName ~= localName then
                     count += 1
                     makeServerRow(entry, count)
@@ -1603,15 +1643,43 @@ return function(Library, context)
             end)
         end)
 
+        local function firstNonEmptyText(...)
+            for i = 1, select("#", ...) do
+                local raw = select(i, ...)
+                if raw ~= nil then
+                    local text = tostring(raw)
+                    text = text:gsub("^%s+", ""):gsub("%s+$", "")
+                    if text ~= "" then
+                        return text
+                    end
+                end
+            end
+            return nil
+        end
+
         local function applyProfileData(profileData)
             local name = tostring(profileData.user or profileData.name or "unknown")
             local userIdText = tostring(profileData.userid or "")
             local statusText = tostring(profileData.status or "unknown")
-            local gameText = tostring(profileData.game or profileData.lastLocation or "unknown")
+            local gameText = firstNonEmptyText(
+                profileData.game,
+                profileData.script_name,
+                profileData.script_slug,
+                profileData.lastLocation
+            )
+            if not gameText then
+                local fallbackPlaceId = tonumber(profileData.placeid or profileData.placeId or 0) or 0
+                gameText = fallbackPlaceId > 0 and ("Place " .. tostring(fallbackPlaceId)) or "unknown"
+            end
+            local jobText = firstNonEmptyText(profileData.jobid, profileData.gameId)
 
             profileName.Text = userIdText ~= "" and string.format("%s (%s)", name, userIdText) or name
             profileStatus.Text = "Status: " .. statusText
-            profileGame.Text = "Game: " .. gameText
+            if jobText then
+                profileGame.Text = "Game: " .. gameText .. " | JobId: " .. jobText
+            else
+                profileGame.Text = "Game: " .. gameText
+            end
             activeProfileData = profileData
             updateProfileJoinVisual()
         end
@@ -1625,6 +1693,22 @@ return function(Library, context)
                 placeid = 0,
                 jobid = "",
             }
+
+            local cachedKey = string.lower(tostring(userName or ""))
+            local cachedMeta = cachedKey ~= "" and userMetaByName[cachedKey] or nil
+            if type(cachedMeta) == "table" then
+                local cachedId = tostring(cachedMeta.userid or "")
+                local cachedGame = firstNonEmptyText(cachedMeta.game, cachedMeta.script_name, cachedMeta.script_slug)
+                local cachedJobId = tostring(cachedMeta.jobid or cachedMeta.gameId or "")
+                resolved.userid = resolved.userid ~= "" and resolved.userid or cachedId
+                if cachedGame then
+                    resolved.game = cachedGame
+                end
+                resolved.placeid = tonumber(cachedMeta.placeid or cachedMeta.placeId or resolved.placeid) or resolved.placeid
+                if cachedJobId ~= "" then
+                    resolved.jobid = cachedJobId
+                end
+            end
 
             local livePlayer = Players:FindFirstChild(resolved.user)
             if livePlayer then
@@ -1648,9 +1732,9 @@ return function(Library, context)
                 local okCall, okResult, response = callProviderFunction(provider, profileFn, resolved.user, resolved.userid)
                 if okCall and okResult ~= false and type(response) == "table" then
                     resolved.status = tostring(response.status or (response.online and "online" or "unknown"))
-                    resolved.game = tostring(response.game or response.placeName or resolved.game)
+                    resolved.game = firstNonEmptyText(response.game, response.script_name, response.script_slug, response.placeName, resolved.game) or resolved.game
                     resolved.placeid = tonumber(response.placeid or response.placeId or resolved.placeid) or resolved.placeid
-                    resolved.jobid = tostring(response.jobid or response.gameId or resolved.jobid or "")
+                    resolved.jobid = firstNonEmptyText(response.jobid, response.gameId, resolved.jobid) or resolved.jobid
                 end
             end
 
@@ -1665,9 +1749,12 @@ return function(Library, context)
                     resolved.status = "offline"
                 end
 
-                resolved.game = tostring(presence.lastLocation or resolved.game)
+                local presenceGame = firstNonEmptyText(presence.lastLocation)
+                if presenceGame then
+                    resolved.game = presenceGame
+                end
                 resolved.placeid = tonumber(presence.placeId or presence.rootPlaceId or resolved.placeid) or resolved.placeid
-                resolved.jobid = tostring(presence.gameId or resolved.jobid or "")
+                resolved.jobid = firstNonEmptyText(presence.gameId, resolved.jobid) or resolved.jobid
             end
 
             return resolved
@@ -1846,9 +1933,15 @@ return function(Library, context)
 
                     local nameKey = string.lower(tostring(userName or ""))
                     if nameKey ~= "" then
+                        local existingMeta = userMetaByName[nameKey]
                         userMetaByName[nameKey] = {
-                            user = userName,
-                            userid = tostring(userId or ""),
+                            user = userName or (existingMeta and existingMeta.user) or "unknown",
+                            userid = tostring(userId or (existingMeta and existingMeta.userid) or ""),
+                            game = entry.game or entry.placeName or (existingMeta and existingMeta.game) or "",
+                            script_name = entry.script_name or entry.scriptName or (existingMeta and existingMeta.script_name) or "",
+                            script_slug = entry.script_slug or entry.scriptSlug or (existingMeta and existingMeta.script_slug) or "",
+                            placeid = entry.placeid or entry.placeId or (existingMeta and existingMeta.placeid) or 0,
+                            jobid = entry.jobid or entry.gameId or (existingMeta and existingMeta.jobid) or "",
                         }
                     end
 
