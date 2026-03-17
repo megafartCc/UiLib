@@ -481,6 +481,7 @@ return function(Library, context)
         presenceCountLabel.ZIndex = 5
 
         local lastPresenceCount = 0
+        local lastSharedUsers = {}
         local function setPresenceVisual(rawCount)
             local count = math.max(0, tonumber(rawCount) or 0)
             lastPresenceCount = count
@@ -495,29 +496,39 @@ return function(Library, context)
         end
         setPresenceVisual(0)
 
-        local function countSharedUsersFromPayload(payload)
+        local function extractSharedUsers(payload)
             if type(payload) ~= "table" then
-                return 0
+                return {}
             end
 
             local list = payload.users or payload.peers
             if type(list) ~= "table" then
-                return 0
+                return {}
             end
+
+            local out = {}
+            for _, entry in ipairs(list) do
+                if type(entry) == "table" then
+                    table.insert(out, entry)
+                end
+            end
+            return out
+        end
+
+        local function countSharedUsersFromPayload(payload)
+            local list = extractSharedUsers(payload)
 
             local localUserId = tostring(Client and Client.UserId or "")
             local localName = string.lower(tostring(Client and Client.Name or ""))
             local unique = {}
 
             for _, entry in ipairs(list) do
-                if type(entry) == "table" then
-                    local entryId = tostring(entry.userid or entry.userId or entry.user_id or "")
-                    local entryName = string.lower(tostring(entry.user or entry.username or entry.name or ""))
-                    if entryId ~= "" and entryId ~= localUserId then
-                        unique["id:" .. entryId] = true
-                    elseif entryName ~= "" and entryName ~= localName then
-                        unique["name:" .. entryName] = true
-                    end
+                local entryId = tostring(entry.userid or entry.userId or entry.user_id or "")
+                local entryName = string.lower(tostring(entry.user or entry.username or entry.name or ""))
+                if entryId ~= "" and entryId ~= localUserId then
+                    unique["id:" .. entryId] = true
+                elseif entryName ~= "" and entryName ~= localName then
+                    unique["name:" .. entryName] = true
                 end
             end
 
@@ -526,6 +537,9 @@ return function(Library, context)
                 count += 1
             end
             return count
+        end
+
+        local refreshServerListPanel = function()
         end
 
         local function refreshSharedPresenceAsync()
@@ -550,6 +564,8 @@ return function(Library, context)
 
                 if not okCall or okResult == false then
                     setPresenceVisual(0)
+                    lastSharedUsers = {}
+                    refreshServerListPanel()
                     return
                 end
 
@@ -558,7 +574,9 @@ return function(Library, context)
                     payload = okResult
                 end
 
+                lastSharedUsers = extractSharedUsers(payload)
                 setPresenceVisual(countSharedUsersFromPayload(payload))
+                refreshServerListPanel()
             end)
         end
 
@@ -566,12 +584,260 @@ return function(Library, context)
         local activeProfileToken = 0
         local activeProfileData = nil
         local profileOpen = false
+        local profileLastSource = nil
+
+        local serverListOpen = false
+        local serverListRows = {}
+        local serverListWidth = math.max(190, math.min(chatPanelWidth - 16, 320))
+        local serverListHeight = math.max(120, math.min(220, math.floor(main.AbsoluteSize.Y * 0.45)))
+
+        local serverListBtn = Instance.new("TextButton", chatPanel)
+        serverListBtn.Name = "ServerListButton"
+        serverListBtn.AnchorPoint = Vector2.new(1, 0)
+        serverListBtn.Position = UDim2.new(1, -8, 0, 7)
+        serverListBtn.Size = UDim2.fromOffset(66, 16)
+        serverListBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        serverListBtn.BorderSizePixel = 0
+        serverListBtn.Font = config.FontMedium
+        serverListBtn.Text = "Servers"
+        serverListBtn.TextColor3 = colors.TextDim
+        serverListBtn.TextSize = 10
+        serverListBtn.TextXAlignment = Enum.TextXAlignment.Center
+        serverListBtn.ZIndex = 14
+        serverListBtn.AutoButtonColor = false
+        serverListBtn.Selectable = false
+        bindTheme(serverListBtn, "BackgroundColor3", "Control")
+        bindTheme(serverListBtn, "BackgroundTransparency", "ControlTransparency")
+        bindTheme(serverListBtn, "TextColor3", "TextDim")
+        Instance.new("UICorner", serverListBtn).CornerRadius = UDim.new(0, 3)
+
+        local serverListPanel = Instance.new("Frame", chatPanel)
+        serverListPanel.Name = "ServerListPanel"
+        serverListPanel.AnchorPoint = Vector2.new(1, 0)
+        serverListPanel.Position = UDim2.new(1, -8, 0, 26)
+        serverListPanel.Size = UDim2.fromOffset(serverListWidth, 0)
+        serverListPanel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+        serverListPanel.BorderSizePixel = 0
+        serverListPanel.Visible = false
+        serverListPanel.ClipsDescendants = true
+        serverListPanel.ZIndex = 130
+        bindTheme(serverListPanel, "BackgroundColor3", "Panel")
+        bindTheme(serverListPanel, "BackgroundTransparency", "PanelTransparency")
+        Instance.new("UICorner", serverListPanel).CornerRadius = UDim.new(0, 4)
+        local serverListStroke = Instance.new("UIStroke", serverListPanel)
+        serverListStroke.Color = colors.Line
+        serverListStroke.Transparency = 0.35
+        bindTheme(serverListStroke, "Color", "Line")
+
+        local serverListTitle = Instance.new("TextLabel", serverListPanel)
+        serverListTitle.BackgroundTransparency = 1
+        serverListTitle.Position = UDim2.new(0, 8, 0, 6)
+        serverListTitle.Size = UDim2.new(1, -16, 0, 16)
+        serverListTitle.Font = config.Font
+        serverListTitle.Text = "SERVER LIST"
+        serverListTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        serverListTitle.TextSize = 11
+        serverListTitle.TextXAlignment = Enum.TextXAlignment.Left
+        serverListTitle.ZIndex = 131
+        bindTheme(serverListTitle, "TextColor3", "TextStrong")
+
+        local serverListScroll = Instance.new("ScrollingFrame", serverListPanel)
+        serverListScroll.Name = "ServerListScroll"
+        serverListScroll.Position = UDim2.new(0, 6, 0, 24)
+        serverListScroll.Size = UDim2.new(1, -12, 1, -30)
+        serverListScroll.BackgroundTransparency = 1
+        serverListScroll.BorderSizePixel = 0
+        serverListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        serverListScroll.ScrollBarThickness = 2
+        serverListScroll.ScrollBarImageColor3 = getThemeColor(Library, "Line", colors.Line)
+        serverListScroll.ZIndex = 131
+
+        local serverListInner = Instance.new("Frame", serverListScroll)
+        serverListInner.BackgroundTransparency = 1
+        serverListInner.BorderSizePixel = 0
+        serverListInner.Size = UDim2.new(1, -2, 0, 0)
+        serverListInner.ZIndex = 131
+
+        local serverListLayout = Instance.new("UIListLayout", serverListInner)
+        serverListLayout.Padding = UDim.new(0, 4)
+        serverListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+        local serverListPopupConfig = {
+            ClosedSize = UDim2.fromOffset(serverListWidth, 0),
+            OpenSize = UDim2.fromOffset(serverListWidth, serverListHeight),
+            OpenToken = "Open",
+            CloseToken = "Close",
+            HideDelay = 0.18,
+        }
+
+        local function clearServerListRows()
+            for _, row in ipairs(serverListRows) do
+                if row and row.Parent then
+                    row:Destroy()
+                end
+            end
+            serverListRows = {}
+        end
+
+        local function refreshServerListCanvas()
+            local contentHeight = serverListLayout.AbsoluteContentSize.Y
+            serverListInner.Size = UDim2.new(1, -2, 0, contentHeight)
+            serverListScroll.CanvasSize = UDim2.new(0, 0, 0, math.max(0, contentHeight + 2))
+        end
+
+        local function makeServerRow(entry, order)
+            local row = Instance.new("Frame", serverListInner)
+            row.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            row.BorderSizePixel = 0
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.LayoutOrder = order
+            row.ZIndex = 132
+            bindTheme(row, "BackgroundColor3", "Control")
+            bindTheme(row, "BackgroundTransparency", "ControlTransparency")
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 3)
+
+            local name = tostring(entry.user or entry.username or entry.name or "unknown")
+            local placeText = tostring(entry.game or entry.placeName or ("Place " .. tostring(entry.placeid or entry.placeId or "?")))
+            local jobId = tostring(entry.jobid or entry.gameId or "")
+            local placeId = tonumber(entry.placeid or entry.placeId or 0) or 0
+            local joinable = placeId > 0 and jobId ~= "" and not (placeId == tonumber(game.PlaceId or 0) and jobId == tostring(game.JobId or ""))
+
+            local nameLabel = Instance.new("TextLabel", row)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Position = UDim2.new(0, 6, 0, 2)
+            nameLabel.Size = UDim2.new(0.48, 0, 0, 11)
+            nameLabel.Font = config.FontMedium
+            nameLabel.Text = name
+            nameLabel.TextColor3 = colors.Main
+            nameLabel.TextSize = 10
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.ZIndex = 133
+            bindTheme(nameLabel, "TextColor3", "Main")
+
+            local placeLabel = Instance.new("TextLabel", row)
+            placeLabel.BackgroundTransparency = 1
+            placeLabel.Position = UDim2.new(0, 6, 0, 13)
+            placeLabel.Size = UDim2.new(0.52, 0, 0, 11)
+            placeLabel.Font = config.FontMedium
+            placeLabel.Text = placeText
+            placeLabel.TextColor3 = colors.TextDim
+            placeLabel.TextSize = 9
+            placeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            placeLabel.ZIndex = 133
+            bindTheme(placeLabel, "TextColor3", "TextDim")
+
+            local joinBtn = Instance.new("TextButton", row)
+            joinBtn.AnchorPoint = Vector2.new(1, 0.5)
+            joinBtn.Position = UDim2.new(1, -6, 0.5, 0)
+            joinBtn.Size = UDim2.fromOffset(48, 18)
+            joinBtn.BackgroundColor3 = joinable and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+            joinBtn.BorderSizePixel = 0
+            joinBtn.Font = config.FontMedium
+            joinBtn.Text = joinable and "Join" or "-"
+            joinBtn.TextColor3 = joinable and Color3.fromRGB(255, 255, 255) or colors.TextDim
+            joinBtn.TextSize = 9
+            joinBtn.AutoButtonColor = false
+            joinBtn.Selectable = false
+            joinBtn.Active = joinable
+            joinBtn.ZIndex = 133
+            Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 3)
+
+            joinBtn.Activated:Connect(function()
+                if not joinable then
+                    return
+                end
+                pcall(function()
+                    TeleportService:TeleportToPlaceInstance(placeId, jobId, Client)
+                end)
+            end)
+
+            table.insert(serverListRows, row)
+        end
+
+        local function setServerListOpen(nextOpen)
+            if serverListOpen == nextOpen then
+                return
+            end
+            serverListOpen = nextOpen
+            if serverListOpen then
+                closeTransientPopups(serverListPanel)
+                refreshServerListPanel()
+            end
+            setPopupOpen(serverListPanel, serverListOpen, serverListPopupConfig)
+        end
+
+        registerTransientPopup(serverListPanel, function()
+            setServerListOpen(false)
+        end)
+        if popupManager and type(popupManager.bindOutsideClose) == "function" then
+            popupManager.bindOutsideClose({
+                cleanupKey = nextCleanupKey("ChatServerListOutsideClick"),
+                close = function()
+                    setServerListOpen(false)
+                end,
+                isOpen = function()
+                    return serverListOpen
+                end,
+                targets = function()
+                    return { serverListPanel, serverListBtn }
+                end,
+            })
+        end
+
+        serverListBtn.MouseEnter:Connect(function()
+            Library:Animate(serverListBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
+        end)
+        serverListBtn.MouseLeave:Connect(function()
+            Library:Animate(serverListBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+        end)
+        serverListBtn.Activated:Connect(function()
+            setServerListOpen(not serverListOpen)
+        end)
+
+        refreshServerListPanel = function()
+            clearServerListRows()
+            table.sort(lastSharedUsers, function(a, b)
+                local nameA = string.lower(tostring(a.user or a.username or a.name or ""))
+                local nameB = string.lower(tostring(b.user or b.username or b.name or ""))
+                return nameA < nameB
+            end)
+
+            local count = 0
+            local localId = tostring(Client and Client.UserId or "")
+            local localName = string.lower(tostring(Client and Client.Name or ""))
+            for _, entry in ipairs(lastSharedUsers) do
+                local entryId = tostring(entry.userid or entry.userId or entry.user_id or "")
+                local entryName = string.lower(tostring(entry.user or entry.username or entry.name or ""))
+                if entryId ~= localId and entryName ~= localName then
+                    count += 1
+                    makeServerRow(entry, count)
+                end
+            end
+
+            if count == 0 then
+                local empty = Instance.new("TextLabel", serverListInner)
+                empty.BackgroundTransparency = 1
+                empty.Size = UDim2.new(1, 0, 0, 22)
+                empty.Font = config.FontMedium
+                empty.Text = "No users found"
+                empty.TextColor3 = colors.TextDim
+                empty.TextSize = 10
+                empty.TextXAlignment = Enum.TextXAlignment.Center
+                empty.ZIndex = 132
+                bindTheme(empty, "TextColor3", "TextDim")
+                table.insert(serverListRows, empty)
+            end
+
+            refreshServerListCanvas()
+        end
 
         local profilePanel = Instance.new("Frame", chatPanel)
         profilePanel.Name = "ProfilePanel"
-        profilePanel.AnchorPoint = Vector2.new(0.5, 0.5)
-        profilePanel.Position = UDim2.new(0.5, 0, 0.5, 0)
-        profilePanel.Size = UDim2.fromOffset(math.max(170, chatPanelWidth - 24), 0)
+        local profilePanelWidth = math.max(170, math.min(chatPanelWidth - 24, 310))
+        local profilePanelHeight = 102
+        profilePanel.AnchorPoint = Vector2.new(0.5, 1)
+        profilePanel.Position = UDim2.new(0.5, 0, 1, -8)
+        profilePanel.Size = UDim2.fromOffset(profilePanelWidth, 0)
         profilePanel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
         profilePanel.BorderSizePixel = 0
         profilePanel.Visible = false
@@ -672,8 +938,8 @@ return function(Library, context)
         Instance.new("UICorner", profileCloseBtn).CornerRadius = UDim.new(0, 3)
 
         local profilePopupConfig = {
-            ClosedSize = UDim2.fromOffset(math.max(170, chatPanelWidth - 24), 0),
-            OpenSize = UDim2.fromOffset(math.max(170, chatPanelWidth - 24), 102),
+            ClosedSize = UDim2.fromOffset(profilePanelWidth, 0),
+            OpenSize = UDim2.fromOffset(profilePanelWidth, profilePanelHeight),
             OpenToken = "Open",
             CloseToken = "Close",
             HideDelay = 0.18,
@@ -708,6 +974,25 @@ return function(Library, context)
             end
             profileOpen = nextOpen
             setPopupOpen(profilePanel, profileOpen, profilePopupConfig)
+        end
+
+        local function positionProfilePanelFromSource(sourceGui)
+            local panelSize = chatPanel.AbsoluteSize
+            local panelPos = chatPanel.AbsolutePosition
+            local x = panelSize.X * 0.5
+            local y = panelSize.Y - 8
+
+            if sourceGui and sourceGui.Parent and sourceGui:IsDescendantOf(chatPanel) then
+                local srcPos = sourceGui.AbsolutePosition
+                local srcSize = sourceGui.AbsoluteSize
+                x = (srcPos.X - panelPos.X) + (srcSize.X * 0.5)
+                local desiredBottom = (srcPos.Y - panelPos.Y) - 4
+                y = desiredBottom
+            end
+
+            x = math.clamp(x, profilePanelWidth * 0.5 + 6, panelSize.X - profilePanelWidth * 0.5 - 6)
+            y = math.clamp(y, profilePanelHeight + 6, panelSize.Y - 6)
+            profilePanel.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
         end
 
         registerTransientPopup(profilePanel, function()
@@ -830,7 +1115,7 @@ return function(Library, context)
             return resolved
         end
 
-        local function openUserProfile(userName, userId)
+        local function openUserProfile(userName, userId, sourceGui)
             local normalizedName = string.lower(tostring(userName or ""))
             local cached = userMetaByName[normalizedName]
             local targetUserId = userId or (cached and cached.userid)
@@ -846,6 +1131,8 @@ return function(Library, context)
                 placeid = 0,
                 jobid = "",
             })
+            profileLastSource = sourceGui
+            positionProfilePanelFromSource(profileLastSource)
             setProfileOpen(true)
 
             task.spawn(function()
@@ -918,7 +1205,7 @@ return function(Library, context)
                 Library:Animate(userButton, "Hover", { TextColor3 = colors.Main })
             end)
             userButton.Activated:Connect(function()
-                openUserProfile(userName, userId)
+                openUserProfile(userName, userId, userButton)
             end)
 
             local timeLabel = Instance.new("TextLabel", rowHeader)
@@ -969,8 +1256,12 @@ return function(Library, context)
             chatSeen = {}
             chatRows = {}
             userMetaByName = {}
+            lastSharedUsers = {}
             activeProfileData = nil
             setProfileOpen(false)
+            setServerListOpen(false)
+            setPresenceVisual(0)
+            refreshServerListPanel()
             for _, child in ipairs(chatMessagesInner:GetChildren()) do
                 if child:IsA("Frame") then
                     child:Destroy()
@@ -1122,6 +1413,7 @@ return function(Library, context)
                 refreshSharedPresenceAsync()
             else
                 setProfileOpen(false)
+                setServerListOpen(false)
             end
 
             refreshChatButtonVisual()
@@ -1186,6 +1478,7 @@ return function(Library, context)
                 local scrollColor = getThemeColor(Library, "Line", colors.Line)
                 if typeof(scrollColor) == "Color3" then
                     chatMessagesScroll.ScrollBarImageColor3 = scrollColor
+                    serverListScroll.ScrollBarImageColor3 = scrollColor
                 end
                 refreshChatButtonVisual()
                 setPresenceVisual(lastPresenceCount)
