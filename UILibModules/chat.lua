@@ -185,6 +185,18 @@ return function(Library, context)
                 and type(panelUrl) == "string" and panelUrl ~= ""
                 and type(panelSlug) == "string" and panelSlug ~= ""
                 and type(panelKey) == "string" and panelKey ~= "" then
+                local function fetchSharedUsers(options)
+                    if type(panelSdk.sharedUsers) ~= "function" then
+                        return false, { error = "shared_users_unavailable" }
+                    end
+
+                    options = type(options) == "table" and options or {}
+                    return panelSdk.sharedUsers(panelUrl, panelSlug, panelKey, {
+                        jobid = tostring(options.jobid or game.JobId or ""),
+                        includeSelf = options.includeSelf == true or options.include_self == true,
+                    })
+                end
+
                 return {
                     Send = function(text, room)
                         return panelSdk.chatSend(panelUrl, panelSlug, panelKey, text, {
@@ -198,12 +210,11 @@ return function(Library, context)
                             limit = limit,
                         })
                     end,
+                    SharedUsers = function(options)
+                        return fetchSharedUsers(options)
+                    end,
                     Profile = function(userName, userId)
-                        if type(panelSdk.sharedUsers) ~= "function" then
-                            return false, { error = "shared_users_unavailable" }
-                        end
-
-                        local okPeers, peersResponse = panelSdk.sharedUsers(panelUrl, panelSlug, panelKey, {
+                        local okPeers, peersResponse = fetchSharedUsers({
                             jobid = game.JobId or "",
                             includeSelf = true,
                         })
@@ -300,6 +311,9 @@ return function(Library, context)
         local chatOpen = false
         local chatPollBusy = false
         local chatLoopToken = 0
+        local presenceLoopToken = 0
+        local presenceBusy = false
+        local presenceInterval = math.max(3, tonumber(chatOpts.PresenceInterval or chatOpts.presenceInterval or 8) or 8)
         local chatProvider = nil
         local chatSeen = {}
         local chatRows = {}
@@ -440,6 +454,112 @@ return function(Library, context)
         local function refreshChatButtonVisual()
             local targetColor = chatOpen and colors.Main or colors.TextDim
             Library:Animate(chatBtn, "Hover", { ImageColor3 = targetColor })
+        end
+
+        local presenceDot = Instance.new("Frame", bottom)
+        presenceDot.Name = "ChatPresenceDot"
+        presenceDot.AnchorPoint = Vector2.new(0.5, 0.5)
+        presenceDot.Position = UDim2.new(0.5, 11, 0.5, -4)
+        presenceDot.Size = UDim2.fromOffset(6, 6)
+        presenceDot.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        presenceDot.BorderSizePixel = 0
+        presenceDot.ZIndex = 5
+        Instance.new("UICorner", presenceDot).CornerRadius = UDim.new(1, 0)
+
+        local presenceCountLabel = Instance.new("TextLabel", bottom)
+        presenceCountLabel.Name = "ChatPresenceCount"
+        presenceCountLabel.AnchorPoint = Vector2.new(0, 0.5)
+        presenceCountLabel.Position = UDim2.new(0.5, 16, 0.5, 0)
+        presenceCountLabel.Size = UDim2.fromOffset(18, 12)
+        presenceCountLabel.BackgroundTransparency = 1
+        presenceCountLabel.BorderSizePixel = 0
+        presenceCountLabel.Font = config.FontMedium
+        presenceCountLabel.Text = "0"
+        presenceCountLabel.TextSize = 9
+        presenceCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+        presenceCountLabel.TextColor3 = colors.TextDim
+        presenceCountLabel.ZIndex = 5
+
+        local lastPresenceCount = 0
+        local function setPresenceVisual(rawCount)
+            local count = math.max(0, tonumber(rawCount) or 0)
+            lastPresenceCount = count
+            presenceCountLabel.Text = tostring(count)
+            if count > 0 then
+                presenceDot.BackgroundColor3 = Color3.fromRGB(67, 217, 126)
+                presenceCountLabel.TextColor3 = colors.Text
+            else
+                presenceDot.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+                presenceCountLabel.TextColor3 = colors.TextDim
+            end
+        end
+        setPresenceVisual(0)
+
+        local function countSharedUsersFromPayload(payload)
+            if type(payload) ~= "table" then
+                return 0
+            end
+
+            local list = payload.users or payload.peers
+            if type(list) ~= "table" then
+                return 0
+            end
+
+            local localUserId = tostring(Client and Client.UserId or "")
+            local localName = string.lower(tostring(Client and Client.Name or ""))
+            local unique = {}
+
+            for _, entry in ipairs(list) do
+                if type(entry) == "table" then
+                    local entryId = tostring(entry.userid or entry.userId or entry.user_id or "")
+                    local entryName = string.lower(tostring(entry.user or entry.username or entry.name or ""))
+                    if entryId ~= "" and entryId ~= localUserId then
+                        unique["id:" .. entryId] = true
+                    elseif entryName ~= "" and entryName ~= localName then
+                        unique["name:" .. entryName] = true
+                    end
+                end
+            end
+
+            local count = 0
+            for _ in pairs(unique) do
+                count += 1
+            end
+            return count
+        end
+
+        local function refreshSharedPresenceAsync()
+            if presenceBusy or not canUseUi() then
+                return
+            end
+
+            local provider = chatProvider
+            local sharedFn = type(provider) == "table" and (provider.SharedUsers or provider.sharedUsers or provider.Peers or provider.peers) or nil
+            if type(sharedFn) ~= "function" then
+                setPresenceVisual(0)
+                return
+            end
+
+            presenceBusy = true
+            task.spawn(function()
+                local okCall, okResult, response = callProviderFunction(provider, sharedFn, {
+                    jobid = game.JobId or "",
+                    includeSelf = false,
+                })
+                presenceBusy = false
+
+                if not okCall or okResult == false then
+                    setPresenceVisual(0)
+                    return
+                end
+
+                local payload = response
+                if type(payload) ~= "table" and type(okResult) == "table" then
+                    payload = okResult
+                end
+
+                setPresenceVisual(countSharedUsersFromPayload(payload))
+            end)
         end
 
         local userMetaByName = {}
@@ -999,6 +1119,7 @@ return function(Library, context)
             chatOpen = nextOpen
             if chatOpen then
                 closeTransientPopups(chatPanel)
+                refreshSharedPresenceAsync()
             else
                 setProfileOpen(false)
             end
@@ -1067,6 +1188,7 @@ return function(Library, context)
                     chatMessagesScroll.ScrollBarImageColor3 = scrollColor
                 end
                 refreshChatButtonVisual()
+                setPresenceVisual(lastPresenceCount)
             end)
         end
 
@@ -1081,12 +1203,26 @@ return function(Library, context)
             end
         end)
 
+        presenceLoopToken += 1
+        local presenceToken = presenceLoopToken
+        task.spawn(function()
+            while not win._destroyed and presenceToken == presenceLoopToken do
+                if canUseUi() then
+                    refreshSharedPresenceAsync()
+                else
+                    setPresenceVisual(0)
+                end
+                task.wait(presenceInterval)
+            end
+        end)
+
         function win:SetChatProvider(provider)
             chatProvider = resolveChatProvider(provider)
             chatPanelRuntime.LastId = 0
             if type(chatPanelRuntime.Reset) == "function" then
                 chatPanelRuntime.Reset()
             end
+            refreshSharedPresenceAsync()
             return chatProvider ~= nil
         end
 
