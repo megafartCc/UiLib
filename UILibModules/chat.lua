@@ -1,6 +1,9 @@
 return function(Library, context)
     local TextService = context.TextService
+    local HttpService = context.HttpService
+    local Players = context.Players
     local Client = context.Client
+    local TeleportService = game:GetService("TeleportService")
 
     local function trimChatText(text)
         local value = tostring(text or "")
@@ -61,6 +64,102 @@ return function(Library, context)
         return false, a
     end
 
+    local function getRequestFunction()
+        local candidates = {
+            request,
+            http_request,
+            httprequest,
+            syn and syn.request,
+            http and http.request,
+            fluxus and fluxus.request,
+        }
+        for _, fn in ipairs(candidates) do
+            if type(fn) == "function" then
+                return fn
+            end
+        end
+        return nil
+    end
+
+    local function decodeJson(body)
+        if type(body) ~= "string" or body == "" then
+            return nil
+        end
+        local okDecode, parsed = pcall(function()
+            return HttpService:JSONDecode(body)
+        end)
+        if okDecode and type(parsed) == "table" then
+            return parsed
+        end
+        return nil
+    end
+
+    local function fetchPresenceForUserId(userId)
+        local uid = tonumber(userId)
+        if not uid or uid <= 0 then
+            return nil
+        end
+
+        local requestFn = getRequestFunction()
+        if type(requestFn) ~= "function" then
+            return nil
+        end
+
+        local body = nil
+        local okBody = pcall(function()
+            body = HttpService:JSONEncode({
+                userIds = { uid },
+            })
+        end)
+        if not okBody or type(body) ~= "string" then
+            return nil
+        end
+
+        local requestVariants = {
+            {
+                Url = "https://presence.roblox.com/v1/presence/users",
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json",
+                },
+                Body = body,
+            },
+            {
+                url = "https://presence.roblox.com/v1/presence/users",
+                method = "POST",
+                headers = {
+                    ["Content-Type"] = "application/json",
+                },
+                body = body,
+            },
+        }
+
+        local response = nil
+        for _, options in ipairs(requestVariants) do
+            local okRequest, result = pcall(requestFn, options)
+            if okRequest and type(result) == "table" then
+                response = result
+                break
+            end
+        end
+        if type(response) ~= "table" then
+            return nil
+        end
+
+        local statusCode = tonumber(response.StatusCode or response.status) or 0
+        if statusCode < 200 or statusCode >= 300 then
+            return nil
+        end
+
+        local payload = decodeJson(response.Body or response.body)
+        local users = payload and payload.userPresences
+        if type(users) == "table" and type(users[1]) == "table" then
+            return users[1]
+        end
+
+        return nil
+    end
+
     local function makeProviderResolver(chatOpts, opts)
         return function(rawProvider)
             if type(rawProvider) == "table" then
@@ -98,6 +197,42 @@ return function(Library, context)
                             room = room,
                             limit = limit,
                         })
+                    end,
+                    Profile = function(userName, userId)
+                        if type(panelSdk.sharedUsers) ~= "function" then
+                            return false, { error = "shared_users_unavailable" }
+                        end
+
+                        local okPeers, peersResponse = panelSdk.sharedUsers(panelUrl, panelSlug, panelKey, {
+                            jobid = game.JobId or "",
+                            includeSelf = true,
+                        })
+                        if not okPeers or type(peersResponse) ~= "table" then
+                            return false, peersResponse
+                        end
+
+                        local candidates = peersResponse.users or peersResponse.peers or {}
+                        local desiredId = tostring(userId or "")
+                        local desiredName = string.lower(tostring(userName or ""))
+                        for _, entry in ipairs(candidates) do
+                            if type(entry) == "table" then
+                                local entryId = tostring(entry.userid or "")
+                                local entryName = string.lower(tostring(entry.user or entry.username or entry.name or ""))
+                                if (desiredId ~= "" and entryId == desiredId)
+                                    or (desiredName ~= "" and entryName == desiredName) then
+                                    return true, {
+                                        online = true,
+                                        user = entry.user or entry.username or entry.name or userName,
+                                        userid = entryId ~= "" and entryId or userId,
+                                        placeid = tonumber(entry.placeid or entry.placeId or game.PlaceId) or game.PlaceId,
+                                        jobid = tostring(entry.jobid or entry.gameId or game.JobId or ""),
+                                        game = entry.game or entry.placeName or "This server",
+                                    }
+                                end
+                            end
+                        end
+
+                        return false, { error = "user_not_found" }
                     end,
                 }
             end
@@ -307,6 +442,301 @@ return function(Library, context)
             Library:Animate(chatBtn, "Hover", { ImageColor3 = targetColor })
         end
 
+        local userMetaByName = {}
+        local activeProfileToken = 0
+        local activeProfileData = nil
+        local profileOpen = false
+
+        local profilePanel = Instance.new("Frame", chatPanel)
+        profilePanel.Name = "ProfilePanel"
+        profilePanel.AnchorPoint = Vector2.new(0.5, 0.5)
+        profilePanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+        profilePanel.Size = UDim2.fromOffset(math.max(170, chatPanelWidth - 24), 0)
+        profilePanel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+        profilePanel.BorderSizePixel = 0
+        profilePanel.Visible = false
+        profilePanel.ClipsDescendants = true
+        profilePanel.ZIndex = 130
+        bindTheme(profilePanel, "BackgroundColor3", "Panel")
+        bindTheme(profilePanel, "BackgroundTransparency", "PanelTransparency")
+        Instance.new("UICorner", profilePanel).CornerRadius = UDim.new(0, 4)
+        local profilePanelStroke = Instance.new("UIStroke", profilePanel)
+        profilePanelStroke.Color = colors.Line
+        profilePanelStroke.Transparency = 0.35
+        bindTheme(profilePanelStroke, "Color", "Line")
+
+        local profileTitle = Instance.new("TextLabel", profilePanel)
+        profileTitle.BackgroundTransparency = 1
+        profileTitle.Position = UDim2.new(0, 10, 0, 8)
+        profileTitle.Size = UDim2.new(1, -20, 0, 16)
+        profileTitle.Font = config.Font
+        profileTitle.Text = "USER PROFILE"
+        profileTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        profileTitle.TextSize = 11
+        profileTitle.TextXAlignment = Enum.TextXAlignment.Left
+        profileTitle.ZIndex = 131
+        bindTheme(profileTitle, "TextColor3", "TextStrong")
+
+        local profileName = Instance.new("TextLabel", profilePanel)
+        profileName.BackgroundTransparency = 1
+        profileName.Position = UDim2.new(0, 10, 0, 28)
+        profileName.Size = UDim2.new(1, -20, 0, 16)
+        profileName.Font = config.FontMedium
+        profileName.Text = "-"
+        profileName.TextColor3 = colors.Main
+        profileName.TextSize = 12
+        profileName.TextXAlignment = Enum.TextXAlignment.Left
+        profileName.ZIndex = 131
+        bindTheme(profileName, "TextColor3", "Main")
+
+        local profileStatus = Instance.new("TextLabel", profilePanel)
+        profileStatus.BackgroundTransparency = 1
+        profileStatus.Position = UDim2.new(0, 10, 0, 45)
+        profileStatus.Size = UDim2.new(1, -20, 0, 14)
+        profileStatus.Font = config.FontMedium
+        profileStatus.Text = "Status: unknown"
+        profileStatus.TextColor3 = colors.TextDim
+        profileStatus.TextSize = 10
+        profileStatus.TextXAlignment = Enum.TextXAlignment.Left
+        profileStatus.ZIndex = 131
+        bindTheme(profileStatus, "TextColor3", "TextDim")
+
+        local profileGame = Instance.new("TextLabel", profilePanel)
+        profileGame.BackgroundTransparency = 1
+        profileGame.Position = UDim2.new(0, 10, 0, 60)
+        profileGame.Size = UDim2.new(1, -20, 0, 14)
+        profileGame.Font = config.FontMedium
+        profileGame.Text = "Game: unknown"
+        profileGame.TextColor3 = colors.Text
+        profileGame.TextSize = 10
+        profileGame.TextXAlignment = Enum.TextXAlignment.Left
+        profileGame.ZIndex = 131
+        bindTheme(profileGame, "TextColor3", "Text")
+
+        local profileFooter = Instance.new("Frame", profilePanel)
+        profileFooter.BackgroundTransparency = 1
+        profileFooter.Position = UDim2.new(0, 10, 1, -30)
+        profileFooter.Size = UDim2.new(1, -20, 0, 20)
+        profileFooter.ZIndex = 131
+
+        local profileJoinBtn = Instance.new("TextButton", profileFooter)
+        profileJoinBtn.Size = UDim2.new(0.52, -3, 1, 0)
+        profileJoinBtn.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
+        profileJoinBtn.BorderSizePixel = 0
+        profileJoinBtn.Font = config.FontMedium
+        profileJoinBtn.Text = "Join Server"
+        profileJoinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        profileJoinBtn.TextSize = 10
+        profileJoinBtn.AutoButtonColor = false
+        profileJoinBtn.Selectable = false
+        profileJoinBtn.ZIndex = 132
+        bindTheme(profileJoinBtn, "TextColor3", "TextStrong")
+        Instance.new("UICorner", profileJoinBtn).CornerRadius = UDim.new(0, 3)
+
+        local profileCloseBtn = Instance.new("TextButton", profileFooter)
+        profileCloseBtn.AnchorPoint = Vector2.new(1, 0)
+        profileCloseBtn.Position = UDim2.new(1, 0, 0, 0)
+        profileCloseBtn.Size = UDim2.new(0.48, -3, 1, 0)
+        profileCloseBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        profileCloseBtn.BorderSizePixel = 0
+        profileCloseBtn.Font = config.FontMedium
+        profileCloseBtn.Text = "Close"
+        profileCloseBtn.TextColor3 = colors.Text
+        profileCloseBtn.TextSize = 10
+        profileCloseBtn.AutoButtonColor = false
+        profileCloseBtn.Selectable = false
+        profileCloseBtn.ZIndex = 132
+        bindTheme(profileCloseBtn, "BackgroundColor3", "Control")
+        bindTheme(profileCloseBtn, "BackgroundTransparency", "ControlTransparency")
+        bindTheme(profileCloseBtn, "TextColor3", "Text")
+        Instance.new("UICorner", profileCloseBtn).CornerRadius = UDim.new(0, 3)
+
+        local profilePopupConfig = {
+            ClosedSize = UDim2.fromOffset(math.max(170, chatPanelWidth - 24), 0),
+            OpenSize = UDim2.fromOffset(math.max(170, chatPanelWidth - 24), 102),
+            OpenToken = "Open",
+            CloseToken = "Close",
+            HideDelay = 0.18,
+        }
+
+        local function updateProfileJoinVisual()
+            local hasTarget = type(activeProfileData) == "table"
+                and tonumber(activeProfileData.placeid or 0)
+                and tonumber(activeProfileData.placeid or 0) > 0
+                and type(activeProfileData.jobid) == "string"
+                and activeProfileData.jobid ~= ""
+                and not (
+                    tonumber(activeProfileData.placeid or 0) == tonumber(game.PlaceId or 0)
+                    and tostring(activeProfileData.jobid or "") == tostring(game.JobId or "")
+                )
+
+            if hasTarget then
+                profileJoinBtn.Text = "Join Server"
+                profileJoinBtn.TextTransparency = 0
+                profileJoinBtn.Active = true
+                return
+            end
+
+            profileJoinBtn.Text = "Join Unavailable"
+            profileJoinBtn.TextTransparency = 0.35
+            profileJoinBtn.Active = false
+        end
+
+        local function setProfileOpen(nextOpen)
+            if profileOpen == nextOpen then
+                return
+            end
+            profileOpen = nextOpen
+            setPopupOpen(profilePanel, profileOpen, profilePopupConfig)
+        end
+
+        registerTransientPopup(profilePanel, function()
+            setProfileOpen(false)
+        end)
+
+        if popupManager and type(popupManager.bindOutsideClose) == "function" then
+            popupManager.bindOutsideClose({
+                cleanupKey = nextCleanupKey("ChatProfileOutsideClick"),
+                close = function()
+                    setProfileOpen(false)
+                end,
+                isOpen = function()
+                    return profileOpen
+                end,
+                targets = function()
+                    return { profilePanel }
+                end,
+            })
+        end
+
+        profileCloseBtn.Activated:Connect(function()
+            setProfileOpen(false)
+        end)
+
+        profileJoinBtn.MouseEnter:Connect(function()
+            if profileJoinBtn.Active then
+                Library:Animate(profileJoinBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(60, 30, 38) })
+            end
+        end)
+        profileJoinBtn.MouseLeave:Connect(function()
+            Library:Animate(profileJoinBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+        end)
+        profileJoinBtn.Activated:Connect(function()
+            if not profileJoinBtn.Active then
+                return
+            end
+            if type(activeProfileData) ~= "table" then
+                return
+            end
+
+            local placeId = tonumber(activeProfileData.placeid or 0)
+            local jobId = tostring(activeProfileData.jobid or "")
+            if not placeId or placeId <= 0 or jobId == "" then
+                return
+            end
+
+            pcall(function()
+                TeleportService:TeleportToPlaceInstance(placeId, jobId, Client)
+            end)
+        end)
+
+        local function applyProfileData(profileData)
+            local name = tostring(profileData.user or profileData.name or "unknown")
+            local userIdText = tostring(profileData.userid or "")
+            local statusText = tostring(profileData.status or "unknown")
+            local gameText = tostring(profileData.game or profileData.lastLocation or "unknown")
+
+            profileName.Text = userIdText ~= "" and string.format("%s (%s)", name, userIdText) or name
+            profileStatus.Text = "Status: " .. statusText
+            profileGame.Text = "Game: " .. gameText
+            activeProfileData = profileData
+            updateProfileJoinVisual()
+        end
+
+        local function resolveProfile(userName, userId)
+            local resolved = {
+                user = tostring(userName or "unknown"),
+                userid = tostring(userId or ""),
+                status = "unknown",
+                game = "unknown",
+                placeid = 0,
+                jobid = "",
+            }
+
+            local livePlayer = Players:FindFirstChild(resolved.user)
+            if livePlayer then
+                resolved.userid = tostring(livePlayer.UserId or resolved.userid)
+                resolved.status = "in this server"
+                resolved.game = "Current Server"
+                resolved.placeid = tonumber(game.PlaceId or 0) or 0
+                resolved.jobid = tostring(game.JobId or "")
+                return resolved
+            end
+
+            if (resolved.userid == "" or resolved.userid == "0") and resolved.user ~= "" then
+                pcall(function()
+                    resolved.userid = tostring(Players:GetUserIdFromNameAsync(resolved.user))
+                end)
+            end
+
+            local provider = chatProvider
+            local profileFn = type(provider) == "table" and (provider.Profile or provider.profile or provider.GetProfile or provider.getProfile) or nil
+            if type(profileFn) == "function" then
+                local okCall, okResult, response = callProviderFunction(provider, profileFn, resolved.user, resolved.userid)
+                if okCall and okResult ~= false and type(response) == "table" then
+                    resolved.status = tostring(response.status or (response.online and "online" or "unknown"))
+                    resolved.game = tostring(response.game or response.placeName or resolved.game)
+                    resolved.placeid = tonumber(response.placeid or response.placeId or resolved.placeid) or resolved.placeid
+                    resolved.jobid = tostring(response.jobid or response.gameId or resolved.jobid or "")
+                end
+            end
+
+            local presence = fetchPresenceForUserId(resolved.userid)
+            if type(presence) == "table" then
+                local presenceType = tonumber(presence.userPresenceType) or 0
+                if presenceType == 2 then
+                    resolved.status = "online"
+                elseif presenceType == 1 then
+                    resolved.status = "online (website)"
+                else
+                    resolved.status = "offline"
+                end
+
+                resolved.game = tostring(presence.lastLocation or resolved.game)
+                resolved.placeid = tonumber(presence.placeId or presence.rootPlaceId or resolved.placeid) or resolved.placeid
+                resolved.jobid = tostring(presence.gameId or resolved.jobid or "")
+            end
+
+            return resolved
+        end
+
+        local function openUserProfile(userName, userId)
+            local normalizedName = string.lower(tostring(userName or ""))
+            local cached = userMetaByName[normalizedName]
+            local targetUserId = userId or (cached and cached.userid)
+
+            activeProfileToken += 1
+            local token = activeProfileToken
+
+            applyProfileData({
+                user = tostring(userName or "unknown"),
+                userid = tostring(targetUserId or ""),
+                status = "loading...",
+                game = "loading...",
+                placeid = 0,
+                jobid = "",
+            })
+            setProfileOpen(true)
+
+            task.spawn(function()
+                local resolved = resolveProfile(userName, targetUserId)
+                if token ~= activeProfileToken or win._destroyed then
+                    return
+                end
+                applyProfileData(resolved)
+            end)
+        end
+
         local function refreshChatCanvas()
             local contentHeight = chatMessagesLayout.AbsoluteContentSize.Y
             chatMessagesInner.Size = UDim2.new(1, -2, 0, contentHeight)
@@ -321,7 +751,7 @@ return function(Library, context)
             chatMessagesScroll.CanvasPosition = Vector2.new(0, target)
         end
 
-        local function addChatRow(userName, bodyText, timeText)
+        local function addChatRow(userName, bodyText, timeText, userId)
             local body = trimChatText(bodyText)
             if body == "" then
                 return
@@ -347,16 +777,29 @@ return function(Library, context)
             rowHeader.Size = UDim2.new(1, 0, 0, 12)
             rowHeader.ZIndex = 14
 
-            local userLabel = Instance.new("TextLabel", rowHeader)
-            userLabel.BackgroundTransparency = 1
-            userLabel.Size = UDim2.new(0.66, 0, 1, 0)
-            userLabel.Font = config.FontMedium
-            userLabel.Text = tostring(userName or "unknown")
-            userLabel.TextColor3 = colors.Main
-            userLabel.TextSize = 11
-            userLabel.TextXAlignment = Enum.TextXAlignment.Left
-            userLabel.ZIndex = 14
-            bindTheme(userLabel, "TextColor3", "Main")
+            local userButton = Instance.new("TextButton", rowHeader)
+            userButton.BackgroundTransparency = 1
+            userButton.BorderSizePixel = 0
+            userButton.Size = UDim2.new(0.66, 0, 1, 0)
+            userButton.Font = config.FontMedium
+            userButton.Text = tostring(userName or "unknown")
+            userButton.TextColor3 = colors.Main
+            userButton.TextSize = 11
+            userButton.TextXAlignment = Enum.TextXAlignment.Left
+            userButton.ZIndex = 14
+            userButton.AutoButtonColor = false
+            userButton.Selectable = false
+            bindTheme(userButton, "TextColor3", "Main")
+
+            userButton.MouseEnter:Connect(function()
+                Library:Animate(userButton, "Hover", { TextColor3 = Color3.fromRGB(255, 182, 201) })
+            end)
+            userButton.MouseLeave:Connect(function()
+                Library:Animate(userButton, "Hover", { TextColor3 = colors.Main })
+            end)
+            userButton.Activated:Connect(function()
+                openUserProfile(userName, userId)
+            end)
 
             local timeLabel = Instance.new("TextLabel", rowHeader)
             timeLabel.BackgroundTransparency = 1
@@ -405,6 +848,9 @@ return function(Library, context)
             chatPanelRuntime.LastId = 0
             chatSeen = {}
             chatRows = {}
+            userMetaByName = {}
+            activeProfileData = nil
+            setProfileOpen(false)
             for _, child in ipairs(chatMessagesInner:GetChildren()) do
                 if child:IsA("Frame") then
                     child:Destroy()
@@ -423,13 +869,22 @@ return function(Library, context)
                 if type(entry) == "table" then
                     local messageId = tonumber(entry.id or entry.message_id)
                     local userName = entry.user or entry.name or entry.roblox_user
+                    local userId = entry.userid or entry.userId or entry.user_id or entry.roblox_userid
                     local bodyText = entry.message or entry.content or entry.text or entry.message_content
                     local timeText = resolveTimeLabel(entry)
                     local dedupeKey = getMessageKey(messageId, userName, bodyText, timeText)
 
+                    local nameKey = string.lower(tostring(userName or ""))
+                    if nameKey ~= "" then
+                        userMetaByName[nameKey] = {
+                            user = userName,
+                            userid = tostring(userId or ""),
+                        }
+                    end
+
                     if not chatSeen[dedupeKey] and type(bodyText) == "string" and trimChatText(bodyText) ~= "" then
                         chatSeen[dedupeKey] = true
-                        addChatRow(userName, bodyText, timeText)
+                        addChatRow(userName, bodyText, timeText, userId)
                         added = true
                     end
 
@@ -544,6 +999,8 @@ return function(Library, context)
             chatOpen = nextOpen
             if chatOpen then
                 closeTransientPopups(chatPanel)
+            else
+                setProfileOpen(false)
             end
 
             refreshChatButtonVisual()
