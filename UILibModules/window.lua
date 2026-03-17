@@ -1653,17 +1653,19 @@ function Library:CreateWindow(opts)
             return os.date("!%H:%M:%S", os.time() - (3 * 60 * 60))
         end
 
-        local function updateContentInset(open)
-            menuContentRightInset = open and (chatPanelWidth + CHAT_PANEL_GAP) or 0
-            updateContentScaleHost(currentContentScale, true)
-            refreshMenuScrolls()
+        local function updateContentInset()
+            if menuContentRightInset ~= 0 then
+                menuContentRightInset = 0
+                updateContentScaleHost(currentContentScale, true)
+                refreshMenuScrolls()
+            end
         end
 
-        local chatPanel = Instance.new("Frame", menuFrame)
+        local chatPanel = Instance.new("Frame", main)
         chatPanel.Name = "ChatPanel"
-        chatPanel.AnchorPoint = Vector2.new(1, 0)
-        chatPanel.Position = UDim2.new(1, -2, 0, 0)
-        chatPanel.Size = UDim2.new(0, 0, 1, 0)
+        chatPanel.AnchorPoint = Vector2.new(0, 0)
+        chatPanel.Position = UDim2.new(1, CHAT_PANEL_GAP, 0, config.HeaderHeight + menuFrameTopInset)
+        chatPanel.Size = UDim2.new(0, 0, 1, -(config.HeaderHeight + menuFrameTopInset + config.BottomHeight + menuFrameBottomInset))
         chatPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
         chatPanel.BorderSizePixel = 0
         chatPanel.ClipsDescendants = true
