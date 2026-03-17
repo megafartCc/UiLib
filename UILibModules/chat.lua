@@ -744,6 +744,12 @@ return function(Library, context)
             end
 
             local list = payload.users or payload.peers
+            if type(list) ~= "table" and type(payload.data) == "table" then
+                list = payload.data.users or payload.data.peers or payload.data
+            end
+            if type(list) ~= "table" and type(payload.result) == "table" then
+                list = payload.result.users or payload.result.peers or payload.result
+            end
             if type(list) ~= "table" then
                 return {}
             end
@@ -786,6 +792,18 @@ return function(Library, context)
                 return nil
             end
             local raw = payload.total_active or payload.totalActive or payload.count
+                or payload.total_connections or payload.totalConnections
+                or payload.online or payload.online_count or payload.onlineCount
+            if raw == nil and type(payload.data) == "table" then
+                raw = payload.data.total_active or payload.data.totalActive or payload.data.count
+                    or payload.data.total_connections or payload.data.totalConnections
+                    or payload.data.online or payload.data.online_count or payload.data.onlineCount
+            end
+            if raw == nil and type(payload.result) == "table" then
+                raw = payload.result.total_active or payload.result.totalActive or payload.result.count
+                    or payload.result.total_connections or payload.result.totalConnections
+                    or payload.result.online or payload.result.online_count or payload.result.onlineCount
+            end
             local value = tonumber(raw)
             if value and value >= 0 then
                 return math.floor(value + 0.5)
@@ -799,6 +817,12 @@ return function(Library, context)
             end
 
             local servers = payload.servers
+            if type(servers) ~= "table" and type(payload.data) == "table" then
+                servers = payload.data.servers or payload.data
+            end
+            if type(servers) ~= "table" and type(payload.result) == "table" then
+                servers = payload.result.servers or payload.result
+            end
             if type(servers) ~= "table" then
                 return {}
             end
@@ -1705,7 +1729,13 @@ return function(Library, context)
                     return
                 end
 
-                local rows = payload.messages or payload.data or payload.rows
+                local rows = payload.messages or payload.rows
+                if type(rows) ~= "table" and type(payload.data) == "table" then
+                    rows = payload.data.messages or payload.data.rows or payload.data
+                end
+                if type(rows) ~= "table" and type(payload.result) == "table" then
+                    rows = payload.result.messages or payload.result.rows or payload.result
+                end
                 applyMessages(rows)
             end)
         end
