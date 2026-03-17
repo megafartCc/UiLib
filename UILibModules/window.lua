@@ -1554,32 +1554,6 @@ function Library:CreateWindow(opts)
             Library:Animate(chatBtn, "Hover", { ImageColor3 = chatOpen and colors.Main or colors.TextDim })
         end)
 
-        local connectedUi = {}
-        connectedUi.Dot = Instance.new("Frame", bottom)
-        connectedUi.Dot.Name = "ChatConnectedDot"
-        connectedUi.Dot.AnchorPoint = Vector2.new(0, 0.5)
-        connectedUi.Dot.Position = UDim2.new(0.5, 10, 0.5, 0)
-        connectedUi.Dot.Size = UDim2.new(0, 6, 0, 6)
-        connectedUi.Dot.BorderSizePixel = 0
-        connectedUi.Dot.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-        connectedUi.Dot.ZIndex = 4
-        Instance.new("UICorner", connectedUi.Dot).CornerRadius = UDim.new(1, 0)
-
-        connectedUi.Count = Instance.new("TextLabel", bottom)
-        connectedUi.Count.Name = "ChatConnectedCount"
-        connectedUi.Count.AnchorPoint = Vector2.new(0, 0.5)
-        connectedUi.Count.Position = UDim2.new(0.5, 19, 0.5, 0)
-        connectedUi.Count.Size = UDim2.new(0, 28, 0, 14)
-        connectedUi.Count.BackgroundTransparency = 1
-        connectedUi.Count.BorderSizePixel = 0
-        connectedUi.Count.Font = config.FontMedium
-        connectedUi.Count.Text = "0"
-        connectedUi.Count.TextColor3 = colors.TextDim
-        connectedUi.Count.TextSize = 11
-        connectedUi.Count.TextXAlignment = Enum.TextXAlignment.Left
-        connectedUi.Count.ZIndex = 4
-        bindTheme(connectedUi.Count, "TextColor3", "TextDim")
-
         local chatOpts = type(opts.Chat) == "table" and opts.Chat or {}
         local chatRoom = tostring(chatOpts.Room or chatOpts.room or "global")
         local chatPollInterval = math.max(1, tonumber(chatOpts.PollInterval or chatOpts.pollInterval or 3) or 3)
@@ -1613,8 +1587,6 @@ function Library:CreateWindow(opts)
             local panelUrl = chatOpts.PanelUrl or chatOpts.URL or chatOpts.Url or (type(envTable) == "table" and (envTable.PANEL_URL or envTable.PanelUrl))
             local panelSlug = chatOpts.ScriptSlug or chatOpts.Slug or (type(envTable) == "table" and (envTable.PANEL_SLUG or envTable.PanelSlug))
             local panelKey = chatOpts.PanelKey or chatOpts.Key or (type(envTable) == "table" and (envTable.PANEL_KEY or envTable.PanelKey))
-            local panelSharedUsers = type(panelSdk) == "table" and panelSdk.sharedUsers or nil
-
             if type(panelSdk) == "table"
                 and type(panelSdk.chatSend) == "function"
                 and type(panelSdk.chatFeed) == "function"
@@ -1634,13 +1606,6 @@ function Library:CreateWindow(opts)
                             limit = limit,
                         })
                     end,
-                    Presence = type(panelSharedUsers) == "function" and function(scope)
-                        local useGlobalScope = tostring(scope or "global"):lower() == "global"
-                        return panelSharedUsers(panelUrl, panelSlug, panelKey, {
-                            include_self = true,
-                            jobid = useGlobalScope and "" or tostring(game.JobId or ""),
-                        })
-                    end or nil,
                 }
             end
 
@@ -1654,27 +1619,11 @@ function Library:CreateWindow(opts)
         local chatRows = {}
         local chatPollBusy = false
         local chatLoopToken = 0
-        local chatPresenceBusy = false
-        local chatPresenceByUserId = {}
-        local chatPresenceByName = {}
-        local chatProfileSelectedUserId = ""
-        local chatProfilePlaceNameCache = {}
-        local updateConnectedUi
 
         local function trimChatText(text)
             local value = tostring(text or "")
             value = value:gsub("^%s+", ""):gsub("%s+$", "")
             return value
-        end
-
-        local function normalizePresenceName(value)
-            return string.lower(tostring(value or "")):gsub("^%s+", ""):gsub("%s+$", "")
-        end
-
-        updateConnectedUi = function(count)
-            local numeric = math.max(0, tonumber(count) or 0)
-            connectedUi.Count.Text = tostring(numeric)
-            connectedUi.Dot.BackgroundColor3 = numeric > 0 and Color3.fromRGB(85, 212, 120) or Color3.fromRGB(90, 90, 90)
         end
 
         function win:SetChatProvider(provider)
@@ -1683,9 +1632,6 @@ function Library:CreateWindow(opts)
             if type(chatPanelRuntime.Reset) == "function" then
                 chatPanelRuntime.Reset()
             end
-            chatPresenceByUserId = {}
-            chatPresenceByName = {}
-            updateConnectedUi(0)
             return chatProvider ~= nil
         end
 
@@ -1832,133 +1778,6 @@ function Library:CreateWindow(opts)
             Library:Animate(chatSendBtn, "Hover", { ImageColor3 = colors.TextDim })
         end)
 
-        local profile = {}
-        profile.Card = Instance.new("Frame", chatPanel)
-        profile.Card.Name = "UserProfileCard"
-        profile.Card.Position = UDim2.new(0, 8, 0, 34)
-        profile.Card.Size = UDim2.new(1, -16, 0, 116)
-        profile.Card.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        profile.Card.BorderSizePixel = 0
-        profile.Card.Visible = false
-        profile.Card.ZIndex = 20
-        bindTheme(profile.Card, "BackgroundColor3", "Panel")
-        bindTheme(profile.Card, "BackgroundTransparency", "PanelTransparency")
-        Instance.new("UICorner", profile.Card).CornerRadius = UDim.new(0, 4)
-
-        profile.Stroke = Instance.new("UIStroke", profile.Card)
-        profile.Stroke.Color = colors.Line
-        profile.Stroke.Transparency = 0.25
-        bindTheme(profile.Stroke, "Color", "Line")
-
-        profile.Avatar = Instance.new("ImageLabel", profile.Card)
-        profile.Avatar.BackgroundTransparency = 1
-        profile.Avatar.Position = UDim2.new(0, 8, 0, 10)
-        profile.Avatar.Size = UDim2.new(0, 30, 0, 30)
-        profile.Avatar.BorderSizePixel = 0
-        profile.Avatar.ZIndex = 21
-        Instance.new("UICorner", profile.Avatar).CornerRadius = UDim.new(1, 0)
-
-        profile.User = Instance.new("TextLabel", profile.Card)
-        profile.User.BackgroundTransparency = 1
-        profile.User.Position = UDim2.new(0, 44, 0, 8)
-        profile.User.Size = UDim2.new(1, -68, 0, 14)
-        profile.User.Font = config.FontMedium
-        profile.User.Text = "User: unknown"
-        profile.User.TextColor3 = colors.TextStrong
-        profile.User.TextSize = 12
-        profile.User.TextXAlignment = Enum.TextXAlignment.Left
-        profile.User.ZIndex = 21
-        bindTheme(profile.User, "TextColor3", "TextStrong")
-
-        profile.Game = Instance.new("TextLabel", profile.Card)
-        profile.Game.BackgroundTransparency = 1
-        profile.Game.Position = UDim2.new(0, 44, 0, 24)
-        profile.Game.Size = UDim2.new(1, -68, 0, 12)
-        profile.Game.Font = config.FontMedium
-        profile.Game.Text = "Game: unknown"
-        profile.Game.TextColor3 = colors.TextDim
-        profile.Game.TextSize = 10
-        profile.Game.TextXAlignment = Enum.TextXAlignment.Left
-        profile.Game.ZIndex = 21
-        bindTheme(profile.Game, "TextColor3", "TextDim")
-
-        profile.Server = Instance.new("TextLabel", profile.Card)
-        profile.Server.BackgroundTransparency = 1
-        profile.Server.Position = UDim2.new(0, 8, 0, 48)
-        profile.Server.Size = UDim2.new(1, -16, 0, 12)
-        profile.Server.Font = config.FontMedium
-        profile.Server.Text = "Server: unknown"
-        profile.Server.TextColor3 = colors.TextDim
-        profile.Server.TextSize = 10
-        profile.Server.TextXAlignment = Enum.TextXAlignment.Left
-        profile.Server.ZIndex = 21
-        bindTheme(profile.Server, "TextColor3", "TextDim")
-
-        profile.Id = Instance.new("TextLabel", profile.Card)
-        profile.Id.BackgroundTransparency = 1
-        profile.Id.Position = UDim2.new(0, 8, 0, 62)
-        profile.Id.Size = UDim2.new(1, -16, 0, 12)
-        profile.Id.Font = config.FontMedium
-        profile.Id.Text = "ID: unknown"
-        profile.Id.TextColor3 = colors.TextDim
-        profile.Id.TextSize = 10
-        profile.Id.TextXAlignment = Enum.TextXAlignment.Left
-        profile.Id.ZIndex = 21
-        bindTheme(profile.Id, "TextColor3", "TextDim")
-
-        profile.Close = Instance.new("TextButton", profile.Card)
-        profile.Close.AnchorPoint = Vector2.new(1, 0)
-        profile.Close.Position = UDim2.new(1, -6, 0, 4)
-        profile.Close.Size = UDim2.new(0, 16, 0, 16)
-        profile.Close.BackgroundTransparency = 1
-        profile.Close.BorderSizePixel = 0
-        profile.Close.Text = "x"
-        profile.Close.Font = config.FontMedium
-        profile.Close.TextSize = 12
-        profile.Close.TextColor3 = colors.TextDim
-        profile.Close.AutoButtonColor = false
-        profile.Close.ZIndex = 22
-        bindTheme(profile.Close, "TextColor3", "TextDim")
-        profile.Close.Activated:Connect(function()
-            profile.Card.Visible = false
-        end)
-
-        profile.Join = Instance.new("TextButton", profile.Card)
-        profile.Join.AnchorPoint = Vector2.new(0.5, 1)
-        profile.Join.Position = UDim2.new(0.5, 0, 1, -8)
-        profile.Join.Size = UDim2.new(1, -16, 0, 28)
-        profile.Join.BackgroundColor3 = colors.Main
-        profile.Join.BorderSizePixel = 0
-        profile.Join.Font = config.FontMedium
-        profile.Join.Text = "Join Server"
-        profile.Join.TextColor3 = Color3.fromRGB(255, 255, 255)
-        profile.Join.TextSize = 12
-        profile.Join.AutoButtonColor = false
-        profile.Join.ZIndex = 21
-        bindTheme(profile.Join, "BackgroundColor3", "Main")
-        bindTheme(profile.Join, "BackgroundTransparency", "AccentTransparency")
-        Instance.new("UICorner", profile.Join).CornerRadius = UDim.new(0, 3)
-
-        local function resolvePlaceName(placeId)
-            local normalized = tostring(placeId or "")
-            if normalized == "" or normalized == "0" then
-                return "Unknown"
-            end
-            if chatProfilePlaceNameCache[normalized] ~= nil then
-                return chatProfilePlaceNameCache[normalized]
-            end
-            local fallback = "Place " .. normalized
-            local resolved = fallback
-            local okInfo, info = pcall(function()
-                return game:GetService("MarketplaceService"):GetProductInfo(tonumber(normalized), Enum.InfoType.Asset)
-            end)
-            if okInfo and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then
-                resolved = info.Name
-            end
-            chatProfilePlaceNameCache[normalized] = resolved
-            return resolved
-        end
-
         local function refreshChatCanvas()
             local contentHeight = chatMessagesLayout.AbsoluteContentSize.Y
             chatMessagesInner.Size = UDim2.new(1, -2, 0, contentHeight)
@@ -1996,132 +1815,6 @@ function Library:CreateWindow(opts)
             }, "|")
         end
 
-        local function openProfileForUser(userName, userId)
-            local normalizedId = tostring(userId or "")
-            local normalizedName = normalizePresenceName(userName)
-            local presence = nil
-            if normalizedId ~= "" then
-                presence = chatPresenceByUserId[normalizedId]
-            end
-            if not presence and normalizedName ~= "" then
-                presence = chatPresenceByName[normalizedName]
-            end
-
-            local displayUser = tostring((presence and presence.user) or userName or "unknown")
-            local displayUserId = tostring((presence and presence.userid) or userId or "")
-            local placeId = tostring((presence and presence.placeid) or tostring(game.PlaceId or ""))
-            local jobId = tostring((presence and presence.jobid) or "")
-
-            chatProfileSelectedUserId = displayUserId
-            profile.User.Text = "User: " .. displayUser
-            profile.Id.Text = displayUserId ~= "" and ("ID: " .. displayUserId) or "ID: unknown"
-            profile.Game.Text = "Game: " .. resolvePlaceName(placeId)
-            profile.Server.Text = jobId ~= "" and ("Server: " .. jobId) or "Server: unknown"
-            profile.Join.AutoButtonColor = (jobId ~= "" and placeId ~= "" and placeId ~= "0")
-            profile.Join.TextTransparency = profile.Join.AutoButtonColor and 0 or 0.35
-            profile.Join.BackgroundTransparency = profile.Join.AutoButtonColor and (colors.AccentTransparency or 0) or 0.55
-            profile.Card.Visible = true
-
-            if tonumber(displayUserId) then
-                task.spawn(function()
-                    local okThumb, thumb = pcall(function()
-                        return Players:GetUserThumbnailAsync(tonumber(displayUserId), Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-                    end)
-                    if okThumb and type(thumb) == "string" and thumb ~= "" then
-                        profile.Avatar.Image = thumb
-                    end
-                end)
-            end
-        end
-
-        profile.Join.Activated:Connect(function()
-            if not profile.Card.Visible then
-                return
-            end
-
-            local selected = chatPresenceByUserId[tostring(chatProfileSelectedUserId or "")]
-            local targetJobId = tostring(selected and selected.jobid or "")
-            local targetPlaceId = tonumber(selected and selected.placeid) or tonumber(game.PlaceId)
-            if targetJobId == "" or not targetPlaceId then
-                return
-            end
-
-            pcall(function()
-                game:GetService("TeleportService"):TeleportToPlaceInstance(targetPlaceId, targetJobId, Client)
-            end)
-        end)
-
-        local function applyPresence(payload)
-            local rows = type(payload) == "table" and (payload.users or payload.data or payload.rows or payload.peers) or nil
-            if type(rows) ~= "table" then
-                updateConnectedUi(0)
-                chatPresenceByUserId = {}
-                chatPresenceByName = {}
-                return
-            end
-
-            local byId = {}
-            local byName = {}
-            local count = 0
-            for _, entry in ipairs(rows) do
-                if type(entry) == "table" then
-                    local rowUser = tostring(entry.user or entry.name or "")
-                    local rowUserId = tostring(entry.userid or entry.userid_str or "")
-                    local rowJobId = tostring(entry.jobid or entry.server_jobid or "")
-                    local rowPlaceId = tostring(entry.placeid or entry.place_id or "")
-                    local rowData = {
-                        user = rowUser,
-                        userid = rowUserId,
-                        jobid = rowJobId,
-                        placeid = rowPlaceId,
-                    }
-                    if rowUserId ~= "" and byId[rowUserId] == nil then
-                        byId[rowUserId] = rowData
-                        count += 1
-                    elseif rowUserId == "" then
-                        count += 1
-                    end
-                    local key = normalizePresenceName(rowUser)
-                    if key ~= "" and byName[key] == nil then
-                        byName[key] = rowData
-                    end
-                end
-            end
-
-            chatPresenceByUserId = byId
-            chatPresenceByName = byName
-            updateConnectedUi(count)
-        end
-
-        local function callPresenceFetch()
-            if chatPresenceBusy or not win.Visible or not keyGateUnlocked then
-                return
-            end
-            local provider = chatProvider
-            local presenceFn = type(provider) == "table"
-                and (provider.Presence or provider.presence or provider.SharedUsers or provider.sharedUsers)
-                or nil
-            if type(presenceFn) ~= "function" then
-                return
-            end
-
-            chatPresenceBusy = true
-            task.spawn(function()
-                local ok, success, response = callProviderFunction(provider, presenceFn, "global")
-                chatPresenceBusy = false
-                if not ok or success == false then
-                    return
-                end
-                local payload = response
-                if type(payload) ~= "table" and type(success) == "table" then
-                    payload = success
-                end
-                if type(payload) == "table" then
-                    applyPresence(payload)
-                end
-            end)
-        end
-
         local function addChatRow(userName, bodyText, timeText)
             local body = trimChatText(bodyText)
             if body == "" then
@@ -2148,7 +1841,7 @@ function Library:CreateWindow(opts)
             rowHeader.Size = UDim2.new(1, 0, 0, 12)
             rowHeader.ZIndex = 14
 
-            local userLabel = Instance.new("TextButton", rowHeader)
+            local userLabel = Instance.new("TextLabel", rowHeader)
             userLabel.BackgroundTransparency = 1
             userLabel.Size = UDim2.new(0.66, 0, 1, 0)
             userLabel.Font = config.FontMedium
@@ -2156,13 +1849,8 @@ function Library:CreateWindow(opts)
             userLabel.TextColor3 = colors.Main
             userLabel.TextSize = 11
             userLabel.TextXAlignment = Enum.TextXAlignment.Left
-            userLabel.AutoButtonColor = false
-            userLabel.TextStrokeTransparency = 1
             userLabel.ZIndex = 14
             bindTheme(userLabel, "TextColor3", "Main")
-            userLabel.Activated:Connect(function()
-                openProfileForUser(userName, nil)
-            end)
 
             local timeLabel = Instance.new("TextLabel", rowHeader)
             timeLabel.BackgroundTransparency = 1
@@ -2354,7 +2042,6 @@ function Library:CreateWindow(opts)
                 updateContentInset(true)
                 chatInput:CaptureFocus()
                 callChatFetch()
-                callPresenceFetch()
             end,
             OnClose = function()
                 updateContentInset(false)
@@ -2416,11 +2103,8 @@ function Library:CreateWindow(opts)
         local loopToken = chatLoopToken
         task.spawn(function()
             while not win._destroyed and loopToken == chatLoopToken do
-                if win.Visible and keyGateUnlocked then
-                    callPresenceFetch()
-                    if chatOpen then
-                        callChatFetch()
-                    end
+                if chatOpen and win.Visible and keyGateUnlocked then
+                    callChatFetch()
                 end
                 task.wait(chatPollInterval)
             end
@@ -2428,7 +2112,6 @@ function Library:CreateWindow(opts)
 
         win.RefreshChat = function()
             callChatFetch()
-            callPresenceFetch()
         end
         win.SetChatRoom = function(_, roomName)
             chatRoom = tostring(roomName or "global")
