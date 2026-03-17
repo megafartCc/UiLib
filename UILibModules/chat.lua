@@ -161,6 +161,7 @@ return function(Library, context)
     end
 
     local function makeProviderResolver(chatOpts, opts)
+        local defaultChatSigningKey = "FDJhxveibdjejehzj"
 
         local function loadPanelSdkFallback()
             local loader = loadstring or load
@@ -249,6 +250,10 @@ return function(Library, context)
             local panelKey = chatOpts.PanelKey or chatOpts.Key
                 or opts.PanelKey or opts.Key
                 or (type(envTable) == "table" and (envTable.PANEL_KEY or envTable.PanelKey))
+            local panelCustomKey = chatOpts.CustomKey or chatOpts.customKey or chatOpts.CustomSigningKey
+                or opts.CustomKey or opts.ChatKey or opts.CustomSigningKey
+                or (type(envTable) == "table" and (envTable.PANEL_CUSTOM_KEY or envTable.PanelCustomKey or envTable.UILIB_CHAT_KEY))
+                or defaultChatSigningKey
             local strictConfig = chatOpts.StrictConfig ~= false and opts.ChatStrictConfig ~= false
             if strictConfig and (type(panelUrl) ~= "string" or panelUrl == "" or type(panelSlug) ~= "string" or panelSlug == "" or type(panelKey) ~= "string" or panelKey == "") then
                 return {
@@ -265,6 +270,13 @@ return function(Library, context)
             local connectionStatsFn = type(panelSdk) == "table" and (panelSdk.connectionStats or panelSdk.ConnectionStats) or nil
             local sharedServersFn = type(panelSdk) == "table" and (panelSdk.sharedServers or panelSdk.SharedServers) or nil
             local monitorFn = type(panelSdk) == "table" and (panelSdk.monitor or panelSdk.Monitor or panelSdk.startMonitor or panelSdk.StartMonitor) or nil
+            local setCustomKeyFn = type(panelSdk) == "table" and (panelSdk.setCustomKey or panelSdk.SetCustomKey) or nil
+
+            if type(setCustomKeyFn) == "function" and type(panelCustomKey) == "string" and panelCustomKey ~= "" then
+                pcall(function()
+                    callProviderFunction(panelSdk, setCustomKeyFn, panelCustomKey)
+                end)
+            end
 
             local function fallbackSignedPost(path, extra)
                 local requestFn = getRequestFunction()
@@ -299,7 +311,7 @@ return function(Library, context)
                     user = tostring(Client and Client.Name or ""),
                     userid = uid,
                     timestamp = ts,
-                    signature = hmacFn(tostring(panelKey or ""), tostring(panelSlug or "") .. ":" .. uid .. ":" .. ts),
+                    signature = hmacFn(tostring(panelCustomKey or panelKey or ""), tostring(panelSlug or "") .. ":" .. uid .. ":" .. ts),
                 }
                 if type(payload.signature) ~= "string" or payload.signature == "" then
                     return false, { error = "signature_failed" }
@@ -348,6 +360,7 @@ return function(Library, context)
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedUsersFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        customKey = panelCustomKey,
                     })
                     if not okCall then
                         return false, resultA
@@ -364,6 +377,7 @@ return function(Library, context)
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, connectionStatsFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        customKey = panelCustomKey,
                     })
                     if not okCall then
                         return false, resultA
@@ -379,6 +393,7 @@ return function(Library, context)
                     options = type(options) == "table" and options or {}
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedServersFn, panelUrl, panelSlug, panelKey, {
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        customKey = panelCustomKey,
                     })
                     if not okCall then
                         return false, resultA
@@ -390,6 +405,7 @@ return function(Library, context)
                     Send = function(text, room)
                         local okCall, resultA, resultB = callProviderFunction(panelSdk, chatSendFn, panelUrl, panelSlug, panelKey, text, {
                             room = room,
+                            customKey = panelCustomKey,
                         })
                         if not okCall then
                             return false, resultA
@@ -401,6 +417,7 @@ return function(Library, context)
                             after_id = afterId,
                             room = room,
                             limit = limit,
+                            customKey = panelCustomKey,
                         })
                         if not okCall then
                             return false, resultA
@@ -425,6 +442,7 @@ return function(Library, context)
                             interval = tonumber(options.interval) or 8,
                             initialDelay = tonumber(options.initialDelay) or 0,
                             debug = options.debug == true,
+                            customKey = panelCustomKey,
                         })
                         if not okCall then
                             return false, resultA
