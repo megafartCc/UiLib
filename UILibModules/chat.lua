@@ -161,9 +161,7 @@ return function(Library, context)
     end
 
     local function makeProviderResolver(chatOpts, opts)
-        local defaultPanelUrl = "https://panel-production-dd46.up.railway.app"
-        local defaultPanelSlug = "sabnew"
-        local defaultPanelKey = "DSD3213232sfdxzcvxcfhhjgfj"
+        local defaultChatSigningKey = "FDJhxveibdjejehzj"
 
         local function loadPanelSdkFallback()
             local loader = loadstring or load
@@ -246,15 +244,23 @@ return function(Library, context)
             local panelUrl = chatOpts.PanelUrl or chatOpts.URL or chatOpts.Url
                 or opts.PanelUrl or opts.PanelURL or opts.URL or opts.Url
                 or (type(envTable) == "table" and (envTable.PANEL_URL or envTable.PanelUrl))
-                or defaultPanelUrl
             local panelSlug = chatOpts.ScriptSlug or chatOpts.Slug
                 or opts.ScriptSlug or opts.PanelSlug or opts.Slug
                 or (type(envTable) == "table" and (envTable.PANEL_SLUG or envTable.PanelSlug))
-                or defaultPanelSlug
             local panelKey = chatOpts.PanelKey or chatOpts.Key
                 or opts.PanelKey or opts.Key
                 or (type(envTable) == "table" and (envTable.PANEL_KEY or envTable.PanelKey))
-                or defaultPanelKey
+            local panelCustomKey = chatOpts.CustomKey or chatOpts.customKey or chatOpts.CustomSigningKey
+                or opts.CustomKey or opts.ChatKey or opts.CustomSigningKey
+                or (type(envTable) == "table" and (envTable.PANEL_CUSTOM_KEY or envTable.PanelCustomKey or envTable.UILIB_CHAT_KEY))
+                or defaultChatSigningKey
+            local strictConfig = chatOpts.StrictConfig ~= false and opts.ChatStrictConfig ~= false
+            if strictConfig and (type(panelUrl) ~= "string" or panelUrl == "" or type(panelSlug) ~= "string" or panelSlug == "" or type(panelKey) ~= "string" or panelKey == "") then
+                return {
+                    __error = "missing_panel_config",
+                    __errorMessage = "Missing panel config (PanelUrl/ScriptSlug/PanelKey)",
+                }
+            end
             local chatSendFn = type(panelSdk) == "table" and (panelSdk.chatSend or panelSdk.ChatSend
                 or (type(panelSdk.chat) == "table" and (panelSdk.chat.send or panelSdk.chat.Send))) or nil
             local chatFeedFn = type(panelSdk) == "table" and (panelSdk.chatFeed or panelSdk.ChatFeed
@@ -263,6 +269,14 @@ return function(Library, context)
                 or panelSdk.peers or panelSdk.Peers) or nil
             local connectionStatsFn = type(panelSdk) == "table" and (panelSdk.connectionStats or panelSdk.ConnectionStats) or nil
             local sharedServersFn = type(panelSdk) == "table" and (panelSdk.sharedServers or panelSdk.SharedServers) or nil
+            local monitorFn = type(panelSdk) == "table" and (panelSdk.monitor or panelSdk.Monitor or panelSdk.startMonitor or panelSdk.StartMonitor) or nil
+            local setCustomKeyFn = type(panelSdk) == "table" and (panelSdk.setCustomKey or panelSdk.SetCustomKey) or nil
+
+            if type(setCustomKeyFn) == "function" and type(panelCustomKey) == "string" and panelCustomKey ~= "" then
+                pcall(function()
+                    callProviderFunction(panelSdk, setCustomKeyFn, panelCustomKey)
+                end)
+            end
 
             local function fallbackSignedPost(path, extra)
                 local requestFn = getRequestFunction()
@@ -297,7 +311,7 @@ return function(Library, context)
                     user = tostring(Client and Client.Name or ""),
                     userid = uid,
                     timestamp = ts,
-                    signature = hmacFn(tostring(panelKey or ""), tostring(panelSlug or "") .. ":" .. uid .. ":" .. ts),
+                    signature = hmacFn(tostring(panelCustomKey or panelKey or ""), tostring(panelSlug or "") .. ":" .. uid .. ":" .. ts),
                 }
                 if type(payload.signature) ~= "string" or payload.signature == "" then
                     return false, { error = "signature_failed" }
@@ -346,6 +360,7 @@ return function(Library, context)
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedUsersFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        customKey = panelCustomKey,
                     })
                     if not okCall then
                         return false, resultA
@@ -361,7 +376,8 @@ return function(Library, context)
                     options = type(options) == "table" and options or {}
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, connectionStatsFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
-                        includeSelf = options.includeSelf ~= false and options.include_self ~= false,
+                        includeSelf = options.includeSelf == true or options.include_self == true,
+                        customKey = panelCustomKey,
                     })
                     if not okCall then
                         return false, resultA
@@ -377,6 +393,7 @@ return function(Library, context)
                     options = type(options) == "table" and options or {}
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedServersFn, panelUrl, panelSlug, panelKey, {
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        customKey = panelCustomKey,
                     })
                     if not okCall then
                         return false, resultA
@@ -388,6 +405,7 @@ return function(Library, context)
                     Send = function(text, room)
                         local okCall, resultA, resultB = callProviderFunction(panelSdk, chatSendFn, panelUrl, panelSlug, panelKey, text, {
                             room = room,
+                            customKey = panelCustomKey,
                         })
                         if not okCall then
                             return false, resultA
@@ -399,6 +417,7 @@ return function(Library, context)
                             after_id = afterId,
                             room = room,
                             limit = limit,
+                            customKey = panelCustomKey,
                         })
                         if not okCall then
                             return false, resultA
@@ -414,10 +433,26 @@ return function(Library, context)
                     Servers = function(options)
                         return fetchSharedServers(options)
                     end,
+                    StartHeartbeat = function(options)
+                        if type(monitorFn) ~= "function" then
+                            return false, { error = "monitor_unavailable" }
+                        end
+                        options = type(options) == "table" and options or {}
+                        local okCall, resultA, resultB = callProviderFunction(panelSdk, monitorFn, panelUrl, panelSlug, panelKey, {
+                            interval = tonumber(options.interval) or 8,
+                            initialDelay = tonumber(options.initialDelay) or 0,
+                            debug = options.debug == true,
+                            customKey = panelCustomKey,
+                        })
+                        if not okCall then
+                            return false, resultA
+                        end
+                        return resultA, resultB
+                    end,
                     Profile = function(userName, userId)
                         local okPeers, peersResponse = fetchSharedUsers({
                             jobid = game.JobId or "",
-                            includeSelf = true,
+                            includeSelf = false,
                         })
                         if not okPeers or type(peersResponse) ~= "table" then
                             return false, peersResponse
@@ -477,7 +512,7 @@ return function(Library, context)
                         options = type(options) == "table" and options or {}
                         return fallbackSignedPost("/api/heartbeat/connections", {
                             jobid = tostring(options.jobid or game.JobId or ""),
-                            include_self = options.includeSelf ~= false and options.include_self ~= false,
+                            include_self = options.includeSelf == true or options.include_self == true,
                         })
                     end,
                     Servers = function(options)
@@ -485,6 +520,9 @@ return function(Library, context)
                         return fallbackSignedPost("/api/heartbeat/servers", {
                             include_self = options.includeSelf == true or options.include_self == true,
                         })
+                    end,
+                    StartHeartbeat = function()
+                        return false, { error = "monitor_unavailable" }
                     end,
                 }
             end
@@ -554,8 +592,9 @@ return function(Library, context)
         local chatLoopToken = 0
         local presenceLoopToken = 0
         local presenceBusy = false
-        local presenceInterval = math.max(3, tonumber(chatOpts.PresenceInterval or chatOpts.presenceInterval or 8) or 8)
+        local presenceInterval = math.max(3, tonumber(chatOpts.PresenceInterval or chatOpts.presenceInterval or 6) or 6)
         local chatProvider = nil
+        local heartbeatStarted = false
         local chatSeen = {}
         local chatRows = {}
         local chatPanelRuntime = {
@@ -565,6 +604,7 @@ return function(Library, context)
 
         local resolveChatProvider = makeProviderResolver(chatOpts, opts)
         chatProvider = resolveChatProvider(chatOpts.Provider or opts.ChatProvider)
+        local ensureProviderHeartbeat
 
         local chatBtn = Instance.new("ImageButton", bottom)
         chatBtn.Name = "ChatBtn"
@@ -610,6 +650,102 @@ return function(Library, context)
         chatHeader.TextXAlignment = Enum.TextXAlignment.Left
         chatHeader.ZIndex = 13
         bindTheme(chatHeader, "TextColor3", "TextStrong")
+
+        local chatStatusLabel = Instance.new("TextLabel", chatPanel)
+        chatStatusLabel.BackgroundTransparency = 1
+        chatStatusLabel.Position = UDim2.new(0, 52, 0, 0)
+        chatStatusLabel.Size = UDim2.new(1, -60, 0, 28)
+        chatStatusLabel.Font = config.FontMedium
+        chatStatusLabel.Text = ""
+        chatStatusLabel.TextColor3 = colors.TextDim
+        chatStatusLabel.TextSize = 10
+        chatStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        chatStatusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        chatStatusLabel.ZIndex = 13
+        bindTheme(chatStatusLabel, "TextColor3", "TextDim")
+
+        local function setChatStatus(message, isError)
+            local value = trimChatText(message)
+            chatStatusLabel.Text = value
+            if value == "" then
+                chatStatusLabel.TextColor3 = colors.TextDim
+            elseif isError then
+                chatStatusLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+            else
+                chatStatusLabel.TextColor3 = colors.TextDim
+            end
+        end
+
+        local function formatProviderError(resultValue, fallbackText)
+            local fallback = tostring(fallbackText or "request_failed")
+            if type(resultValue) == "table" then
+                local raw = resultValue.error or resultValue.message or resultValue.reason or resultValue.detail
+                if raw ~= nil then
+                    return tostring(raw)
+                end
+                local statusCode = tonumber(resultValue.status or resultValue.StatusCode)
+                if statusCode then
+                    return "HTTP " .. tostring(statusCode)
+                end
+            elseif type(resultValue) == "string" and resultValue ~= "" then
+                return resultValue
+            end
+            return fallback
+        end
+
+        local function debugSerialize(value)
+            local valueType = type(value)
+            if valueType == "table" then
+                local okEncode, encoded = pcall(function()
+                    return HttpService:JSONEncode(value)
+                end)
+                if okEncode and type(encoded) == "string" then
+                    return encoded
+                end
+                return "<table>"
+            end
+            if valueType == "nil" then
+                return "nil"
+            end
+            return tostring(value)
+        end
+
+        local chatDebugEnabled = chatOpts.Debug ~= false
+        local function debugWarn(stage, a, b, c)
+            if not chatDebugEnabled then
+                return
+            end
+            warn("[UiLibChatDebug] " .. tostring(stage) .. " | a=" .. debugSerialize(a) .. " | b=" .. debugSerialize(b) .. " | c=" .. debugSerialize(c))
+        end
+
+        ensureProviderHeartbeat = function()
+            if heartbeatStarted then
+                return true
+            end
+            local provider = chatProvider
+            local startFn = type(provider) == "table" and (provider.StartHeartbeat or provider.startHeartbeat or provider.Monitor or provider.monitor) or nil
+            if type(startFn) ~= "function" then
+                debugWarn("heartbeat_missing_function", provider)
+                return false
+            end
+            local okCall, successValue, response = callProviderFunction(provider, startFn, {
+                interval = math.max(4, math.min(presenceInterval, 10)),
+                initialDelay = 0,
+                debug = chatOpts.Debug == true,
+            })
+            debugWarn("heartbeat_start_result", okCall, successValue, response)
+            if not okCall or successValue == false then
+                setChatStatus("HB: " .. formatProviderError(response or successValue, "start_failed"), true)
+                debugWarn("heartbeat_start_failed", response, successValue)
+                return false
+            end
+            heartbeatStarted = true
+            return true
+        end
+
+        if type(chatProvider) == "table" and type(chatProvider.__errorMessage) == "string" then
+            setChatStatus(chatProvider.__errorMessage, true)
+        end
 
         local chatHeaderLine = Instance.new("Frame", chatPanel)
         chatHeaderLine.Position = UDim2.new(0, 8, 0, 28)
@@ -744,6 +880,12 @@ return function(Library, context)
             end
 
             local list = payload.users or payload.peers
+            if type(list) ~= "table" and type(payload.data) == "table" then
+                list = payload.data.users or payload.data.peers or payload.data
+            end
+            if type(list) ~= "table" and type(payload.result) == "table" then
+                list = payload.result.users or payload.result.peers or payload.result
+            end
             if type(list) ~= "table" then
                 return {}
             end
@@ -786,6 +928,18 @@ return function(Library, context)
                 return nil
             end
             local raw = payload.total_active or payload.totalActive or payload.count
+                or payload.total_connections or payload.totalConnections
+                or payload.online or payload.online_count or payload.onlineCount
+            if raw == nil and type(payload.data) == "table" then
+                raw = payload.data.total_active or payload.data.totalActive or payload.data.count
+                    or payload.data.total_connections or payload.data.totalConnections
+                    or payload.data.online or payload.data.online_count or payload.data.onlineCount
+            end
+            if raw == nil and type(payload.result) == "table" then
+                raw = payload.result.total_active or payload.result.totalActive or payload.result.count
+                    or payload.result.total_connections or payload.result.totalConnections
+                    or payload.result.online or payload.result.online_count or payload.result.onlineCount
+            end
             local value = tonumber(raw)
             if value and value >= 0 then
                 return math.floor(value + 0.5)
@@ -799,6 +953,12 @@ return function(Library, context)
             end
 
             local servers = payload.servers
+            if type(servers) ~= "table" and type(payload.data) == "table" then
+                servers = payload.data.servers or payload.data
+            end
+            if type(servers) ~= "table" and type(payload.result) == "table" then
+                servers = payload.result.servers or payload.result
+            end
             if type(servers) ~= "table" then
                 return {}
             end
@@ -851,7 +1011,9 @@ return function(Library, context)
                 return
             end
 
+            ensureProviderHeartbeat()
             local provider = chatProvider
+            debugWarn("presence_refresh_begin", game.JobId, provider)
             local sharedFn = type(provider) == "table" and (provider.SharedUsers or provider.sharedUsers or provider.Peers or provider.peers) or nil
             local connectionsFn = type(provider) == "table" and (provider.Connections or provider.connectionStats) or nil
             local serversFn = type(provider) == "table" and (provider.Servers or provider.sharedServers) or nil
@@ -871,8 +1033,9 @@ return function(Library, context)
                 if type(connectionsFn) == "function" then
                     local okConnCall, okConnResult, connResponse = callProviderFunction(provider, connectionsFn, {
                         jobid = game.JobId or "",
-                        includeSelf = true,
+                        includeSelf = false,
                     })
+                    debugWarn("presence_connections_result", okConnCall, okConnResult, connResponse)
                     if okConnCall and okConnResult ~= false then
                         local connPayload = connResponse
                         if type(connPayload) ~= "table" and type(okConnResult) == "table" then
@@ -890,6 +1053,7 @@ return function(Library, context)
                     local okServerCall, okServerResult, serverResponse = callProviderFunction(provider, serversFn, {
                         includeSelf = false,
                     })
+                    debugWarn("presence_servers_result", okServerCall, okServerResult, serverResponse)
                     if okServerCall and okServerResult ~= false then
                         local serverPayload = serverResponse
                         if type(serverPayload) ~= "table" and type(okServerResult) == "table" then
@@ -899,6 +1063,12 @@ return function(Library, context)
                         if #lastServerUsers > 0 then
                             gotServerUsers = true
                         end
+                    else
+                        debugWarn("presence_servers_failed", {
+                            okCall = okServerCall,
+                            okResult = okServerResult,
+                            response = serverResponse,
+                        })
                     end
                 end
 
@@ -907,6 +1077,7 @@ return function(Library, context)
                         jobid = game.JobId or "",
                         includeSelf = false,
                     })
+                    debugWarn("presence_shared_users_result", okCall, okResult, response)
                     if okCall and okResult ~= false then
                         local payload = response
                         if type(payload) ~= "table" and type(okResult) == "table" then
@@ -921,11 +1092,19 @@ return function(Library, context)
                         if not gotServerUsers then
                             lastServerUsers = {}
                         end
+                    else
+                        debugWarn("presence_shared_failed", {
+                            okCall = okCall,
+                            okResult = okResult,
+                            response = response,
+                        })
                     end
                 end
 
                 if not gotPresence then
                     setPresenceVisual(0)
+                else
+                    setChatStatus("", false)
                 end
                 if not gotServerUsers and #lastSharedUsers == 0 then
                     lastServerUsers = {}
@@ -1686,6 +1865,8 @@ return function(Library, context)
             local provider = chatProvider
             local fetchFn = type(provider) == "table" and (provider.Fetch or provider.fetch or provider.Get or provider.get) or nil
             if type(fetchFn) ~= "function" then
+                setChatStatus("Fetch unavailable", true)
+                debugWarn("fetch_unavailable", { provider = tostring(type(provider)) })
                 return
             end
 
@@ -1693,9 +1874,21 @@ return function(Library, context)
             task.spawn(function()
                 local ok, success, response = callProviderFunction(provider, fetchFn, chatPanelRuntime.LastId or 0, chatRoom, chatFeedLimit)
                 chatPollBusy = false
+                debugWarn("chat_fetch_result", ok, success, response)
                 if not ok or success == false then
+                    setChatStatus("Fetch: " .. formatProviderError(response or success, "request_failed"), true)
+                    debugWarn("fetch_failed", {
+                        ok = ok,
+                        success = success,
+                        response = response,
+                    })
                     return
                 end
+                debugWarn("fetch_ok", {
+                    success = success,
+                    response = response,
+                })
+                setChatStatus("", false)
 
                 local payload = response
                 if type(payload) ~= "table" and type(success) == "table" then
@@ -1705,7 +1898,13 @@ return function(Library, context)
                     return
                 end
 
-                local rows = payload.messages or payload.data or payload.rows
+                local rows = payload.messages or payload.rows
+                if type(rows) ~= "table" and type(payload.data) == "table" then
+                    rows = payload.data.messages or payload.data.rows or payload.data
+                end
+                if type(rows) ~= "table" and type(payload.result) == "table" then
+                    rows = payload.result.messages or payload.result.rows or payload.result
+                end
                 applyMessages(rows)
             end)
         end
@@ -1726,6 +1925,8 @@ return function(Library, context)
             local provider = chatProvider
             local sendFn = type(provider) == "table" and (provider.Send or provider.send or provider.Post or provider.post) or nil
             if type(sendFn) ~= "function" then
+                setChatStatus("Send unavailable", true)
+                debugWarn("send_unavailable", { provider = tostring(type(provider)) })
                 addChatRow(Client.Name, messageText, os.date("!%H:%M:%S", os.time() - (3 * 60 * 60)))
                 scrollChatToBottom()
                 return
@@ -1733,9 +1934,24 @@ return function(Library, context)
 
             task.spawn(function()
                 local ok, success, response = callProviderFunction(provider, sendFn, messageText, chatRoom)
+                debugWarn("chat_send_result", ok, success, response)
                 if not ok or success == false then
+                    setChatStatus("Send: " .. formatProviderError(response or success, "request_failed"), true)
+                    debugWarn("send_failed", {
+                        ok = ok,
+                        success = success,
+                        response = response,
+                        room = chatRoom,
+                        message = messageText,
+                    })
                     return
                 end
+                debugWarn("send_ok", {
+                    success = success,
+                    response = response,
+                    room = chatRoom,
+                })
+                setChatStatus("", false)
 
                 local payload = response
                 if type(payload) ~= "table" and type(success) == "table" then
@@ -1862,14 +2078,24 @@ return function(Library, context)
             end
         end)
 
+        ensureProviderHeartbeat()
+
         function win:SetChatProvider(provider)
+            heartbeatStarted = false
             chatProvider = resolveChatProvider(provider)
+            debugWarn("set_provider", provider, chatProvider)
+            if type(chatProvider) == "table" and type(chatProvider.__errorMessage) == "string" then
+                setChatStatus(chatProvider.__errorMessage, true)
+            else
+                setChatStatus("", false)
+            end
+            ensureProviderHeartbeat()
             chatPanelRuntime.LastId = 0
             if type(chatPanelRuntime.Reset) == "function" then
                 chatPanelRuntime.Reset()
             end
             refreshSharedPresenceAsync()
-            return chatProvider ~= nil
+            return chatProvider ~= nil and type(chatProvider.__error) ~= "string"
         end
 
         win.RefreshChat = function()
