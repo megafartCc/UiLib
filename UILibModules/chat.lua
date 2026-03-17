@@ -356,6 +356,10 @@ return function(Library, context)
                 or (type(panelSdk.chat) == "table" and (panelSdk.chat.send or panelSdk.chat.Send))) or nil
             local chatFeedFn = type(panelSdk) == "table" and (panelSdk.chatFeed or panelSdk.ChatFeed
                 or (type(panelSdk.chat) == "table" and (panelSdk.chat.feed or panelSdk.chat.Feed))) or nil
+            local chatTypingFn = type(panelSdk) == "table" and (panelSdk.chatTyping or panelSdk.ChatTyping
+                or (type(panelSdk.chat) == "table" and (panelSdk.chat.typing or panelSdk.chat.Typing))) or nil
+            local chatTypingStatusFn = type(panelSdk) == "table" and (panelSdk.chatTypingStatus or panelSdk.ChatTypingStatus
+                or (type(panelSdk.chat) == "table" and (panelSdk.chat.typingStatus or panelSdk.chat.TypingStatus))) or nil
             local sharedUsersFn = type(panelSdk) == "table" and (panelSdk.sharedUsers or panelSdk.SharedUsers
                 or panelSdk.peers or panelSdk.Peers) or nil
             local connectionStatsFn = type(panelSdk) == "table" and (panelSdk.connectionStats or panelSdk.ConnectionStats) or nil
@@ -526,6 +530,35 @@ return function(Library, context)
                         end
                         return resultA, resultB
                     end,
+                    Typing = function(isTyping, room)
+                        if type(chatTypingFn) ~= "function" then
+                            return false, { error = "typing_unavailable" }
+                        end
+                        local okCall, resultA, resultB = callProviderFunction(panelSdk, chatTypingFn, panelUrl, panelSlug, panelKey, {
+                            room = room,
+                            is_typing = isTyping == true,
+                            scope = sharedScope,
+                            customKey = panelCustomKey,
+                        })
+                        if not okCall then
+                            return false, resultA
+                        end
+                        return resultA, resultB
+                    end,
+                    TypingStatus = function(room)
+                        if type(chatTypingStatusFn) ~= "function" then
+                            return false, { error = "typing_status_unavailable" }
+                        end
+                        local okCall, resultA, resultB = callProviderFunction(panelSdk, chatTypingStatusFn, panelUrl, panelSlug, panelKey, {
+                            room = room,
+                            scope = sharedScope,
+                            customKey = panelCustomKey,
+                        })
+                        if not okCall then
+                            return false, resultA
+                        end
+                        return resultA, resultB
+                    end,
                     SharedUsers = function(options)
                         return fetchSharedUsers(options)
                     end,
@@ -609,6 +642,19 @@ return function(Library, context)
                             room = room,
                             after_id = tonumber(afterId or 0) or 0,
                             limit = tonumber(limit or 60) or 60,
+                            scope = sharedScope,
+                        })
+                    end,
+                    Typing = function(isTyping, room)
+                        return fallbackSignedPost("/api/chat/typing", {
+                            room = room,
+                            is_typing = isTyping == true,
+                            scope = sharedScope,
+                        })
+                    end,
+                    TypingStatus = function(room)
+                        return fallbackSignedPost("/api/chat/typing_status", {
+                            room = room,
                             scope = sharedScope,
                         })
                     end,
@@ -714,6 +760,11 @@ return function(Library, context)
         local unreadPingCount = 0
         local pendingReply = nil
         local replyMenuTarget = nil
+        local typingUsers = {}
+        local localTypingWanted = false
+        local typingStateSent = false
+        local typingLastSentAt = 0
+        local typingLoopToken = 0
         local chatPanelRuntime = {
             LastId = 0,
             Reset = nil,
@@ -813,6 +864,57 @@ return function(Library, context)
         local function debugWarn()
         end
 
+        local extractTypingUsers
+        local setTypingUsers
+
+        local function sendTypingState(nextTyping, force)
+            local provider = chatProvider
+            local typingFn = type(provider) == "table" and (provider.Typing or provider.typing or provider.SetTyping or provider.setTyping) or nil
+            if type(typingFn) ~= "function" then
+                typingStateSent = false
+                return false
+            end
+
+            local desired = nextTyping == true
+            local nowClock = os.clock()
+            if not force and typingStateSent == desired and (nowClock - typingLastSentAt) < 1.2 then
+                return true
+            end
+
+            typingLastSentAt = nowClock
+            task.spawn(function()
+                local ok, success = callProviderFunction(provider, typingFn, desired, chatRoom)
+                if ok and success ~= false then
+                    typingStateSent = desired
+                end
+            end)
+            return true
+        end
+
+        local function refreshTypingStatus()
+            local provider = chatProvider
+            local statusFn = type(provider) == "table" and (provider.TypingStatus or provider.typingStatus or provider.GetTypingStatus or provider.getTypingStatus) or nil
+            if type(statusFn) ~= "function" then
+                return false
+            end
+
+            local ok, success, response = callProviderFunction(provider, statusFn, chatRoom)
+            if not ok or success == false then
+                return false
+            end
+
+            local payload = response
+            if type(payload) ~= "table" and type(success) == "table" then
+                payload = success
+            end
+            if type(payload) ~= "table" then
+                return false
+            end
+
+            setTypingUsers(extractTypingUsers(payload))
+            return true
+        end
+
         ensureProviderHeartbeat = function()
             if heartbeatStarted then
                 return true
@@ -878,6 +980,22 @@ return function(Library, context)
         chatInputRow.Position = UDim2.new(0, 8, 1, -38)
         chatInputRow.Size = UDim2.new(1, -16, 0, 30)
         chatInputRow.ZIndex = 13
+
+        local typingStatusLabel = Instance.new("TextLabel", chatPanel)
+        typingStatusLabel.Name = "TypingStatusLabel"
+        typingStatusLabel.BackgroundTransparency = 1
+        typingStatusLabel.Position = UDim2.new(0, 10, 1, -52)
+        typingStatusLabel.Size = UDim2.new(1, -20, 0, 12)
+        typingStatusLabel.Font = config.FontMedium
+        typingStatusLabel.Text = ""
+        typingStatusLabel.TextColor3 = colors.TextDim
+        typingStatusLabel.TextSize = 10
+        typingStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        typingStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
+        typingStatusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        typingStatusLabel.Visible = false
+        typingStatusLabel.ZIndex = 13
+        bindTheme(typingStatusLabel, "TextColor3", "TextDim")
 
         local replyComposerFrame = Instance.new("Frame", chatPanel)
         replyComposerFrame.Name = "ReplyComposer"
@@ -997,8 +1115,10 @@ return function(Library, context)
         local function updateChatInputLayout()
             if replyComposerFrame.Visible then
                 chatMessagesScroll.Size = UDim2.new(1, -16, 1, -100)
+                typingStatusLabel.Position = UDim2.new(0, 10, 1, -74)
             else
                 chatMessagesScroll.Size = UDim2.new(1, -16, 1, -78)
+                typingStatusLabel.Position = UDim2.new(0, 10, 1, -52)
             end
         end
 
@@ -1050,6 +1170,8 @@ return function(Library, context)
             replyMenuTarget = messageMeta
             setReplyContextOpen(true)
         end
+
+        updateChatInputLayout()
 
         local function refreshChatButtonVisual()
             local targetColor = chatOpen and colors.Main or colors.TextDim
@@ -1107,6 +1229,77 @@ return function(Library, context)
             refreshPresenceLabelText()
         end
         setPresenceVisual(0)
+
+        extractTypingUsers = function(payload)
+            if type(payload) ~= "table" then
+                return {}
+            end
+
+            local list = payload.typing_users or payload.typingUsers
+            if type(list) ~= "table" and type(payload.data) == "table" then
+                list = payload.data.typing_users or payload.data.typingUsers
+            end
+            if type(list) ~= "table" and type(payload.result) == "table" then
+                list = payload.result.typing_users or payload.result.typingUsers
+            end
+            if type(list) ~= "table" then
+                return {}
+            end
+
+            local out = {}
+            for _, entry in ipairs(list) do
+                if type(entry) == "table" then
+                    table.insert(out, entry)
+                end
+            end
+            return out
+        end
+
+        setTypingUsers = function(nextUsers)
+            typingUsers = type(nextUsers) == "table" and nextUsers or {}
+
+            local names = {}
+            local seen = {}
+            local localId = tostring(Client and Client.UserId or "")
+            local localNameLower = string.lower(tostring(Client and Client.Name or ""))
+            local localDisplayLower = string.lower(tostring(Client and (Client.DisplayName or Client.Name) or ""))
+
+            for _, entry in ipairs(typingUsers) do
+                if type(entry) == "table" then
+                    local entryId = tostring(entry.userid or entry.userId or "")
+                    local entryUser = tostring(entry.user or entry.username or entry.name or "")
+                    local lower = string.lower(entryUser)
+                    if entryId ~= "" and entryId ~= localId and lower ~= localNameLower and lower ~= localDisplayLower then
+                        local key = "id:" .. entryId
+                        if not seen[key] then
+                            seen[key] = true
+                            table.insert(names, entryUser ~= "" and entryUser or entryId)
+                        end
+                    elseif entryId == "" and lower ~= "" and lower ~= localNameLower and lower ~= localDisplayLower then
+                        local key = "name:" .. lower
+                        if not seen[key] then
+                            seen[key] = true
+                            table.insert(names, entryUser)
+                        end
+                    end
+                end
+            end
+
+            if #names == 0 then
+                typingStatusLabel.Visible = false
+                typingStatusLabel.Text = ""
+                return
+            end
+
+            if #names == 1 then
+                typingStatusLabel.Text = string.format("(%s) Typing", tostring(names[1]))
+            elseif #names <= 3 then
+                typingStatusLabel.Text = table.concat(names, ",") .. " Typing"
+            else
+                typingStatusLabel.Text = "Multiple People Typing"
+            end
+            typingStatusLabel.Visible = true
+        end
 
         local function extractSharedUsers(payload)
             if type(payload) ~= "table" then
@@ -2196,6 +2389,9 @@ return function(Library, context)
             setUnreadPingCount(0)
             setPendingReply(nil)
             setReplyContextOpen(false)
+            localTypingWanted = false
+            sendTypingState(false, true)
+            setTypingUsers({})
             setProfileOpen(false)
             setServerListOpen(false)
             setPresenceVisual(0)
@@ -2320,6 +2516,15 @@ return function(Library, context)
                     rows = payload.result.messages or payload.result.rows or payload.result
                 end
                 applyMessages(rows)
+
+                local typingRows = extractTypingUsers(payload)
+                if #typingRows > 0 then
+                    setTypingUsers(typingRows)
+                else
+                    if not refreshTypingStatus() then
+                        setTypingUsers({})
+                    end
+                end
             end)
         end
 
@@ -2336,6 +2541,8 @@ return function(Library, context)
             chatInput.Text = ""
             chatInput:ReleaseFocus()
             setReplyContextOpen(false)
+            localTypingWanted = false
+            sendTypingState(false, true)
 
             local replyPayload = nil
             if type(pendingReply) == "table" then
@@ -2434,10 +2641,19 @@ return function(Library, context)
                 setUnreadPingCount(0)
                 setReplyContextOpen(false)
                 refreshSharedPresenceAsync()
+                localTypingWanted = trimChatText(chatInput.Text) ~= ""
+                if localTypingWanted then
+                    sendTypingState(true, true)
+                else
+                    sendTypingState(false, true)
+                end
             else
                 setReplyContextOpen(false)
                 setProfileOpen(false)
                 setServerListOpen(false)
+                localTypingWanted = false
+                sendTypingState(false, true)
+                setTypingUsers({})
             end
 
             refreshChatButtonVisual()
@@ -2494,6 +2710,28 @@ return function(Library, context)
         chatInput.FocusLost:Connect(function(enterPressed)
             if enterPressed then
                 sendCurrentChatText()
+            else
+                localTypingWanted = false
+                sendTypingState(false, true)
+            end
+        end)
+
+        chatInput.Focused:Connect(function()
+            local hasText = trimChatText(chatInput.Text) ~= ""
+            localTypingWanted = hasText and chatOpen
+            if localTypingWanted then
+                sendTypingState(true, true)
+            end
+        end)
+
+        chatInput:GetPropertyChangedSignal("Text"):Connect(function()
+            local hasText = trimChatText(chatInput.Text) ~= ""
+            local desiredTyping = chatOpen and hasText
+            if desiredTyping ~= localTypingWanted then
+                localTypingWanted = desiredTyping
+                sendTypingState(localTypingWanted, true)
+            elseif desiredTyping then
+                sendTypingState(true, false)
             end
         end)
 
@@ -2546,6 +2784,19 @@ return function(Library, context)
                     callChatFetch()
                 end
                 task.wait(chatPollInterval)
+            end
+        end)
+
+        typingLoopToken += 1
+        local localTypingToken = typingLoopToken
+        task.spawn(function()
+            while not win._destroyed and localTypingToken == typingLoopToken do
+                if chatOpen and canUseUi() and localTypingWanted then
+                    sendTypingState(true, false)
+                    task.wait(2)
+                else
+                    task.wait(0.4)
+                end
             end
         end)
 
