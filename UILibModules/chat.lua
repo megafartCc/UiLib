@@ -254,6 +254,7 @@ return function(Library, context)
                 or opts.CustomKey or opts.ChatKey or opts.CustomSigningKey
                 or (type(envTable) == "table" and (envTable.PANEL_CUSTOM_KEY or envTable.PanelCustomKey or envTable.UILIB_CHAT_KEY))
                 or defaultChatSigningKey
+            local sharedScope = tostring(chatOpts.Scope or chatOpts.scope or opts.ChatScope or opts.chatScope or "global")
             local strictConfig = chatOpts.StrictConfig ~= false and opts.ChatStrictConfig ~= false
             if strictConfig and (type(panelUrl) ~= "string" or panelUrl == "" or type(panelSlug) ~= "string" or panelSlug == "" or type(panelKey) ~= "string" or panelKey == "") then
                 return {
@@ -360,6 +361,7 @@ return function(Library, context)
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedUsersFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        scope = options.scope or sharedScope,
                         customKey = panelCustomKey,
                     })
                     if not okCall then
@@ -377,6 +379,7 @@ return function(Library, context)
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, connectionStatsFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        scope = options.scope or sharedScope,
                         customKey = panelCustomKey,
                     })
                     if not okCall then
@@ -393,6 +396,7 @@ return function(Library, context)
                     options = type(options) == "table" and options or {}
                     local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedServersFn, panelUrl, panelSlug, panelKey, {
                         includeSelf = options.includeSelf == true or options.include_self == true,
+                        scope = options.scope or sharedScope,
                         customKey = panelCustomKey,
                     })
                     if not okCall then
@@ -405,6 +409,7 @@ return function(Library, context)
                     Send = function(text, room)
                         local okCall, resultA, resultB = callProviderFunction(panelSdk, chatSendFn, panelUrl, panelSlug, panelKey, text, {
                             room = room,
+                            scope = sharedScope,
                             customKey = panelCustomKey,
                         })
                         if not okCall then
@@ -417,6 +422,7 @@ return function(Library, context)
                             after_id = afterId,
                             room = room,
                             limit = limit,
+                            scope = sharedScope,
                             customKey = panelCustomKey,
                         })
                         if not okCall then
@@ -492,6 +498,7 @@ return function(Library, context)
                         return fallbackSignedPost("/api/chat/send", {
                             room = room,
                             message = tostring(text or ""),
+                            scope = sharedScope,
                         })
                     end,
                     Fetch = function(afterId, room, limit)
@@ -499,6 +506,7 @@ return function(Library, context)
                             room = room,
                             after_id = tonumber(afterId or 0) or 0,
                             limit = tonumber(limit or 60) or 60,
+                            scope = sharedScope,
                         })
                     end,
                     SharedUsers = function(options)
@@ -506,6 +514,7 @@ return function(Library, context)
                         return fallbackSignedPost("/api/heartbeat/peers", {
                             jobid = tostring(options.jobid or game.JobId or ""),
                             include_self = options.includeSelf == true or options.include_self == true,
+                            scope = options.scope or sharedScope,
                         })
                     end,
                     Connections = function(options)
@@ -513,12 +522,14 @@ return function(Library, context)
                         return fallbackSignedPost("/api/heartbeat/connections", {
                             jobid = tostring(options.jobid or game.JobId or ""),
                             include_self = options.includeSelf == true or options.include_self == true,
+                            scope = options.scope or sharedScope,
                         })
                     end,
                     Servers = function(options)
                         options = type(options) == "table" and options or {}
                         return fallbackSignedPost("/api/heartbeat/servers", {
                             include_self = options.includeSelf == true or options.include_self == true,
+                            scope = options.scope or sharedScope,
                         })
                     end,
                     StartHeartbeat = function()
@@ -1011,7 +1022,7 @@ return function(Library, context)
                 if type(connectionsFn) == "function" then
                     local okConnCall, okConnResult, connResponse = callProviderFunction(provider, connectionsFn, {
                         jobid = game.JobId or "",
-                        includeSelf = false,
+                        includeSelf = true,
                     })
                     debugWarn("presence_connections_result", okConnCall, okConnResult, connResponse)
                     if okConnCall and okConnResult ~= false then
