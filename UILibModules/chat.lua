@@ -732,8 +732,6 @@ return function(Library, context)
 
         local serverListOpen = false
         local serverListRows = {}
-        local serverListWidth = math.max(190, math.min(chatPanelWidth - 16, 320))
-        local serverListHeight = math.max(120, math.min(220, math.floor(main.AbsoluteSize.Y * 0.45)))
 
         local serverListBtn = Instance.new("TextButton", chatPanel)
         serverListBtn.Name = "ServerListButton"
@@ -757,14 +755,14 @@ return function(Library, context)
 
         local serverListPanel = Instance.new("Frame", chatPanel)
         serverListPanel.Name = "ServerListPanel"
-        serverListPanel.AnchorPoint = Vector2.new(1, 0)
-        serverListPanel.Position = UDim2.new(1, -8, 0, 26)
-        serverListPanel.Size = UDim2.fromOffset(serverListWidth, 0)
+        serverListPanel.AnchorPoint = Vector2.new(0, 0)
+        serverListPanel.Position = UDim2.new(0, 8, 0, 34)
+        serverListPanel.Size = UDim2.new(1, -16, 1, -42)
         serverListPanel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
         serverListPanel.BorderSizePixel = 0
         serverListPanel.Visible = false
         serverListPanel.ClipsDescendants = true
-        serverListPanel.ZIndex = 130
+        serverListPanel.ZIndex = 13
         bindTheme(serverListPanel, "BackgroundColor3", "Panel")
         bindTheme(serverListPanel, "BackgroundTransparency", "PanelTransparency")
         Instance.new("UICorner", serverListPanel).CornerRadius = UDim.new(0, 4)
@@ -782,37 +780,30 @@ return function(Library, context)
         serverListTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
         serverListTitle.TextSize = 11
         serverListTitle.TextXAlignment = Enum.TextXAlignment.Left
-        serverListTitle.ZIndex = 131
+        serverListTitle.ZIndex = 14
         bindTheme(serverListTitle, "TextColor3", "TextStrong")
+        serverListTitle.Visible = false
 
         local serverListScroll = Instance.new("ScrollingFrame", serverListPanel)
         serverListScroll.Name = "ServerListScroll"
-        serverListScroll.Position = UDim2.new(0, 6, 0, 24)
-        serverListScroll.Size = UDim2.new(1, -12, 1, -30)
+        serverListScroll.Position = UDim2.new(0, 6, 0, 6)
+        serverListScroll.Size = UDim2.new(1, -12, 1, -12)
         serverListScroll.BackgroundTransparency = 1
         serverListScroll.BorderSizePixel = 0
         serverListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
         serverListScroll.ScrollBarThickness = 2
         serverListScroll.ScrollBarImageColor3 = getThemeColor(Library, "Line", colors.Line)
-        serverListScroll.ZIndex = 131
+        serverListScroll.ZIndex = 14
 
         local serverListInner = Instance.new("Frame", serverListScroll)
         serverListInner.BackgroundTransparency = 1
         serverListInner.BorderSizePixel = 0
         serverListInner.Size = UDim2.new(1, -2, 0, 0)
-        serverListInner.ZIndex = 131
+        serverListInner.ZIndex = 14
 
         local serverListLayout = Instance.new("UIListLayout", serverListInner)
         serverListLayout.Padding = UDim.new(0, 4)
         serverListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-        local serverListPopupConfig = {
-            ClosedSize = UDim2.fromOffset(serverListWidth, 0),
-            OpenSize = UDim2.fromOffset(serverListWidth, serverListHeight),
-            OpenToken = "Open",
-            CloseToken = "Close",
-            HideDelay = 0.18,
-        }
 
         local function clearServerListRows()
             for _, row in ipairs(serverListRows) do
@@ -835,7 +826,7 @@ return function(Library, context)
             row.BorderSizePixel = 0
             row.Size = UDim2.new(1, 0, 0, 28)
             row.LayoutOrder = order
-            row.ZIndex = 132
+            row.ZIndex = 15
             bindTheme(row, "BackgroundColor3", "Control")
             bindTheme(row, "BackgroundTransparency", "ControlTransparency")
             Instance.new("UICorner", row).CornerRadius = UDim.new(0, 3)
@@ -855,7 +846,7 @@ return function(Library, context)
             nameLabel.TextColor3 = colors.Main
             nameLabel.TextSize = 10
             nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-            nameLabel.ZIndex = 133
+            nameLabel.ZIndex = 16
             bindTheme(nameLabel, "TextColor3", "Main")
 
             local placeLabel = Instance.new("TextLabel", row)
@@ -867,7 +858,7 @@ return function(Library, context)
             placeLabel.TextColor3 = colors.TextDim
             placeLabel.TextSize = 9
             placeLabel.TextXAlignment = Enum.TextXAlignment.Left
-            placeLabel.ZIndex = 133
+            placeLabel.ZIndex = 16
             bindTheme(placeLabel, "TextColor3", "TextDim")
 
             local joinBtn = Instance.new("TextButton", row)
@@ -883,7 +874,7 @@ return function(Library, context)
             joinBtn.AutoButtonColor = false
             joinBtn.Selectable = false
             joinBtn.Active = joinable
-            joinBtn.ZIndex = 133
+            joinBtn.ZIndex = 16
             Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 3)
 
             joinBtn.Activated:Connect(function()
@@ -906,33 +897,25 @@ return function(Library, context)
             if serverListOpen then
                 setProfileOpen(false)
                 refreshServerListPanel()
+                chatInput:ReleaseFocus()
+            elseif chatOpen then
+                chatInput:CaptureFocus()
             end
-            setPopupOpen(serverListPanel, serverListOpen, serverListPopupConfig)
-        end
-
-        registerTransientPopup(serverListPanel, function()
-            setServerListOpen(false)
-        end)
-        if popupManager and type(popupManager.bindOutsideClose) == "function" then
-            popupManager.bindOutsideClose({
-                cleanupKey = nextCleanupKey("ChatServerListOutsideClick"),
-                close = function()
-                    setServerListOpen(false)
-                end,
-                isOpen = function()
-                    return serverListOpen
-                end,
-                targets = function()
-                    return { serverListPanel, serverListBtn }
-                end,
-            })
+            serverListPanel.Visible = serverListOpen
+            chatMessagesScroll.Visible = not serverListOpen
+            chatInputRow.Visible = not serverListOpen
+            chatHeader.Text = serverListOpen and "SERVER LIST" or "CHAT"
+            serverListBtn.Text = serverListOpen and "Chat" or "Servers"
+            local baseColor = serverListOpen and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(35, 35, 35)
+            Library:Animate(serverListBtn, "Hover", { BackgroundColor3 = baseColor })
         end
 
         serverListBtn.MouseEnter:Connect(function()
             Library:Animate(serverListBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
         end)
         serverListBtn.MouseLeave:Connect(function()
-            Library:Animate(serverListBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+            local baseColor = serverListOpen and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(35, 35, 35)
+            Library:Animate(serverListBtn, "Hover", { BackgroundColor3 = baseColor })
         end)
         serverListBtn.Activated:Connect(function()
             setServerListOpen(not serverListOpen)
@@ -968,7 +951,7 @@ return function(Library, context)
                 empty.TextColor3 = colors.TextDim
                 empty.TextSize = 10
                 empty.TextXAlignment = Enum.TextXAlignment.Center
-                empty.ZIndex = 132
+                empty.ZIndex = 15
                 bindTheme(empty, "TextColor3", "TextDim")
                 table.insert(serverListRows, empty)
             end
