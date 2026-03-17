@@ -1664,8 +1664,8 @@ function Library:CreateWindow(opts)
         local chatPanel = Instance.new("Frame", main)
         chatPanel.Name = "ChatPanel"
         chatPanel.AnchorPoint = Vector2.new(0, 0)
-        chatPanel.Position = UDim2.new(1, CHAT_PANEL_GAP, 0, config.HeaderHeight + menuFrameTopInset)
-        chatPanel.Size = UDim2.new(0, 0, 1, -(config.HeaderHeight + menuFrameTopInset + config.BottomHeight + menuFrameBottomInset))
+        chatPanel.Position = UDim2.new(1, CHAT_PANEL_GAP, 0, 0)
+        chatPanel.Size = UDim2.new(0, 0, 1, 0)
         chatPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
         chatPanel.BorderSizePixel = 0
         chatPanel.ClipsDescendants = true
@@ -1732,7 +1732,7 @@ function Library:CreateWindow(opts)
         local chatInputFrame = Instance.new("Frame", chatInputRow)
         chatInputFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
         chatInputFrame.BorderSizePixel = 0
-        chatInputFrame.Size = UDim2.new(1, -32, 1, 0)
+        chatInputFrame.Size = UDim2.new(1, -34, 1, 0)
         chatInputFrame.ZIndex = 13
         bindTheme(chatInputFrame, "BackgroundColor3", "Control")
         bindTheme(chatInputFrame, "BackgroundTransparency", "ControlTransparency")
@@ -1761,9 +1761,9 @@ function Library:CreateWindow(opts)
 
         local chatSendBtn = Instance.new("ImageButton", chatInputRow)
         chatSendBtn.Name = "SendButton"
-        chatSendBtn.AnchorPoint = Vector2.new(1, 0)
-        chatSendBtn.Position = UDim2.new(1, 0, 0, 0)
-        chatSendBtn.Size = UDim2.new(0, 24, 0, 24)
+        chatSendBtn.AnchorPoint = Vector2.new(1, 0.5)
+        chatSendBtn.Position = UDim2.new(1, -1, 0.5, 0)
+        chatSendBtn.Size = UDim2.new(0, 22, 0, 22)
         chatSendBtn.BackgroundTransparency = 1
         chatSendBtn.BorderSizePixel = 0
         chatSendBtn.Image = "rbxassetid://109231405623946"
