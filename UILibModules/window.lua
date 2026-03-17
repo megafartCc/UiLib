@@ -326,6 +326,7 @@ function Library:CreateWindow(opts)
         UserInputService = UserInputService,
         win = win,
     })
+    local chatModule = moduleRequire("chat.lua")(Library, context)
     local controlBase = moduleRequire("controls_base.lua")(Library, context)
     local dropdownControls = moduleRequire("dropdowns.lua")(Library, context)
     local closeTransientPopups = popupManager.closeTransientPopups
@@ -1525,7 +1526,25 @@ function Library:CreateWindow(opts)
         end,
     })
 
-    -- CHAT SIDE PANEL REMOVED FROM CreateWindow TO STAY UNDER LUAU REGISTER LIMIT
+    chatModule.attach({
+        win = win,
+        opts = opts,
+        main = main,
+        bottom = bottom,
+        colors = colors,
+        config = config,
+        bindTheme = bindTheme,
+        onThemeChanged = onThemeChanged,
+        closeTransientPopups = closeTransientPopups,
+        registerTransientPopup = registerTransientPopup,
+        setPopupOpen = setPopupOpen,
+        popupManager = popupManager,
+        trackGlobal = trackGlobal,
+        nextCleanupKey = nextCleanupKey,
+        canUseUi = function()
+            return win.Visible and keyGateUnlocked
+        end,
+    })
 
     -- ==============================
     -- DRAGGING / RESIZING
