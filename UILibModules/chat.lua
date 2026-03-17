@@ -40,6 +40,96 @@ return function(Library, context)
         }, "|")
     end
 
+    local function truncatePreviewText(text, maxLen)
+        local value = tostring(text or ""):gsub("\r", " "):gsub("\n", " ")
+        local limit = math.max(8, tonumber(maxLen) or 90)
+        if #value <= limit then
+            return value
+        end
+        return string.sub(value, 1, limit - 1) .. "…"
+    end
+
+    local function extractReplyPayload(entry)
+        if type(entry) ~= "table" then
+            return nil
+        end
+
+        local reply = type(entry.reply) == "table" and entry.reply or nil
+        local replyId = tonumber(
+            (reply and (reply.id or reply.message_id or reply.messageId))
+            or entry.reply_to_id or entry.replyToId
+        )
+        local replyUser = tostring(
+            (reply and (reply.user or reply.username or reply.name))
+            or entry.reply_to_user or entry.replyToUser or ""
+        )
+        local replyUserId = tostring(
+            (reply and (reply.userid or reply.userid_str or reply.userId))
+            or entry.reply_to_userid or entry.replyToUserId or ""
+        )
+        local replyMessage = tostring(
+            (reply and (reply.message or reply.text or reply.content))
+            or entry.reply_to_message or entry.replyToMessage or ""
+        )
+
+        if (not replyId or replyId <= 0) and replyUser == "" and replyUserId == "" and replyMessage == "" then
+            return nil
+        end
+
+        return {
+            id = (replyId and replyId > 0) and replyId or nil,
+            user = replyUser ~= "" and replyUser or "unknown",
+            userid = replyUserId,
+            message = replyMessage,
+        }
+    end
+
+    local function containsMentionToken(lowerText, token)
+        if type(lowerText) ~= "string" or type(token) ~= "string" or token == "" then
+            return false
+        end
+        local pattern = "@" .. token
+        local searchFrom = 1
+        while true do
+            local startPos, endPos = string.find(lowerText, pattern, searchFrom, true)
+            if not startPos then
+                return false
+            end
+            local nextChar = string.sub(lowerText, endPos + 1, endPos + 1)
+            if nextChar == "" or not string.match(nextChar, "[%w_]") then
+                return true
+            end
+            searchFrom = endPos + 1
+        end
+    end
+
+    local function messageMentionsUser(messageText, userName, displayName, userId)
+        local lowerText = string.lower(tostring(messageText or ""))
+        if lowerText == "" then
+            return false
+        end
+
+        local nameLower = string.lower(tostring(userName or ""))
+        if nameLower ~= "" and containsMentionToken(lowerText, nameLower) then
+            return true
+        end
+
+        local displayLower = string.lower(tostring(displayName or ""))
+        if displayLower ~= "" then
+            local compactDisplay = string.gsub(displayLower, "%s+", "")
+            if containsMentionToken(lowerText, displayLower) or (compactDisplay ~= displayLower and containsMentionToken(lowerText, compactDisplay)) then
+                return true
+            end
+        end
+
+        local userIdText = tostring(userId or "")
+        if userIdText ~= "" and containsMentionToken(lowerText, userIdText) then
+            return true
+        end
+
+        return false
+    end
+
     local function getThemeColor(LibraryRef, key, fallback)
         if type(LibraryRef.GetThemeValue) == "function" then
             local value = LibraryRef:GetThemeValue(key)
@@ -406,11 +496,17 @@ return function(Library, context)
                 end
 
                 return {
-                    Send = function(text, room)
+                    Send = function(text, room, sendOptions)
+                        sendOptions = type(sendOptions) == "table" and sendOptions or {}
+                        local reply = type(sendOptions.reply) == "table" and sendOptions.reply or nil
                         local okCall, resultA, resultB = callProviderFunction(panelSdk, chatSendFn, panelUrl, panelSlug, panelKey, text, {
                             room = room,
                             scope = sharedScope,
                             customKey = panelCustomKey,
+                            reply_to_id = sendOptions.reply_to_id or sendOptions.replyToId or (reply and (reply.id or reply.message_id or reply.messageId)),
+                            reply_to_user = sendOptions.reply_to_user or sendOptions.replyToUser or (reply and (reply.user or reply.username or reply.name)),
+                            reply_to_userid = sendOptions.reply_to_userid or sendOptions.replyToUserId or (reply and (reply.userid or reply.userid_str or reply.userId)),
+                            reply_to_message = sendOptions.reply_to_message or sendOptions.replyToMessage or (reply and (reply.message or reply.text or reply.content)),
                         })
                         if not okCall then
                             return false, resultA
@@ -495,11 +591,17 @@ return function(Library, context)
                 and type(panelSlug) == "string" and panelSlug ~= ""
                 and type(panelKey) == "string" and panelKey ~= "" then
                 return {
-                    Send = function(text, room)
+                    Send = function(text, room, sendOptions)
+                        sendOptions = type(sendOptions) == "table" and sendOptions or {}
+                        local reply = type(sendOptions.reply) == "table" and sendOptions.reply or nil
                         return fallbackSignedPost("/api/chat/send", {
                             room = room,
                             message = tostring(text or ""),
                             scope = sharedScope,
+                            reply_to_id = sendOptions.reply_to_id or sendOptions.replyToId or (reply and (reply.id or reply.message_id or reply.messageId)),
+                            reply_to_user = sendOptions.reply_to_user or sendOptions.replyToUser or (reply and (reply.user or reply.username or reply.name)),
+                            reply_to_userid = sendOptions.reply_to_userid or sendOptions.replyToUserId or (reply and (reply.userid or reply.userid_str or reply.userId)),
+                            reply_to_message = sendOptions.reply_to_message or sendOptions.replyToMessage or (reply and (reply.message or reply.text or reply.content)),
                         })
                     end,
                     Fetch = function(afterId, room, limit)
@@ -609,6 +711,9 @@ return function(Library, context)
         local heartbeatStarted = false
         local chatSeen = {}
         local chatRows = {}
+        local unreadPingCount = 0
+        local pendingReply = nil
+        local replyMenuTarget = nil
         local chatPanelRuntime = {
             LastId = 0,
             Reset = nil,
@@ -774,6 +879,51 @@ return function(Library, context)
         chatInputRow.Size = UDim2.new(1, -16, 0, 30)
         chatInputRow.ZIndex = 13
 
+        local replyComposerFrame = Instance.new("Frame", chatPanel)
+        replyComposerFrame.Name = "ReplyComposer"
+        replyComposerFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+        replyComposerFrame.BorderSizePixel = 0
+        replyComposerFrame.Position = UDim2.new(0, 8, 1, -62)
+        replyComposerFrame.Size = UDim2.new(1, -16, 0, 20)
+        replyComposerFrame.Visible = false
+        replyComposerFrame.ZIndex = 13
+        bindTheme(replyComposerFrame, "BackgroundColor3", "Control")
+        bindTheme(replyComposerFrame, "BackgroundTransparency", "ControlTransparency")
+        Instance.new("UICorner", replyComposerFrame).CornerRadius = UDim.new(0, 3)
+
+        local replyComposerStroke = Instance.new("UIStroke", replyComposerFrame)
+        replyComposerStroke.Color = colors.Line
+        replyComposerStroke.Transparency = 0.45
+        bindTheme(replyComposerStroke, "Color", "Line")
+
+        local replyComposerLabel = Instance.new("TextLabel", replyComposerFrame)
+        replyComposerLabel.BackgroundTransparency = 1
+        replyComposerLabel.Position = UDim2.new(0, 8, 0, 0)
+        replyComposerLabel.Size = UDim2.new(1, -30, 1, 0)
+        replyComposerLabel.Font = config.FontMedium
+        replyComposerLabel.Text = ""
+        replyComposerLabel.TextColor3 = colors.TextDim
+        replyComposerLabel.TextSize = 10
+        replyComposerLabel.TextXAlignment = Enum.TextXAlignment.Left
+        replyComposerLabel.TextYAlignment = Enum.TextYAlignment.Center
+        replyComposerLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        replyComposerLabel.ZIndex = 14
+        bindTheme(replyComposerLabel, "TextColor3", "TextDim")
+
+        local replyComposerCancel = Instance.new("TextButton", replyComposerFrame)
+        replyComposerCancel.AnchorPoint = Vector2.new(1, 0.5)
+        replyComposerCancel.Position = UDim2.new(1, -6, 0.5, 0)
+        replyComposerCancel.Size = UDim2.fromOffset(14, 14)
+        replyComposerCancel.BackgroundTransparency = 1
+        replyComposerCancel.BorderSizePixel = 0
+        replyComposerCancel.Font = config.FontMedium
+        replyComposerCancel.Text = "×"
+        replyComposerCancel.TextColor3 = colors.TextDim
+        replyComposerCancel.TextSize = 14
+        replyComposerCancel.ZIndex = 14
+        replyComposerCancel.AutoButtonColor = false
+        bindTheme(replyComposerCancel, "TextColor3", "TextDim")
+
         local chatInputFrame = Instance.new("Frame", chatInputRow)
         chatInputFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
         chatInputFrame.BorderSizePixel = 0
@@ -818,6 +968,89 @@ return function(Library, context)
         chatSendBtn.AutoButtonColor = false
         bindTheme(chatSendBtn, "ImageColor3", "TextDim")
 
+        local replyContextMenu = Instance.new("Frame", chatPanel)
+        replyContextMenu.Name = "ReplyContextMenu"
+        replyContextMenu.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+        replyContextMenu.BorderSizePixel = 0
+        replyContextMenu.Size = UDim2.fromOffset(72, 22)
+        replyContextMenu.Visible = false
+        replyContextMenu.ZIndex = 140
+        bindTheme(replyContextMenu, "BackgroundColor3", "Panel")
+        bindTheme(replyContextMenu, "BackgroundTransparency", "PanelTransparency")
+        Instance.new("UICorner", replyContextMenu).CornerRadius = UDim.new(0, 3)
+        local replyContextStroke = Instance.new("UIStroke", replyContextMenu)
+        replyContextStroke.Color = colors.Line
+        replyContextStroke.Transparency = 0.35
+        bindTheme(replyContextStroke, "Color", "Line")
+
+        local replyContextBtn = Instance.new("TextButton", replyContextMenu)
+        replyContextBtn.BackgroundTransparency = 1
+        replyContextBtn.Size = UDim2.fromScale(1, 1)
+        replyContextBtn.Font = config.FontMedium
+        replyContextBtn.Text = "Reply"
+        replyContextBtn.TextColor3 = colors.Text
+        replyContextBtn.TextSize = 10
+        replyContextBtn.ZIndex = 141
+        replyContextBtn.AutoButtonColor = false
+        bindTheme(replyContextBtn, "TextColor3", "Text")
+
+        local function updateChatInputLayout()
+            if replyComposerFrame.Visible then
+                chatMessagesScroll.Size = UDim2.new(1, -16, 1, -100)
+            else
+                chatMessagesScroll.Size = UDim2.new(1, -16, 1, -78)
+            end
+        end
+
+        local function setReplyContextOpen(nextOpen)
+            replyContextMenu.Visible = nextOpen and true or false
+            if not nextOpen then
+                replyMenuTarget = nil
+            end
+        end
+
+        local function setPendingReply(replyMeta)
+            if type(replyMeta) == "table" then
+                pendingReply = {
+                    id = tonumber(replyMeta.id) or nil,
+                    user = tostring(replyMeta.user or "unknown"),
+                    userid = tostring(replyMeta.userid or ""),
+                    message = tostring(replyMeta.message or ""),
+                }
+                local previewText = string.format(
+                    "Replying to %s: %s",
+                    pendingReply.user,
+                    truncatePreviewText(pendingReply.message, 80)
+                )
+                replyComposerLabel.Text = previewText
+                replyComposerFrame.Visible = true
+            else
+                pendingReply = nil
+                replyComposerLabel.Text = ""
+                replyComposerFrame.Visible = false
+            end
+            updateChatInputLayout()
+        end
+
+        local function openReplyContextForMessage(messageMeta, inputPosition)
+            if type(messageMeta) ~= "table" then
+                return
+            end
+
+            local panelPos = chatPanel.AbsolutePosition
+            local panelSize = chatPanel.AbsoluteSize
+            local localX = math.floor((inputPosition and inputPosition.X or panelPos.X) - panelPos.X + 0.5)
+            local localY = math.floor((inputPosition and inputPosition.Y or panelPos.Y) - panelPos.Y + 0.5)
+            local maxX = math.max(0, panelSize.X - replyContextMenu.AbsoluteSize.X - 6)
+            local maxY = math.max(0, panelSize.Y - replyContextMenu.AbsoluteSize.Y - 6)
+            localX = math.clamp(localX, 6, maxX)
+            localY = math.clamp(localY, 6, maxY)
+
+            replyContextMenu.Position = UDim2.fromOffset(localX, localY)
+            replyMenuTarget = messageMeta
+            setReplyContextOpen(true)
+        end
+
         local function refreshChatButtonVisual()
             local targetColor = chatOpen and colors.Main or colors.TextDim
             Library:Animate(chatBtn, "Hover", { ImageColor3 = targetColor })
@@ -837,7 +1070,7 @@ return function(Library, context)
         presenceCountLabel.Name = "ChatPresenceCount"
         presenceCountLabel.AnchorPoint = Vector2.new(0, 0.5)
         presenceCountLabel.Position = UDim2.new(0.5, 16, 0.5, 0)
-        presenceCountLabel.Size = UDim2.fromOffset(30, 12)
+        presenceCountLabel.Size = UDim2.fromOffset(52, 12)
         presenceCountLabel.BackgroundTransparency = 1
         presenceCountLabel.BorderSizePixel = 0
         presenceCountLabel.Font = config.FontMedium
@@ -850,10 +1083,17 @@ return function(Library, context)
         local lastPresenceCount = 0
         local lastSharedUsers = {}
         local lastServerUsers = {}
+        local function refreshPresenceLabelText()
+            if unreadPingCount > 0 then
+                presenceCountLabel.Text = string.format("%d(%d)", lastPresenceCount, unreadPingCount)
+            else
+                presenceCountLabel.Text = tostring(lastPresenceCount)
+            end
+        end
         local function setPresenceVisual(rawCount)
             local count = math.max(0, tonumber(rawCount) or 0)
             lastPresenceCount = count
-            presenceCountLabel.Text = tostring(count)
+            refreshPresenceLabelText()
             if count > 0 then
                 presenceDot.BackgroundColor3 = Color3.fromRGB(67, 217, 126)
                 presenceCountLabel.TextColor3 = colors.Text
@@ -861,6 +1101,10 @@ return function(Library, context)
                 presenceDot.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
                 presenceCountLabel.TextColor3 = colors.TextDim
             end
+        end
+        local function setUnreadPingCount(value)
+            unreadPingCount = math.max(0, tonumber(value) or 0)
+            refreshPresenceLabelText()
         end
         setPresenceVisual(0)
 
@@ -1803,10 +2047,20 @@ return function(Library, context)
             chatMessagesScroll.CanvasPosition = Vector2.new(0, target)
         end
 
-        local function addChatRow(userName, bodyText, timeText, userId)
+        local function addChatRow(userName, bodyText, timeText, userId, messageMeta)
             local body = trimChatText(bodyText)
             if body == "" then
                 return
+            end
+
+            local replyMeta = extractReplyPayload(messageMeta)
+            local replyPreviewText = nil
+            if replyMeta then
+                replyPreviewText = string.format(
+                    "@%s %s",
+                    tostring(replyMeta.user or "unknown"),
+                    truncatePreviewText(replyMeta.message or "", 80)
+                )
             end
 
             local row = Instance.new("Frame", chatMessagesInner)
@@ -1814,6 +2068,7 @@ return function(Library, context)
             row.BorderSizePixel = 0
             row.Size = UDim2.new(1, 0, 0, 38)
             row.ZIndex = 13
+            row.Active = true
             bindTheme(row, "BackgroundColor3", "Control")
             bindTheme(row, "BackgroundTransparency", "ControlTransparency")
             Instance.new("UICorner", row).CornerRadius = UDim.new(0, 3)
@@ -1866,10 +2121,27 @@ return function(Library, context)
             timeLabel.ZIndex = 14
             bindTheme(timeLabel, "TextColor3", "TextDim")
 
+            local replyLabel = nil
+            if replyPreviewText then
+                replyLabel = Instance.new("TextLabel", row)
+                replyLabel.BackgroundTransparency = 1
+                replyLabel.Position = UDim2.new(0, 0, 0, 14)
+                replyLabel.Size = UDim2.new(1, 0, 0, 10)
+                replyLabel.Font = config.FontMedium
+                replyLabel.Text = replyPreviewText
+                replyLabel.TextColor3 = colors.Main
+                replyLabel.TextSize = 10
+                replyLabel.TextXAlignment = Enum.TextXAlignment.Left
+                replyLabel.TextYAlignment = Enum.TextYAlignment.Top
+                replyLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                replyLabel.ZIndex = 14
+                bindTheme(replyLabel, "TextColor3", "Main")
+            end
+
             local messageLabel = Instance.new("TextLabel", row)
             messageLabel.BackgroundTransparency = 1
-            messageLabel.Position = UDim2.new(0, 0, 0, 14)
-            messageLabel.Size = UDim2.new(1, 0, 1, -14)
+            messageLabel.Position = UDim2.new(0, 0, 0, replyPreviewText and 24 or 14)
+            messageLabel.Size = UDim2.new(1, 0, 1, -(replyPreviewText and 24 or 14))
             messageLabel.Font = config.FontMedium
             messageLabel.Text = body
             messageLabel.TextColor3 = colors.Text
@@ -1882,8 +2154,25 @@ return function(Library, context)
 
             local availableWidth = math.max(90, chatMessagesScroll.AbsoluteSize.X - 30)
             local textBounds = TextService:GetTextSize(body, 12, config.FontMedium, Vector2.new(availableWidth, 1000))
-            row.Size = UDim2.new(1, 0, 0, math.max(34, textBounds.Y + 24))
+            local replyHeight = 0
+            if replyPreviewText then
+                local replyBounds = TextService:GetTextSize(replyPreviewText, 10, config.FontMedium, Vector2.new(availableWidth, 1000))
+                replyHeight = math.max(10, replyBounds.Y + 2)
+            end
+            row.Size = UDim2.new(1, 0, 0, math.max(34, textBounds.Y + 24 + replyHeight))
             row.LayoutOrder = chatMessagesLayout.AbsoluteContentSize.Y + 1
+
+            local contextReplyTarget = {
+                id = tonumber(messageMeta and (messageMeta.id or messageMeta.message_id)) or nil,
+                user = tostring(userName or "unknown"),
+                userid = tostring(userId or ""),
+                message = body,
+            }
+            row.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton2 then
+                    openReplyContextForMessage(contextReplyTarget, input.Position)
+                end
+            end)
 
             table.insert(chatRows, row)
             if #chatRows > 160 then
@@ -1904,6 +2193,9 @@ return function(Library, context)
             lastSharedUsers = {}
             lastServerUsers = {}
             activeProfileData = nil
+            setUnreadPingCount(0)
+            setPendingReply(nil)
+            setReplyContextOpen(false)
             setProfileOpen(false)
             setServerListOpen(false)
             setPresenceVisual(0)
@@ -1922,6 +2214,9 @@ return function(Library, context)
             end
 
             local added = false
+            local localUserId = tostring(Client and Client.UserId or "")
+            local localUserName = tostring(Client and Client.Name or "")
+            local localDisplayName = tostring(Client and (Client.DisplayName or Client.Name) or "")
             for _, entry in ipairs(messageList) do
                 if type(entry) == "table" then
                     local messageId = tonumber(entry.id or entry.message_id)
@@ -1947,7 +2242,21 @@ return function(Library, context)
 
                     if not chatSeen[dedupeKey] and type(bodyText) == "string" and trimChatText(bodyText) ~= "" then
                         chatSeen[dedupeKey] = true
-                        addChatRow(userName, bodyText, timeText, userId)
+                        addChatRow(userName, bodyText, timeText, userId, entry)
+
+                        local isFromSelf = tostring(userId or "") == localUserId
+                            or string.lower(tostring(userName or "")) == string.lower(localUserName)
+                        if not isFromSelf then
+                            local replyMeta = extractReplyPayload(entry)
+                            local isReplyToLocal = type(replyMeta) == "table"
+                                and (
+                                    tostring(replyMeta.userid or "") == localUserId
+                                    or string.lower(tostring(replyMeta.user or "")) == string.lower(localUserName)
+                                )
+                            if (isReplyToLocal or messageMentionsUser(bodyText, localUserName, localDisplayName, localUserId)) and not chatOpen then
+                                setUnreadPingCount(unreadPingCount + 1)
+                            end
+                        end
                         added = true
                     end
 
@@ -2026,19 +2335,39 @@ return function(Library, context)
 
             chatInput.Text = ""
             chatInput:ReleaseFocus()
+            setReplyContextOpen(false)
+
+            local replyPayload = nil
+            if type(pendingReply) == "table" then
+                replyPayload = {
+                    id = pendingReply.id,
+                    user = pendingReply.user,
+                    userid = pendingReply.userid,
+                    message = pendingReply.message,
+                }
+            end
 
             local provider = chatProvider
             local sendFn = type(provider) == "table" and (provider.Send or provider.send or provider.Post or provider.post) or nil
             if type(sendFn) ~= "function" then
                 setChatStatus("Send unavailable", true)
                 debugWarn("send_unavailable", { provider = tostring(type(provider)) })
-                addChatRow(Client.Name, messageText, os.date("!%H:%M:%S", os.time() - (3 * 60 * 60)))
+                addChatRow(Client.Name, messageText, os.date("!%H:%M:%S", os.time() - (3 * 60 * 60)), tostring(Client and Client.UserId or ""), {
+                    reply = replyPayload,
+                })
+                setPendingReply(nil)
                 scrollChatToBottom()
                 return
             end
 
             task.spawn(function()
-                local ok, success, response = callProviderFunction(provider, sendFn, messageText, chatRoom)
+                local ok, success, response = callProviderFunction(provider, sendFn, messageText, chatRoom, {
+                    reply = replyPayload,
+                    reply_to_id = replyPayload and replyPayload.id or nil,
+                    reply_to_user = replyPayload and replyPayload.user or nil,
+                    reply_to_userid = replyPayload and replyPayload.userid or nil,
+                    reply_to_message = replyPayload and replyPayload.message or nil,
+                })
                 debugWarn("chat_send_result", ok, success, response)
                 if not ok or success == false then
                     setChatStatus("Send: " .. formatProviderError(response or success, "request_failed"), true)
@@ -2057,6 +2386,7 @@ return function(Library, context)
                     room = chatRoom,
                 })
                 setChatStatus("", false)
+                setPendingReply(nil)
 
                 local payload = response
                 if type(payload) ~= "table" and type(success) == "table" then
@@ -2066,7 +2396,9 @@ return function(Library, context)
                 if type(payload) == "table" and type(payload.message) == "table" then
                     applyMessages({ payload.message })
                 else
-                    addChatRow(Client.Name, messageText, os.date("!%H:%M:%S", os.time() - (3 * 60 * 60)))
+                    addChatRow(Client.Name, messageText, os.date("!%H:%M:%S", os.time() - (3 * 60 * 60)), tostring(Client and Client.UserId or ""), {
+                        reply = replyPayload,
+                    })
                     scrollChatToBottom()
                     callChatFetch()
                 end
@@ -2099,8 +2431,11 @@ return function(Library, context)
             chatOpen = nextOpen
             if chatOpen then
                 closeTransientPopups(chatPanel)
+                setUnreadPingCount(0)
+                setReplyContextOpen(false)
                 refreshSharedPresenceAsync()
             else
+                setReplyContextOpen(false)
                 setProfileOpen(false)
                 setServerListOpen(false)
             end
@@ -2130,6 +2465,32 @@ return function(Library, context)
             sendCurrentChatText()
         end)
 
+        replyComposerCancel.MouseEnter:Connect(function()
+            Library:Animate(replyComposerCancel, "Hover", { TextColor3 = colors.Main })
+        end)
+        replyComposerCancel.MouseLeave:Connect(function()
+            Library:Animate(replyComposerCancel, "Hover", { TextColor3 = colors.TextDim })
+        end)
+        replyComposerCancel.Activated:Connect(function()
+            setPendingReply(nil)
+            chatInput:CaptureFocus()
+        end)
+
+        replyContextBtn.MouseEnter:Connect(function()
+            Library:Animate(replyContextBtn, "Hover", { TextColor3 = colors.Main })
+        end)
+        replyContextBtn.MouseLeave:Connect(function()
+            Library:Animate(replyContextBtn, "Hover", { TextColor3 = colors.Text })
+        end)
+        replyContextBtn.Activated:Connect(function()
+            local target = replyMenuTarget
+            setReplyContextOpen(false)
+            if type(target) == "table" then
+                setPendingReply(target)
+                chatInput:CaptureFocus()
+            end
+        end)
+
         chatInput.FocusLost:Connect(function(enterPressed)
             if enterPressed then
                 sendCurrentChatText()
@@ -2139,6 +2500,24 @@ return function(Library, context)
         registerTransientPopup(chatPanel, function()
             setChatOpen(false)
         end)
+        registerTransientPopup(replyContextMenu, function()
+            setReplyContextOpen(false)
+        end)
+
+        if popupManager and type(popupManager.bindOutsideClose) == "function" then
+            popupManager.bindOutsideClose({
+                cleanupKey = nextCleanupKey("ChatReplyContextOutsideClick"),
+                close = function()
+                    setReplyContextOpen(false)
+                end,
+                isOpen = function()
+                    return replyContextMenu.Visible
+                end,
+                targets = function()
+                    return { replyContextMenu }
+                end,
+            })
+        end
 
         trackGlobal(chatMessagesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             refreshChatCanvas()
