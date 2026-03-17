@@ -178,60 +178,88 @@ return function(Library, context)
             local panelUrl = chatOpts.PanelUrl or chatOpts.URL or chatOpts.Url or (type(envTable) == "table" and (envTable.PANEL_URL or envTable.PanelUrl))
             local panelSlug = chatOpts.ScriptSlug or chatOpts.Slug or (type(envTable) == "table" and (envTable.PANEL_SLUG or envTable.PanelSlug))
             local panelKey = chatOpts.PanelKey or chatOpts.Key or (type(envTable) == "table" and (envTable.PANEL_KEY or envTable.PanelKey))
+            local chatSendFn = type(panelSdk) == "table" and (panelSdk.chatSend or panelSdk.ChatSend
+                or (type(panelSdk.chat) == "table" and (panelSdk.chat.send or panelSdk.chat.Send))) or nil
+            local chatFeedFn = type(panelSdk) == "table" and (panelSdk.chatFeed or panelSdk.ChatFeed
+                or (type(panelSdk.chat) == "table" and (panelSdk.chat.feed or panelSdk.chat.Feed))) or nil
+            local sharedUsersFn = type(panelSdk) == "table" and (panelSdk.sharedUsers or panelSdk.SharedUsers
+                or panelSdk.peers or panelSdk.Peers) or nil
+            local connectionStatsFn = type(panelSdk) == "table" and (panelSdk.connectionStats or panelSdk.ConnectionStats) or nil
+            local sharedServersFn = type(panelSdk) == "table" and (panelSdk.sharedServers or panelSdk.SharedServers) or nil
 
             if type(panelSdk) == "table"
-                and type(panelSdk.chatSend) == "function"
-                and type(panelSdk.chatFeed) == "function"
+                and type(chatSendFn) == "function"
+                and type(chatFeedFn) == "function"
                 and type(panelUrl) == "string" and panelUrl ~= ""
                 and type(panelSlug) == "string" and panelSlug ~= ""
                 and type(panelKey) == "string" and panelKey ~= "" then
                 local function fetchSharedUsers(options)
-                    if type(panelSdk.sharedUsers) ~= "function" then
+                    if type(sharedUsersFn) ~= "function" then
                         return false, { error = "shared_users_unavailable" }
                     end
 
                     options = type(options) == "table" and options or {}
-                    return panelSdk.sharedUsers(panelUrl, panelSlug, panelKey, {
+                    local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedUsersFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
                         includeSelf = options.includeSelf == true or options.include_self == true,
                     })
+                    if not okCall then
+                        return false, resultA
+                    end
+                    return resultA, resultB
                 end
 
                 local function fetchConnectionStats(options)
-                    if type(panelSdk.connectionStats) ~= "function" then
+                    if type(connectionStatsFn) ~= "function" then
                         return false, { error = "connection_stats_unavailable" }
                     end
 
                     options = type(options) == "table" and options or {}
-                    return panelSdk.connectionStats(panelUrl, panelSlug, panelKey, {
+                    local okCall, resultA, resultB = callProviderFunction(panelSdk, connectionStatsFn, panelUrl, panelSlug, panelKey, {
                         jobid = tostring(options.jobid or game.JobId or ""),
                         includeSelf = options.includeSelf ~= false and options.include_self ~= false,
                     })
+                    if not okCall then
+                        return false, resultA
+                    end
+                    return resultA, resultB
                 end
 
                 local function fetchSharedServers(options)
-                    if type(panelSdk.sharedServers) ~= "function" then
+                    if type(sharedServersFn) ~= "function" then
                         return false, { error = "shared_servers_unavailable" }
                     end
 
                     options = type(options) == "table" and options or {}
-                    return panelSdk.sharedServers(panelUrl, panelSlug, panelKey, {
+                    local okCall, resultA, resultB = callProviderFunction(panelSdk, sharedServersFn, panelUrl, panelSlug, panelKey, {
                         includeSelf = options.includeSelf == true or options.include_self == true,
                     })
+                    if not okCall then
+                        return false, resultA
+                    end
+                    return resultA, resultB
                 end
 
                 return {
                     Send = function(text, room)
-                        return panelSdk.chatSend(panelUrl, panelSlug, panelKey, text, {
+                        local okCall, resultA, resultB = callProviderFunction(panelSdk, chatSendFn, panelUrl, panelSlug, panelKey, text, {
                             room = room,
                         })
+                        if not okCall then
+                            return false, resultA
+                        end
+                        return resultA, resultB
                     end,
                     Fetch = function(afterId, room, limit)
-                        return panelSdk.chatFeed(panelUrl, panelSlug, panelKey, {
+                        local okCall, resultA, resultB = callProviderFunction(panelSdk, chatFeedFn, panelUrl, panelSlug, panelKey, {
                             after_id = afterId,
                             room = room,
                             limit = limit,
                         })
+                        if not okCall then
+                            return false, resultA
+                        end
+                        return resultA, resultB
                     end,
                     SharedUsers = function(options)
                         return fetchSharedUsers(options)
