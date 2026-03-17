@@ -2213,11 +2213,6 @@ function Library:CreateWindow(opts)
         end
     )
 
-    local function setKeyStatus(text, color)
-        keyUi.StatusLabel.Text = tostring(text or "")
-        keyUi.StatusLabel.TextColor3 = color or colors.TextDim
-    end
-
     win._setKeyChromeLocked = function(locked)
         if locked then
             closeTransientPopups()
@@ -2269,15 +2264,18 @@ function Library:CreateWindow(opts)
             end
 
             if copied then
-                setKeyStatus("Key link copied to clipboard.", colors.Main)
+                keyUi.StatusLabel.Text = "Key link copied to clipboard."
+                keyUi.StatusLabel.TextColor3 = colors.Main
             else
-                setKeyStatus(keyLink, colors.TextDim)
+                keyUi.StatusLabel.Text = tostring(keyLink)
+                keyUi.StatusLabel.TextColor3 = colors.TextDim
             end
             handled = true
         end
 
         if not handled then
-            setKeyStatus("No key link configured.", Color3.fromRGB(255, 160, 160))
+            keyUi.StatusLabel.Text = "No key link configured."
+            keyUi.StatusLabel.TextColor3 = Color3.fromRGB(255, 160, 160)
         end
     end
 
@@ -2315,7 +2313,8 @@ function Library:CreateWindow(opts)
         if keyGateUnlocked then
             win._bootstrapWindowContent()
             keyUi.Input.Text = ""
-            setKeyStatus("", colors.TextDim)
+            keyUi.StatusLabel.Text = ""
+            keyUi.StatusLabel.TextColor3 = colors.TextDim
         end
     end
 
@@ -2327,7 +2326,8 @@ function Library:CreateWindow(opts)
         end
 
         if not isAcceptedKey(submitted) then
-            setKeyStatus("Invalid key.", Color3.fromRGB(255, 160, 160))
+            keyUi.StatusLabel.Text = "Invalid key."
+            keyUi.StatusLabel.TextColor3 = Color3.fromRGB(255, 160, 160)
             Library:Spring(keyUi.InputStroke, "Smooth", { Color = Color3.fromRGB(200, 90, 90), Transparency = 0.1 })
             task.delay(0.3, function()
                 if keyUi.InputStroke.Parent then
