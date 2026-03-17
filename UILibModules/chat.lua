@@ -244,12 +244,15 @@ return function(Library, context)
             end
 
             local panelUrl = chatOpts.PanelUrl or chatOpts.URL or chatOpts.Url
+                or opts.PanelUrl or opts.PanelURL or opts.URL or opts.Url
                 or (type(envTable) == "table" and (envTable.PANEL_URL or envTable.PanelUrl))
                 or defaultPanelUrl
             local panelSlug = chatOpts.ScriptSlug or chatOpts.Slug
+                or opts.ScriptSlug or opts.PanelSlug or opts.Slug
                 or (type(envTable) == "table" and (envTable.PANEL_SLUG or envTable.PanelSlug))
                 or defaultPanelSlug
             local panelKey = chatOpts.PanelKey or chatOpts.Key
+                or opts.PanelKey or opts.Key
                 or (type(envTable) == "table" and (envTable.PANEL_KEY or envTable.PanelKey))
                 or defaultPanelKey
             local chatSendFn = type(panelSdk) == "table" and (panelSdk.chatSend or panelSdk.ChatSend
@@ -1815,21 +1818,6 @@ return function(Library, context)
         registerTransientPopup(chatPanel, function()
             setChatOpen(false)
         end)
-
-        if popupManager and type(popupManager.bindOutsideClose) == "function" then
-            popupManager.bindOutsideClose({
-                cleanupKey = nextCleanupKey("ChatOutsideClick"),
-                close = function()
-                    setChatOpen(false)
-                end,
-                isOpen = function()
-                    return chatOpen
-                end,
-                targets = function()
-                    return { chatPanel, chatBtn }
-                end,
-            })
-        end
 
         trackGlobal(chatMessagesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             refreshChatCanvas()
