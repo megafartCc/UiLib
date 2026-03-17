@@ -261,6 +261,73 @@ return function(Library, context)
             local connectionStatsFn = type(panelSdk) == "table" and (panelSdk.connectionStats or panelSdk.ConnectionStats) or nil
             local sharedServersFn = type(panelSdk) == "table" and (panelSdk.sharedServers or panelSdk.SharedServers) or nil
 
+            local function fallbackSignedPost(path, extra)
+                local requestFn = getRequestFunction()
+                if type(requestFn) ~= "function" then
+                    return false, { error = "request_unavailable" }
+                end
+
+                local hmacFn = nil
+                if syn and syn.crypt and syn.crypt.hmac then
+                    hmacFn = function(key, message)
+                        local okHmac, value = pcall(syn.crypt.hmac, "sha256", message, key)
+                        if okHmac and value then return tostring(value) end
+                        return nil
+                    end
+                elseif crypt and crypt.hmac then
+                    hmacFn = function(key, message)
+                        local okHmac, value = pcall(crypt.hmac, key, message, "sha256")
+                        if okHmac and value then return tostring(value) end
+                        okHmac, value = pcall(crypt.hmac, message, key, "sha256")
+                        if okHmac and value then return tostring(value) end
+                        return nil
+                    end
+                end
+                if type(hmacFn) ~= "function" then
+                    return false, { error = "hmac_unavailable" }
+                end
+
+                local ts = tostring(math.floor(os.time()))
+                local uid = tostring(Client and Client.UserId or "")
+                local payload = {
+                    script = tostring(panelSlug or ""),
+                    user = tostring(Client and Client.Name or ""),
+                    userid = uid,
+                    timestamp = ts,
+                    signature = hmacFn(tostring(panelKey or ""), tostring(panelSlug or "") .. ":" .. uid .. ":" .. ts),
+                }
+                if type(payload.signature) ~= "string" or payload.signature == "" then
+                    return false, { error = "signature_failed" }
+                end
+
+                if type(extra) == "table" then
+                    for k, v in pairs(extra) do
+                        payload[k] = v
+                    end
+                end
+
+                local body = HttpService:JSONEncode(payload)
+                local targetUrl = tostring(panelUrl or ""):gsub("/$", "") .. tostring(path or "")
+                local variants = {
+                    { Url = targetUrl, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body },
+                    { url = targetUrl, method = "POST", headers = { ["Content-Type"] = "application/json" }, body = body },
+                }
+
+                for _, req in ipairs(variants) do
+                    local okReq, response = pcall(requestFn, req)
+                    if okReq and type(response) == "table" then
+                        local status = tonumber(response.StatusCode or response.status) or 0
+                        local parsed = decodeJson(response.Body or response.body)
+                        if status >= 200 and status < 300 then
+                            return true, parsed or { ok = true, status = status }
+                        end
+                        return false, parsed or { error = "HTTP " .. tostring(status) }
+                    end
+                end
+
+                return false, { error = "request_failed" }
+            end
+
             if type(panelSdk) == "table"
                 and type(chatSendFn) == "function"
                 and type(chatFeedFn) == "function"
@@ -375,6 +442,46 @@ return function(Library, context)
                         end
 
                         return false, { error = "user_not_found" }
+                    end,
+                }
+            end
+
+            if type(panelUrl) == "string" and panelUrl ~= ""
+                and type(panelSlug) == "string" and panelSlug ~= ""
+                and type(panelKey) == "string" and panelKey ~= "" then
+                return {
+                    Send = function(text, room)
+                        return fallbackSignedPost("/api/chat/send", {
+                            room = room,
+                            message = tostring(text or ""),
+                        })
+                    end,
+                    Fetch = function(afterId, room, limit)
+                        return fallbackSignedPost("/api/chat/feed", {
+                            room = room,
+                            after_id = tonumber(afterId or 0) or 0,
+                            limit = tonumber(limit or 60) or 60,
+                        })
+                    end,
+                    SharedUsers = function(options)
+                        options = type(options) == "table" and options or {}
+                        return fallbackSignedPost("/api/heartbeat/peers", {
+                            jobid = tostring(options.jobid or game.JobId or ""),
+                            include_self = options.includeSelf == true or options.include_self == true,
+                        })
+                    end,
+                    Connections = function(options)
+                        options = type(options) == "table" and options or {}
+                        return fallbackSignedPost("/api/heartbeat/connections", {
+                            jobid = tostring(options.jobid or game.JobId or ""),
+                            include_self = options.includeSelf ~= false and options.include_self ~= false,
+                        })
+                    end,
+                    Servers = function(options)
+                        options = type(options) == "table" and options or {}
+                        return fallbackSignedPost("/api/heartbeat/servers", {
+                            include_self = options.includeSelf == true or options.include_self == true,
+                        })
                     end,
                 }
             end
