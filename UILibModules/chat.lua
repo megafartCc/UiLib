@@ -585,6 +585,7 @@ return function(Library, context)
         local activeProfileData = nil
         local profileOpen = false
         local profileLastSource = nil
+        local setProfileOpen
 
         local serverListOpen = false
         local serverListRows = {}
@@ -760,7 +761,7 @@ return function(Library, context)
             end
             serverListOpen = nextOpen
             if serverListOpen then
-                closeTransientPopups(serverListPanel)
+                setProfileOpen(false)
                 refreshServerListPanel()
             end
             setPopupOpen(serverListPanel, serverListOpen, serverListPopupConfig)
@@ -834,7 +835,23 @@ return function(Library, context)
         local profilePanel = Instance.new("Frame", chatPanel)
         profilePanel.Name = "ProfilePanel"
         local profilePanelWidth = math.max(170, math.min(chatPanelWidth - 24, 310))
-        local profilePanelHeight = 102
+        local profilePanelHeight = 128
+        local profileLayout = {
+            PadX = 10,
+            HeaderY = 10,
+            HeaderH = 14,
+            LineY = 28,
+            LineH = 1,
+            NameY = 34,
+            NameH = 16,
+            StatusY = 54,
+            StatusH = 14,
+            GameY = 70,
+            GameH = 14,
+            FooterY = 94,
+            FooterH = 24,
+            ButtonGap = 6,
+        }
         profilePanel.AnchorPoint = Vector2.new(0.5, 1)
         profilePanel.Position = UDim2.new(0.5, 0, 1, -8)
         profilePanel.Size = UDim2.fromOffset(profilePanelWidth, 0)
@@ -853,8 +870,8 @@ return function(Library, context)
 
         local profileTitle = Instance.new("TextLabel", profilePanel)
         profileTitle.BackgroundTransparency = 1
-        profileTitle.Position = UDim2.new(0, 10, 0, 8)
-        profileTitle.Size = UDim2.new(1, -20, 0, 16)
+        profileTitle.Position = UDim2.new(0, profileLayout.PadX, 0, profileLayout.HeaderY)
+        profileTitle.Size = UDim2.new(1, -(profileLayout.PadX * 2), 0, profileLayout.HeaderH)
         profileTitle.Font = config.Font
         profileTitle.Text = "USER PROFILE"
         profileTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -863,50 +880,61 @@ return function(Library, context)
         profileTitle.ZIndex = 131
         bindTheme(profileTitle, "TextColor3", "TextStrong")
 
+        local profileHeaderLine = Instance.new("Frame", profilePanel)
+        profileHeaderLine.BackgroundColor3 = colors.Line
+        profileHeaderLine.BorderSizePixel = 0
+        profileHeaderLine.Position = UDim2.new(0, profileLayout.PadX, 0, profileLayout.LineY)
+        profileHeaderLine.Size = UDim2.new(1, -(profileLayout.PadX * 2), 0, profileLayout.LineH)
+        profileHeaderLine.ZIndex = 131
+        bindTheme(profileHeaderLine, "BackgroundColor3", "Line")
+
         local profileName = Instance.new("TextLabel", profilePanel)
         profileName.BackgroundTransparency = 1
-        profileName.Position = UDim2.new(0, 10, 0, 28)
-        profileName.Size = UDim2.new(1, -20, 0, 16)
+        profileName.Position = UDim2.new(0, profileLayout.PadX, 0, profileLayout.NameY)
+        profileName.Size = UDim2.new(1, -(profileLayout.PadX * 2), 0, profileLayout.NameH)
         profileName.Font = config.FontMedium
         profileName.Text = "-"
         profileName.TextColor3 = colors.Main
         profileName.TextSize = 12
         profileName.TextXAlignment = Enum.TextXAlignment.Left
+        profileName.TextTruncate = Enum.TextTruncate.AtEnd
         profileName.ZIndex = 131
         bindTheme(profileName, "TextColor3", "Main")
 
         local profileStatus = Instance.new("TextLabel", profilePanel)
         profileStatus.BackgroundTransparency = 1
-        profileStatus.Position = UDim2.new(0, 10, 0, 45)
-        profileStatus.Size = UDim2.new(1, -20, 0, 14)
+        profileStatus.Position = UDim2.new(0, profileLayout.PadX, 0, profileLayout.StatusY)
+        profileStatus.Size = UDim2.new(1, -(profileLayout.PadX * 2), 0, profileLayout.StatusH)
         profileStatus.Font = config.FontMedium
         profileStatus.Text = "Status: unknown"
         profileStatus.TextColor3 = colors.TextDim
         profileStatus.TextSize = 10
         profileStatus.TextXAlignment = Enum.TextXAlignment.Left
+        profileStatus.TextTruncate = Enum.TextTruncate.AtEnd
         profileStatus.ZIndex = 131
         bindTheme(profileStatus, "TextColor3", "TextDim")
 
         local profileGame = Instance.new("TextLabel", profilePanel)
         profileGame.BackgroundTransparency = 1
-        profileGame.Position = UDim2.new(0, 10, 0, 60)
-        profileGame.Size = UDim2.new(1, -20, 0, 14)
+        profileGame.Position = UDim2.new(0, profileLayout.PadX, 0, profileLayout.GameY)
+        profileGame.Size = UDim2.new(1, -(profileLayout.PadX * 2), 0, profileLayout.GameH)
         profileGame.Font = config.FontMedium
         profileGame.Text = "Game: unknown"
         profileGame.TextColor3 = colors.Text
         profileGame.TextSize = 10
         profileGame.TextXAlignment = Enum.TextXAlignment.Left
+        profileGame.TextTruncate = Enum.TextTruncate.AtEnd
         profileGame.ZIndex = 131
         bindTheme(profileGame, "TextColor3", "Text")
 
         local profileFooter = Instance.new("Frame", profilePanel)
         profileFooter.BackgroundTransparency = 1
-        profileFooter.Position = UDim2.new(0, 10, 1, -30)
-        profileFooter.Size = UDim2.new(1, -20, 0, 20)
+        profileFooter.Position = UDim2.new(0, profileLayout.PadX, 0, profileLayout.FooterY)
+        profileFooter.Size = UDim2.new(1, -(profileLayout.PadX * 2), 0, profileLayout.FooterH)
         profileFooter.ZIndex = 131
 
         local profileJoinBtn = Instance.new("TextButton", profileFooter)
-        profileJoinBtn.Size = UDim2.new(0.52, -3, 1, 0)
+        profileJoinBtn.Size = UDim2.new(0.5, -(profileLayout.ButtonGap * 0.5), 1, 0)
         profileJoinBtn.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
         profileJoinBtn.BorderSizePixel = 0
         profileJoinBtn.Font = config.FontMedium
@@ -922,7 +950,7 @@ return function(Library, context)
         local profileCloseBtn = Instance.new("TextButton", profileFooter)
         profileCloseBtn.AnchorPoint = Vector2.new(1, 0)
         profileCloseBtn.Position = UDim2.new(1, 0, 0, 0)
-        profileCloseBtn.Size = UDim2.new(0.48, -3, 1, 0)
+        profileCloseBtn.Size = UDim2.new(0.5, -(profileLayout.ButtonGap * 0.5), 1, 0)
         profileCloseBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
         profileCloseBtn.BorderSizePixel = 0
         profileCloseBtn.Font = config.FontMedium
@@ -968,7 +996,7 @@ return function(Library, context)
             profileJoinBtn.Active = false
         end
 
-        local function setProfileOpen(nextOpen)
+        setProfileOpen = function(nextOpen)
             if profileOpen == nextOpen then
                 return
             end
