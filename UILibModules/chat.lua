@@ -182,6 +182,31 @@ return function(Library, context)
                 local okSource, source = pcall(function()
                     return game:HttpGet(fullUrl, true)
                 end)
+                if (not okSource or type(source) ~= "string" or source == "") and game and type(game.HttpGet) == "function" then
+                    okSource, source = pcall(function()
+                        return game.HttpGet(game, fullUrl, true)
+                    end)
+                end
+                if (not okSource or type(source) ~= "string" or source == "") then
+                    okSource, source = pcall(function()
+                        return game:HttpGet(fullUrl)
+                    end)
+                end
+                if (not okSource or type(source) ~= "string" or source == "") and game and type(game.HttpGet) == "function" then
+                    okSource, source = pcall(function()
+                        return game.HttpGet(game, fullUrl)
+                    end)
+                end
+                if (not okSource or type(source) ~= "string" or source == "") and HttpService and type(HttpService.GetAsync) == "function" then
+                    okSource, source = pcall(function()
+                        return HttpService:GetAsync(fullUrl, true)
+                    end)
+                end
+                if (not okSource or type(source) ~= "string" or source == "") and HttpService and type(HttpService.GetAsync) == "function" then
+                    okSource, source = pcall(function()
+                        return HttpService:GetAsync(fullUrl)
+                    end)
+                end
                 if okSource and type(source) == "string" and source ~= "" then
                     local okCompile, chunk = pcall(loader, source)
                     if okCompile and type(chunk) == "function" then
