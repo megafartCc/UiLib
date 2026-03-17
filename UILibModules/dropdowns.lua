@@ -171,11 +171,17 @@ return function(Library, context)
             end
 
             local normalized = value
-            if type(normalized) == "string" then
+            local normalizedType = type(normalized)
+            if normalizedType == "string" then
                 normalized = normalized:gsub("^%s+", ""):gsub("%s+$", "")
                 if normalized == "" then
                     return
                 end
+                normalizedType = "string"
+            elseif normalizedType == "number" then
+                normalizedType = "number"
+            else
+                return
             end
 
             local key = type(normalized) .. ":" .. tostring(normalized)
@@ -203,10 +209,18 @@ return function(Library, context)
             end
 
             if #out == 0 then
+                local nonNumericAllBoolean = true
+                for key, value in pairs(values) do
+                    if not (type(key) == "number" and key % 1 == 0) and type(value) ~= "boolean" then
+                        nonNumericAllBoolean = false
+                        break
+                    end
+                end
+
                 for key, value in pairs(values) do
                     if not (type(key) == "number" and key % 1 == 0) then
-                        if type(value) == "boolean" then
-                            if value then
+                        if nonNumericAllBoolean then
+                            if value == true then
                                 pushOption(key)
                             end
                         else
