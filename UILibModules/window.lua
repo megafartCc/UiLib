@@ -1267,11 +1267,6 @@ function Library:CreateWindow(opts)
         Library:Animate(searchBtn, "Hover", { ImageColor3 = colors.TextDim })
     end)
 
-    local chatEnabled = (opts.ChatEnabled ~= false)
-        and (type(opts.Chat) ~= "table" or opts.Chat.Enabled ~= false)
-    local chatOpen = false
-    local setChatOpen = function()
-    end
     function win:SetChatProvider()
         return false
     end
@@ -1279,32 +1274,7 @@ function Library:CreateWindow(opts)
     end
     win.SetChatRoom = function()
     end
-
-    -- ==============================
-    -- CHAT ICON (bottom-center)
-    -- ==============================
-    local chatBtn
-    if chatEnabled then
-        chatBtn = Instance.new("ImageButton", bottom)
-        chatBtn.Name = "ChatBtn"
-        chatBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-        chatBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
-        chatBtn.Size = UDim2.new(0, 16, 0, 16)
-        chatBtn.BackgroundTransparency = 1
-        chatBtn.BorderSizePixel = 0
-        chatBtn.Image = "rbxassetid://104591132509810"
-        chatBtn.ImageColor3 = colors.TextDim
-        chatBtn.ZIndex = 4
-        chatBtn.AutoButtonColor = false
-        bindTheme(chatBtn, "ImageColor3", "TextDim")
-
-        chatBtn.MouseEnter:Connect(function()
-            Library:Animate(chatBtn, "Hover", { ImageColor3 = colors.Main })
-        end)
-        chatBtn.MouseLeave:Connect(function()
-            Library:Animate(chatBtn, "Hover", { ImageColor3 = chatOpen and colors.Main or colors.TextDim })
-        end)
-    end
+    win._setChatOpen = nil
 
     -- ==============================
     -- SEARCH FLOATING PANEL
@@ -1558,7 +1528,32 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- CHAT SIDE PANEL
     -- ==============================
-    if chatEnabled and chatBtn then
+    do
+        local chatEnabled = (opts.ChatEnabled ~= false)
+            and (type(opts.Chat) ~= "table" or opts.Chat.Enabled ~= false)
+        if chatEnabled then
+        local chatOpen = false
+        local setChatOpen
+        local chatBtn = Instance.new("ImageButton", bottom)
+        chatBtn.Name = "ChatBtn"
+        chatBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+        chatBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
+        chatBtn.Size = UDim2.new(0, 16, 0, 16)
+        chatBtn.BackgroundTransparency = 1
+        chatBtn.BorderSizePixel = 0
+        chatBtn.Image = "rbxassetid://104591132509810"
+        chatBtn.ImageColor3 = colors.TextDim
+        chatBtn.ZIndex = 4
+        chatBtn.AutoButtonColor = false
+        bindTheme(chatBtn, "ImageColor3", "TextDim")
+
+        chatBtn.MouseEnter:Connect(function()
+            Library:Animate(chatBtn, "Hover", { ImageColor3 = colors.Main })
+        end)
+        chatBtn.MouseLeave:Connect(function()
+            Library:Animate(chatBtn, "Hover", { ImageColor3 = chatOpen and colors.Main or colors.TextDim })
+        end)
+
         local chatOpts = type(opts.Chat) == "table" and opts.Chat or {}
         local chatRoom = tostring(chatOpts.Room or chatOpts.room or "global")
         local chatPollInterval = math.max(1, tonumber(chatOpts.PollInterval or chatOpts.pollInterval or 3) or 3)
@@ -2076,6 +2071,8 @@ function Library:CreateWindow(opts)
             setPopupOpen(chatPanel, chatOpen, chatPopupConfig)
         end
 
+        win._setChatOpen = setChatOpen
+
         registerTransientPopup(chatPanel, function()
             setChatOpen(false)
         end)
@@ -2129,6 +2126,7 @@ function Library:CreateWindow(opts)
                     setChatOpen(true)
                 end
             end)
+        end
         end
     end
 
@@ -2809,7 +2807,9 @@ function Library:CreateWindow(opts)
             closeTransientPopups()
             settingsOpen = false
             searchOpen = false
-            setChatOpen(false)
+            if type(win._setChatOpen) == "function" then
+                win._setChatOpen(false)
+            end
             uiScaleDropdownOpen = false
             settingsPanel.Visible = false
             searchPanel.Visible = false
