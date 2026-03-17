@@ -300,6 +300,7 @@ return function(Library, context)
         Header = Color3.fromRGB(21, 21, 21),
         Bottom = Color3.fromRGB(21, 21, 21),
         Line = Color3.fromRGB(29, 29, 29),
+        Scroll = Color3.fromRGB(90, 90, 90),
         TabBg = Color3.fromRGB(30, 30, 30),
         TabBgActive = Color3.fromRGB(38, 38, 38),
         Text = Color3.fromRGB(229, 229, 229),

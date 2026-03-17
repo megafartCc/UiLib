@@ -1705,7 +1705,7 @@ function Library:CreateWindow(opts)
         chatMessagesScroll.BorderSizePixel = 0
         chatMessagesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
         chatMessagesScroll.ScrollBarThickness = 3
-        chatMessagesScroll.ScrollBarImageColor3 = colors.Scroll
+        chatMessagesScroll.ScrollBarImageColor3 = colors.Scroll or colors.Line or Color3.fromRGB(90, 90, 90)
         chatMessagesScroll.ScrollingDirection = Enum.ScrollingDirection.Y
         chatMessagesScroll.AutomaticCanvasSize = Enum.AutomaticSize.None
         chatMessagesScroll.ZIndex = 13
