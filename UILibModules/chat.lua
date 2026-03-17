@@ -635,13 +635,13 @@ return function(Library, context)
 
         local chatStatusLabel = Instance.new("TextLabel", chatPanel)
         chatStatusLabel.BackgroundTransparency = 1
-        chatStatusLabel.Position = UDim2.new(0, 90, 0, 0)
-        chatStatusLabel.Size = UDim2.new(1, -98, 0, 28)
+        chatStatusLabel.Position = UDim2.new(0, 52, 0, 0)
+        chatStatusLabel.Size = UDim2.new(1, -60, 0, 28)
         chatStatusLabel.Font = config.FontMedium
         chatStatusLabel.Text = ""
         chatStatusLabel.TextColor3 = colors.TextDim
         chatStatusLabel.TextSize = 10
-        chatStatusLabel.TextXAlignment = Enum.TextXAlignment.Right
+        chatStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
         chatStatusLabel.TextTruncate = Enum.TextTruncate.AtEnd
         chatStatusLabel.ZIndex = 13
         bindTheme(chatStatusLabel, "TextColor3", "TextDim")
@@ -675,6 +675,31 @@ return function(Library, context)
             return fallback
         end
 
+        local function debugSerialize(value)
+            local valueType = type(value)
+            if valueType == "table" then
+                local okEncode, encoded = pcall(function()
+                    return HttpService:JSONEncode(value)
+                end)
+                if okEncode and type(encoded) == "string" then
+                    return encoded
+                end
+                return "<table>"
+            end
+            if valueType == "nil" then
+                return "nil"
+            end
+            return tostring(value)
+        end
+
+        local chatDebugEnabled = chatOpts.Debug ~= false
+        local function debugWarn(stage, a, b, c)
+            if not chatDebugEnabled then
+                return
+            end
+            warn("[UiLibChatDebug] " .. tostring(stage) .. " | a=" .. debugSerialize(a) .. " | b=" .. debugSerialize(b) .. " | c=" .. debugSerialize(c))
+        end
+
         ensureProviderHeartbeat = function()
             if heartbeatStarted then
                 return true
@@ -682,6 +707,7 @@ return function(Library, context)
             local provider = chatProvider
             local startFn = type(provider) == "table" and (provider.StartHeartbeat or provider.startHeartbeat or provider.Monitor or provider.monitor) or nil
             if type(startFn) ~= "function" then
+                debugWarn("heartbeat_missing_function", provider)
                 return false
             end
             local okCall, successValue, response = callProviderFunction(provider, startFn, {
@@ -689,8 +715,10 @@ return function(Library, context)
                 initialDelay = 0,
                 debug = chatOpts.Debug == true,
             })
+            debugWarn("heartbeat_start_result", okCall, successValue, response)
             if not okCall or successValue == false then
                 setChatStatus("HB: " .. formatProviderError(response or successValue, "start_failed"), true)
+                debugWarn("heartbeat_start_failed", response, successValue)
                 return false
             end
             heartbeatStarted = true
@@ -967,6 +995,7 @@ return function(Library, context)
 
             ensureProviderHeartbeat()
             local provider = chatProvider
+            debugWarn("presence_refresh_begin", game.JobId, provider)
             local sharedFn = type(provider) == "table" and (provider.SharedUsers or provider.sharedUsers or provider.Peers or provider.peers) or nil
             local connectionsFn = type(provider) == "table" and (provider.Connections or provider.connectionStats) or nil
             local serversFn = type(provider) == "table" and (provider.Servers or provider.sharedServers) or nil
@@ -988,6 +1017,7 @@ return function(Library, context)
                         jobid = game.JobId or "",
                         includeSelf = false,
                     })
+                    debugWarn("presence_connections_result", okConnCall, okConnResult, connResponse)
                     if okConnCall and okConnResult ~= false then
                         local connPayload = connResponse
                         if type(connPayload) ~= "table" and type(okConnResult) == "table" then
@@ -1005,6 +1035,7 @@ return function(Library, context)
                     local okServerCall, okServerResult, serverResponse = callProviderFunction(provider, serversFn, {
                         includeSelf = false,
                     })
+                    debugWarn("presence_servers_result", okServerCall, okServerResult, serverResponse)
                     if okServerCall and okServerResult ~= false then
                         local serverPayload = serverResponse
                         if type(serverPayload) ~= "table" and type(okServerResult) == "table" then
@@ -1014,6 +1045,12 @@ return function(Library, context)
                         if #lastServerUsers > 0 then
                             gotServerUsers = true
                         end
+                    else
+                        debugWarn("presence_servers_failed", {
+                            okCall = okServerCall,
+                            okResult = okServerResult,
+                            response = serverResponse,
+                        })
                     end
                 end
 
@@ -1022,6 +1059,7 @@ return function(Library, context)
                         jobid = game.JobId or "",
                         includeSelf = false,
                     })
+                    debugWarn("presence_shared_users_result", okCall, okResult, response)
                     if okCall and okResult ~= false then
                         local payload = response
                         if type(payload) ~= "table" and type(okResult) == "table" then
@@ -1036,6 +1074,12 @@ return function(Library, context)
                         if not gotServerUsers then
                             lastServerUsers = {}
                         end
+                    else
+                        debugWarn("presence_shared_failed", {
+                            okCall = okCall,
+                            okResult = okResult,
+                            response = response,
+                        })
                     end
                 end
 
@@ -1804,6 +1848,7 @@ return function(Library, context)
             local fetchFn = type(provider) == "table" and (provider.Fetch or provider.fetch or provider.Get or provider.get) or nil
             if type(fetchFn) ~= "function" then
                 setChatStatus("Fetch unavailable", true)
+                debugWarn("fetch_unavailable", { provider = tostring(type(provider)) })
                 return
             end
 
@@ -1811,10 +1856,20 @@ return function(Library, context)
             task.spawn(function()
                 local ok, success, response = callProviderFunction(provider, fetchFn, chatPanelRuntime.LastId or 0, chatRoom, chatFeedLimit)
                 chatPollBusy = false
+                debugWarn("chat_fetch_result", ok, success, response)
                 if not ok or success == false then
                     setChatStatus("Fetch: " .. formatProviderError(response or success, "request_failed"), true)
+                    debugWarn("fetch_failed", {
+                        ok = ok,
+                        success = success,
+                        response = response,
+                    })
                     return
                 end
+                debugWarn("fetch_ok", {
+                    success = success,
+                    response = response,
+                })
                 setChatStatus("", false)
 
                 local payload = response
@@ -1853,6 +1908,7 @@ return function(Library, context)
             local sendFn = type(provider) == "table" and (provider.Send or provider.send or provider.Post or provider.post) or nil
             if type(sendFn) ~= "function" then
                 setChatStatus("Send unavailable", true)
+                debugWarn("send_unavailable", { provider = tostring(type(provider)) })
                 addChatRow(Client.Name, messageText, os.date("!%H:%M:%S", os.time() - (3 * 60 * 60)))
                 scrollChatToBottom()
                 return
@@ -1860,10 +1916,23 @@ return function(Library, context)
 
             task.spawn(function()
                 local ok, success, response = callProviderFunction(provider, sendFn, messageText, chatRoom)
+                debugWarn("chat_send_result", ok, success, response)
                 if not ok or success == false then
                     setChatStatus("Send: " .. formatProviderError(response or success, "request_failed"), true)
+                    debugWarn("send_failed", {
+                        ok = ok,
+                        success = success,
+                        response = response,
+                        room = chatRoom,
+                        message = messageText,
+                    })
                     return
                 end
+                debugWarn("send_ok", {
+                    success = success,
+                    response = response,
+                    room = chatRoom,
+                })
                 setChatStatus("", false)
 
                 local payload = response
@@ -1996,6 +2065,7 @@ return function(Library, context)
         function win:SetChatProvider(provider)
             heartbeatStarted = false
             chatProvider = resolveChatProvider(provider)
+            debugWarn("set_provider", provider, chatProvider)
             if type(chatProvider) == "table" and type(chatProvider.__errorMessage) == "string" then
                 setChatStatus(chatProvider.__errorMessage, true)
             else
