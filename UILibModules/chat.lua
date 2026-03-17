@@ -161,6 +161,41 @@ return function(Library, context)
     end
 
     local function makeProviderResolver(chatOpts, opts)
+        local defaultPanelUrl = "https://panel-production-dd46.up.railway.app"
+        local defaultPanelSlug = "sabnew"
+        local defaultPanelKey = "DSD3213232sfdxzcvxcfhhjgfj"
+
+        local function loadPanelSdkFallback()
+            local loader = loadstring or load
+            if type(loader) ~= "function" then
+                return nil
+            end
+
+            local cacheBust = tostring(math.floor((os.clock() or 0) * 1000000))
+            local sdkUrls = {
+                "https://raw.githubusercontent.com/megafartCc/panel/main/sdk/panel_sdk.lua",
+                "https://raw.githubusercontent.com/megafartCc/panel/refs/heads/main/sdk/panel_sdk.lua",
+            }
+
+            for _, sdkUrl in ipairs(sdkUrls) do
+                local fullUrl = sdkUrl .. "?cb=" .. cacheBust
+                local okSource, source = pcall(function()
+                    return game:HttpGet(fullUrl, true)
+                end)
+                if okSource and type(source) == "string" and source ~= "" then
+                    local okCompile, chunk = pcall(loader, source)
+                    if okCompile and type(chunk) == "function" then
+                        local okExec, sdk = pcall(chunk)
+                        if okExec and type(sdk) == "table" then
+                            return sdk
+                        end
+                    end
+                end
+            end
+
+            return nil
+        end
+
         return function(rawProvider)
             if type(rawProvider) == "table" then
                 return rawProvider
@@ -175,9 +210,23 @@ return function(Library, context)
             end
 
             local panelSdk = chatOpts.PanelSDK or chatOpts.SDK or (type(envTable) == "table" and (envTable.PanelSDK or envTable.panelSdk))
-            local panelUrl = chatOpts.PanelUrl or chatOpts.URL or chatOpts.Url or (type(envTable) == "table" and (envTable.PANEL_URL or envTable.PanelUrl))
-            local panelSlug = chatOpts.ScriptSlug or chatOpts.Slug or (type(envTable) == "table" and (envTable.PANEL_SLUG or envTable.PanelSlug))
-            local panelKey = chatOpts.PanelKey or chatOpts.Key or (type(envTable) == "table" and (envTable.PANEL_KEY or envTable.PanelKey))
+            if type(panelSdk) ~= "table" then
+                panelSdk = loadPanelSdkFallback()
+                if type(panelSdk) == "table" and type(envTable) == "table" then
+                    envTable.PanelSDK = panelSdk
+                    envTable.panelSdk = panelSdk
+                end
+            end
+
+            local panelUrl = chatOpts.PanelUrl or chatOpts.URL or chatOpts.Url
+                or (type(envTable) == "table" and (envTable.PANEL_URL or envTable.PanelUrl))
+                or defaultPanelUrl
+            local panelSlug = chatOpts.ScriptSlug or chatOpts.Slug
+                or (type(envTable) == "table" and (envTable.PANEL_SLUG or envTable.PanelSlug))
+                or defaultPanelSlug
+            local panelKey = chatOpts.PanelKey or chatOpts.Key
+                or (type(envTable) == "table" and (envTable.PANEL_KEY or envTable.PanelKey))
+                or defaultPanelKey
             local chatSendFn = type(panelSdk) == "table" and (panelSdk.chatSend or panelSdk.ChatSend
                 or (type(panelSdk.chat) == "table" and (panelSdk.chat.send or panelSdk.chat.Send))) or nil
             local chatFeedFn = type(panelSdk) == "table" and (panelSdk.chatFeed or panelSdk.ChatFeed
