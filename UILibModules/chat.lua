@@ -1215,7 +1215,24 @@ return function(Library, context)
             local placeText = tostring(entry.game or entry.placeName or ("Place " .. tostring(entry.placeid or entry.placeId or "?")))
             local jobId = tostring(entry.jobid or entry.gameId or "")
             local placeId = tonumber(entry.placeid or entry.placeId or 0) or 0
-            local joinable = placeId > 0 and jobId ~= "" and not (placeId == tonumber(game.PlaceId or 0) and jobId == tostring(game.JobId or ""))
+            local joinUrl = tostring(entry.join_url or entry.joinUrl or "")
+            if joinUrl ~= "" then
+                local parsedPlaceId, parsedJobId = string.match(joinUrl, "placeID=(%d+)&gameInstanceId=([%w%-_]+)")
+                if placeId <= 0 and parsedPlaceId then
+                    placeId = tonumber(parsedPlaceId) or 0
+                end
+                if jobId == "" and parsedJobId then
+                    jobId = tostring(parsedJobId)
+                end
+            end
+            if placeId <= 0 and jobId ~= "" then
+                placeId = tonumber(game.PlaceId or 0) or 0
+            end
+
+            local currentJobId = tostring(game.JobId or "")
+            local inCurrentServer = jobId ~= "" and jobId == currentJobId
+            local joinable = placeId > 0 and jobId ~= "" and not inCurrentServer
+            local joinLabel = joinable and "Join" or (inCurrentServer and "Here" or "N/A")
 
             local nameLabel = Instance.new("TextLabel", row)
             nameLabel.BackgroundTransparency = 1
@@ -1248,7 +1265,7 @@ return function(Library, context)
             joinBtn.BackgroundColor3 = joinable and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
             joinBtn.BorderSizePixel = 0
             joinBtn.Font = config.FontMedium
-            joinBtn.Text = joinable and "Join" or "-"
+            joinBtn.Text = joinLabel
             joinBtn.TextColor3 = joinable and Color3.fromRGB(255, 255, 255) or colors.TextDim
             joinBtn.TextSize = 9
             joinBtn.AutoButtonColor = false
@@ -1481,14 +1498,17 @@ return function(Library, context)
         }
 
         local function updateProfileJoinVisual()
+            local activePlaceId = tonumber(type(activeProfileData) == "table" and activeProfileData.placeid or 0) or 0
+            local activeJobId = tostring(type(activeProfileData) == "table" and activeProfileData.jobid or "")
+            if activePlaceId <= 0 and activeJobId ~= "" then
+                activePlaceId = tonumber(game.PlaceId or 0) or 0
+            end
             local hasTarget = type(activeProfileData) == "table"
-                and tonumber(activeProfileData.placeid or 0)
-                and tonumber(activeProfileData.placeid or 0) > 0
-                and type(activeProfileData.jobid) == "string"
-                and activeProfileData.jobid ~= ""
+                and activePlaceId > 0
+                and activeJobId ~= ""
                 and not (
-                    tonumber(activeProfileData.placeid or 0) == tonumber(game.PlaceId or 0)
-                    and tostring(activeProfileData.jobid or "") == tostring(game.JobId or "")
+                    activePlaceId == tonumber(game.PlaceId or 0)
+                    and activeJobId == tostring(game.JobId or "")
                 )
 
             if hasTarget then
@@ -1569,8 +1589,11 @@ return function(Library, context)
                 return
             end
 
-            local placeId = tonumber(activeProfileData.placeid or 0)
+            local placeId = tonumber(activeProfileData.placeid or 0) or 0
             local jobId = tostring(activeProfileData.jobid or "")
+            if placeId <= 0 and jobId ~= "" then
+                placeId = tonumber(game.PlaceId or 0) or 0
+            end
             if not placeId or placeId <= 0 or jobId == "" then
                 return
             end
