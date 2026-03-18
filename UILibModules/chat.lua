@@ -955,7 +955,7 @@ return function(Library, context)
         local chatMessagesScroll = Instance.new("ScrollingFrame", chatPanel)
         chatMessagesScroll.Name = "MessagesScroll"
         chatMessagesScroll.Position = UDim2.new(0, 8, 0, 34)
-        chatMessagesScroll.Size = UDim2.new(1, -16, 1, -78)
+        chatMessagesScroll.Size = UDim2.new(1, -16, 1, -92)
         chatMessagesScroll.BackgroundTransparency = 1
         chatMessagesScroll.BorderSizePixel = 0
         chatMessagesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -977,19 +977,19 @@ return function(Library, context)
 
         local chatInputRow = Instance.new("Frame", chatPanel)
         chatInputRow.BackgroundTransparency = 1
-        chatInputRow.Position = UDim2.new(0, 8, 1, -38)
+        chatInputRow.Position = UDim2.new(0, 8, 1, -34)
         chatInputRow.Size = UDim2.new(1, -16, 0, 30)
         chatInputRow.ZIndex = 13
 
         local typingStatusLabel = Instance.new("TextLabel", chatPanel)
         typingStatusLabel.Name = "TypingStatusLabel"
         typingStatusLabel.BackgroundTransparency = 1
-        typingStatusLabel.Position = UDim2.new(0, 10, 1, -52)
-        typingStatusLabel.Size = UDim2.new(1, -20, 0, 12)
+        typingStatusLabel.Position = UDim2.new(0, 10, 1, -50)
+        typingStatusLabel.Size = UDim2.new(1, -20, 0, 10)
         typingStatusLabel.Font = config.FontMedium
         typingStatusLabel.Text = ""
         typingStatusLabel.TextColor3 = colors.TextDim
-        typingStatusLabel.TextSize = 10
+        typingStatusLabel.TextSize = 9
         typingStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
         typingStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
         typingStatusLabel.TextTruncate = Enum.TextTruncate.AtEnd
@@ -1114,11 +1114,11 @@ return function(Library, context)
 
         local function updateChatInputLayout()
             if replyComposerFrame.Visible then
-                chatMessagesScroll.Size = UDim2.new(1, -16, 1, -100)
-                typingStatusLabel.Position = UDim2.new(0, 10, 1, -74)
+                chatMessagesScroll.Size = UDim2.new(1, -16, 1, -114)
+                typingStatusLabel.Position = UDim2.new(0, 10, 1, -84)
             else
-                chatMessagesScroll.Size = UDim2.new(1, -16, 1, -78)
-                typingStatusLabel.Position = UDim2.new(0, 10, 1, -52)
+                chatMessagesScroll.Size = UDim2.new(1, -16, 1, -92)
+                typingStatusLabel.Position = UDim2.new(0, 10, 1, -50)
             end
         end
 
