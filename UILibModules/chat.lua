@@ -742,7 +742,7 @@ return function(Library, context)
 
         local chatOpts = type(opts.Chat) == "table" and opts.Chat or {}
         local chatRoom = tostring(chatOpts.Room or chatOpts.room or "global")
-        local chatPollInterval = math.max(1, tonumber(chatOpts.PollInterval or chatOpts.pollInterval or 3) or 3)
+        local chatPollInterval = math.max(0.45, tonumber(chatOpts.PollInterval or chatOpts.pollInterval or 1) or 1)
         local chatFeedLimit = math.max(10, math.min(tonumber(chatOpts.Limit or chatOpts.limit or 60) or 60, 150))
         local chatMaxMessageLength = math.max(32, math.min(tonumber(chatOpts.MaxLength or chatOpts.maxLength or 240) or 240, 500))
         local chatPanelWidth = math.max(240, math.min(tonumber(chatOpts.Width or chatOpts.width or 312) or 312, 420))
@@ -2602,6 +2602,11 @@ return function(Library, context)
 
                 if type(payload) == "table" and type(payload.message) == "table" then
                     applyMessages({ payload.message })
+                    task.delay(0.12, function()
+                        if chatOpen and canUseUi() then
+                            callChatFetch()
+                        end
+                    end)
                 else
                     addChatRow(Client.Name, messageText, os.date("!%H:%M:%S", os.time() - (3 * 60 * 60)), tostring(Client and Client.UserId or ""), {
                         reply = replyPayload,
