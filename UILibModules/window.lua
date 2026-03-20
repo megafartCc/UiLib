@@ -10,6 +10,286 @@ return function(Library, context, moduleRequire)
     local protectGui = context.protectGui
     local randomStr = context.randomStr
 
+    local function getThemeValueOr(L, key, fallback)
+        local value = nil
+        if type(L.GetThemeValue) == "function" then
+            value = L:GetThemeValue(key)
+        elseif L.Colors then
+            value = L.Colors[key]
+        end
+        if value == nil then
+            return fallback
+        end
+        return value
+    end
+
+    local function parseNotifyArgs(options, text, duration)
+        if type(options) == "table" then
+            local title = options.Title or options.Name or options.Header or "Notification"
+            local body = options.Text or options.Description or options.Content or ""
+            local time = options.Duration or options.Time or options.Timeout or 3
+            return tostring(title), tostring(body), math.clamp(tonumber(time) or 3, 0.5, 60)
+        end
+
+        local title = tostring(options or "Notification")
+        local body = tostring(text or "")
+        local time = math.clamp(tonumber(duration) or 3, 0.5, 60)
+        return title, body, time
+    end
+
+    local function ensureNotifyApi()
+        if Library._notifyApiInstalled then
+            return
+        end
+
+        Library._notifyApiInstalled = true
+
+        function Library:_ensureNotifyHost(hostGui)
+            local targetHost = hostGui
+            if not targetHost and self._activeWindow and self._activeWindow._sg then
+                targetHost = self._activeWindow._sg
+            end
+            if not targetHost or not targetHost.Parent then
+                return nil
+            end
+
+            local state = self._notifyState
+            if state and state.host == targetHost and state.root and state.root.Parent then
+                return state
+            end
+
+            if state and state.root then
+                pcall(function()
+                    state.root:Destroy()
+                end)
+            end
+
+            state = {
+                host = targetHost,
+                toasts = {},
+                serial = 0,
+            }
+            self._notifyState = state
+
+            local root = Instance.new("Frame")
+            root.Name = "NotifyRoot"
+            root.AnchorPoint = Vector2.new(1, 0)
+            root.Position = UDim2.new(1, -14, 0, 14)
+            root.Size = UDim2.new(0, 330, 1, -20)
+            root.BackgroundTransparency = 1
+            root.BorderSizePixel = 0
+            root.ZIndex = 900
+            root.ClipsDescendants = false
+            root.Parent = targetHost
+
+            local layout = Instance.new("UIListLayout")
+            layout.FillDirection = Enum.FillDirection.Vertical
+            layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+            layout.VerticalAlignment = Enum.VerticalAlignment.Top
+            layout.SortOrder = Enum.SortOrder.LayoutOrder
+            layout.Padding = UDim.new(0, 7)
+            layout.Parent = root
+
+            state.root = root
+            return state
+        end
+
+        function Library:Notify(options, text, duration)
+            local state = self:_ensureNotifyHost()
+            if not state or not state.root then
+                return nil
+            end
+
+            local title, body, displayTime = parseNotifyArgs(options, text, duration)
+            local fontTitle = (self.Config and self.Config.Font) or Enum.Font.GothamBold
+            local fontBody = (self.Config and self.Config.FontMedium) or Enum.Font.Gotham
+            local titleSize = 13
+            local bodySize = 12
+            local textWidth = 302
+
+            local measuredBodyHeight = bodySize + 2
+            local okMeasure, bounds = pcall(TextService.GetTextSize, TextService, body, bodySize, fontBody, Vector2.new(textWidth, 1000))
+            if okMeasure and bounds then
+                measuredBodyHeight = math.max(bodySize + 2, bounds.Y)
+            end
+
+            local toastHeight = math.clamp(16 + titleSize + 3 + measuredBodyHeight + 14, 52, 130)
+            state.serial += 1
+
+            local slot = Instance.new("Frame")
+            slot.Name = "NotifySlot_" .. tostring(state.serial)
+            slot.Size = UDim2.new(1, 0, 0, 0)
+            slot.BackgroundTransparency = 1
+            slot.BorderSizePixel = 0
+            slot.ClipsDescendants = true
+            slot.ZIndex = 900
+            slot.LayoutOrder = -state.serial
+            slot.Parent = state.root
+
+            local card = Instance.new("Frame")
+            card.Name = "NotifyCard"
+            card.AnchorPoint = Vector2.new(1, 0)
+            card.Position = UDim2.new(1, 26, 0, 0)
+            card.Size = UDim2.new(1, 0, 0, toastHeight)
+            card.BackgroundColor3 = getThemeValueOr(self, "Panel", Color3.fromRGB(22, 22, 22))
+            card.BackgroundTransparency = 1
+            card.BorderSizePixel = 0
+            card.ZIndex = 901
+            card.Parent = slot
+            Instance.new("UICorner", card).CornerRadius = UDim.new(0, 6)
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = getThemeValueOr(self, "Line", Color3.fromRGB(60, 60, 60))
+            stroke.Transparency = 1
+            stroke.Parent = card
+
+            local titleLabel = Instance.new("TextLabel")
+            titleLabel.BackgroundTransparency = 1
+            titleLabel.Position = UDim2.new(0, 10, 0, 8)
+            titleLabel.Size = UDim2.new(1, -20, 0, titleSize + 2)
+            titleLabel.Font = fontTitle
+            titleLabel.Text = title
+            titleLabel.TextColor3 = getThemeValueOr(self, "TextStrong", Color3.fromRGB(255, 255, 255))
+            titleLabel.TextSize = titleSize
+            titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+            titleLabel.TextYAlignment = Enum.TextYAlignment.Top
+            titleLabel.TextTransparency = 1
+            titleLabel.ZIndex = 902
+            titleLabel.Parent = card
+
+            local bodyLabel = Instance.new("TextLabel")
+            bodyLabel.BackgroundTransparency = 1
+            bodyLabel.Position = UDim2.new(0, 10, 0, 8 + titleSize + 3)
+            bodyLabel.Size = UDim2.new(1, -20, 0, toastHeight - (8 + titleSize + 3 + 8))
+            bodyLabel.Font = fontBody
+            bodyLabel.Text = body
+            bodyLabel.TextColor3 = getThemeValueOr(self, "TextDim", Color3.fromRGB(194, 194, 194))
+            bodyLabel.TextSize = bodySize
+            bodyLabel.TextWrapped = true
+            bodyLabel.TextXAlignment = Enum.TextXAlignment.Left
+            bodyLabel.TextYAlignment = Enum.TextYAlignment.Top
+            bodyLabel.TextTransparency = 1
+            bodyLabel.ZIndex = 902
+            bodyLabel.Parent = card
+
+            local progressBack = Instance.new("Frame")
+            progressBack.AnchorPoint = Vector2.new(0, 1)
+            progressBack.Position = UDim2.new(0, 0, 1, 0)
+            progressBack.Size = UDim2.new(1, 0, 0, 2)
+            progressBack.BackgroundColor3 = getThemeValueOr(self, "Line", Color3.fromRGB(54, 54, 54))
+            progressBack.BackgroundTransparency = 0.55
+            progressBack.BorderSizePixel = 0
+            progressBack.ZIndex = 903
+            progressBack.Parent = card
+
+            local progressFill = Instance.new("Frame")
+            progressFill.Size = UDim2.new(1, 0, 1, 0)
+            progressFill.BackgroundColor3 = getThemeValueOr(self, "Main", Color3.fromRGB(245, 49, 116))
+            progressFill.BorderSizePixel = 0
+            progressFill.ZIndex = 904
+            progressFill.Parent = progressBack
+
+            if type(self.RegisterThemeBinding) == "function" then
+                self:RegisterThemeBinding(card, "BackgroundColor3", "Panel")
+                self:RegisterThemeBinding(stroke, "Color", "Line")
+                self:RegisterThemeBinding(titleLabel, "TextColor3", "TextStrong")
+                self:RegisterThemeBinding(bodyLabel, "TextColor3", "TextDim")
+                self:RegisterThemeBinding(progressBack, "BackgroundColor3", "Line")
+                self:RegisterThemeBinding(progressFill, "BackgroundColor3", "Main")
+            end
+
+            local toast = { closed = false }
+            local tickerConnection
+            local function closeToast()
+                if toast.closed then
+                    return
+                end
+                toast.closed = true
+
+                if tickerConnection then
+                    pcall(function()
+                        tickerConnection:Disconnect()
+                    end)
+                    tickerConnection = nil
+                end
+
+                self:Spring(card, "Close", {
+                    Position = UDim2.new(1, 24, 0, 0),
+                    BackgroundTransparency = 1,
+                })
+                self:Spring(stroke, "Close", { Transparency = 1 })
+                self:Spring(titleLabel, "Close", { TextTransparency = 1 })
+                self:Spring(bodyLabel, "Close", { TextTransparency = 1 })
+                self:Spring(progressBack, "Close", { BackgroundTransparency = 1 })
+                self:Spring(progressFill, "Close", { BackgroundTransparency = 1 })
+                self:Spring(slot, "Close", { Size = UDim2.new(1, 0, 0, 0) })
+
+                for i = #state.toasts, 1, -1 do
+                    if state.toasts[i] == toast then
+                        table.remove(state.toasts, i)
+                        break
+                    end
+                end
+
+                task.delay(0.24, function()
+                    if slot and slot.Parent then
+                        slot:Destroy()
+                    end
+                end)
+            end
+            toast.close = closeToast
+
+            local dismissButton = Instance.new("TextButton")
+            dismissButton.Name = "Dismiss"
+            dismissButton.BackgroundTransparency = 1
+            dismissButton.Size = UDim2.new(1, 0, 1, 0)
+            dismissButton.Text = ""
+            dismissButton.AutoButtonColor = false
+            dismissButton.Selectable = false
+            dismissButton.ZIndex = 905
+            dismissButton.Parent = card
+            dismissButton.Activated:Connect(closeToast)
+
+            table.insert(state.toasts, 1, toast)
+            while #state.toasts > 5 do
+                local oldest = state.toasts[#state.toasts]
+                if oldest and oldest.close then
+                    oldest.close()
+                else
+                    break
+                end
+            end
+
+            self:Spring(slot, "Open", { Size = UDim2.new(1, 0, 0, toastHeight) })
+            self:Spring(card, "Popup", {
+                Position = UDim2.new(1, 0, 0, 0),
+                BackgroundTransparency = getThemeValueOr(self, "PanelTransparency", 0),
+            })
+            self:Spring(stroke, "Open", { Transparency = 0.35 })
+            self:Spring(titleLabel, "Open", { TextTransparency = 0 })
+            self:Spring(bodyLabel, "Open", { TextTransparency = 0 })
+
+            local startedAt = tick()
+            tickerConnection = RunService.Heartbeat:Connect(function()
+                if toast.closed then
+                    return
+                end
+                local elapsed = tick() - startedAt
+                local alpha = math.clamp(elapsed / displayTime, 0, 1)
+                progressFill.Size = UDim2.new(1 - alpha, 0, 1, 0)
+                if alpha >= 1 then
+                    closeToast()
+                end
+            end)
+
+            return {
+                Close = closeToast,
+            }
+        end
+    end
+
+    ensureNotifyApi()
+
 function Library:CreateWindow(opts)
     opts = opts or {}
     local name = opts.Name or opts.Title or "FATALITY"
@@ -348,6 +628,8 @@ function Library:CreateWindow(opts)
 
     protectGui(sg)
     sg.Parent = getHiddenParent()
+    Library._activeWindow = win
+    Library:_ensureNotifyHost(sg)
 
     function win:Destroy()
         if self._destroyed then
@@ -376,6 +658,9 @@ function Library:CreateWindow(opts)
         self.Menus = {}
         self.ActiveMenu = nil
         self._floatingPanels = {}
+        if Library._activeWindow == self then
+            Library._activeWindow = nil
+        end
     end
 
     -- ==============================
@@ -2946,8 +3231,8 @@ function Library:CreateWindow(opts)
                         StrokeColor = colors.Line,
                         StrokeTransparency = 0.3,
                         RightOffset = -24,
-                        Width = 16,
-                        Height = 10,
+                        Width = 18,
+                        Height = 18,
                         ZIndex = 20,
                     })
 
