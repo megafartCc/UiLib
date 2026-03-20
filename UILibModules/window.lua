@@ -2135,7 +2135,11 @@ function Library:CreateWindow(opts)
             return startupReady and keyGateUnlocked
         end,
         main = main,
+        screenGui = sg,
         registerTransientPopup = registerTransientPopup,
+        getWindowRect = function()
+            return main.AbsolutePosition, main.AbsoluteSize
+        end,
         setPopupOpen = setPopupOpen,
         syncFloatingPanels = syncFloatingPanels,
         trackGlobal = trackGlobal,
