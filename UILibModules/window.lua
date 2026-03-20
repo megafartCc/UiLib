@@ -609,6 +609,7 @@ function Library:CreateWindow(opts)
     local chatModule = moduleRequire("chat.lua")(Library, context)
     local controlBase = moduleRequire("controls_base.lua")(Library, context)
     local dropdownControls = moduleRequire("dropdowns.lua")(Library, context)
+    local createKeybindManager = moduleRequire("keybinds.lua")(Library, context)
     local closeTransientPopups = popupManager.closeTransientPopups
     local registerTransientPopup = popupManager.registerTransientPopup
     local setPopupOpen = popupManager.setPopupOpen
@@ -2114,6 +2115,34 @@ function Library:CreateWindow(opts)
         end
     end
 
+    local keybindManager = createKeybindManager({
+        bindOutsideClose = popupManager.bindOutsideClose,
+        bindTheme = bindTheme,
+        clipFrame = clipFrame,
+        closeTransientPopups = closeTransientPopups,
+        colors = colors,
+        config = config,
+        getReservedKey = function()
+            if typeof(guiKeybind) == "EnumItem" and guiKeybind.EnumType == Enum.KeyCode then
+                return guiKeybind
+            end
+            if type(guiKeybind) == "string" then
+                return Enum.KeyCode[guiKeybind]
+            end
+            return nil
+        end,
+        isRuntimeEnabled = function()
+            return startupReady and keyGateUnlocked
+        end,
+        main = main,
+        registerTransientPopup = registerTransientPopup,
+        setPopupOpen = setPopupOpen,
+        syncFloatingPanels = syncFloatingPanels,
+        trackGlobal = trackGlobal,
+        win = win,
+    })
+    win._keybindManager = keybindManager
+
     local function smoothToggle()
         win.Visible = not win.Visible
 
@@ -2498,9 +2527,26 @@ function Library:CreateWindow(opts)
         end
     )
 
+    Library:RegisterConfig("__uilib.settings.show_keybind_list", "setting",
+        function()
+            if keybindManager then
+                return keybindManager:GetListEnabled()
+            end
+            return true
+        end,
+        function(val)
+            if keybindManager then
+                keybindManager:SetListEnabled(val == true, false)
+            end
+        end
+    )
+
     win._setKeyChromeLocked = function(locked)
         if locked then
             closeTransientPopups()
+            if keybindManager then
+                keybindManager:CloseEditor()
+            end
             settingsOpen = false
             searchOpen = false
             if type(win._setChatOpen) == "function" then
@@ -3210,6 +3256,15 @@ function Library:CreateWindow(opts)
 
                 -- Init visual
                 updateVisual()
+                if keybindManager then
+                    keybindManager:AttachToggle(toggle, {
+                        ConfigKey = tConfigKey,
+                        MenuName = menuName,
+                        Name = tName,
+                        SectionName = secName,
+                        Targets = { clickBtn, checkBtn },
+                    })
+                end
 
                 -- ==============================
                 -- Toggle:AddColorPicker (inline)
@@ -5575,6 +5630,17 @@ function Library:CreateWindow(opts)
                     Library:SaveConfig()
                     Library:SaveTheme()
                 end)
+            end,
+        })
+
+        uiFunctionSection:AddToggle({
+            Name = "Show Keybind List",
+            Default = keybindManager and keybindManager:GetListEnabled() or true,
+            SaveKey = false,
+            Callback = function(enabled)
+                if keybindManager then
+                    keybindManager:SetListEnabled(enabled, true)
+                end
             end,
         })
 
