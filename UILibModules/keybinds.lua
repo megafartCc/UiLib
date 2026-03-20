@@ -1,20 +1,75 @@
 return function(Library, context)
     local UserInputService = context.UserInputService
 
+    local keyLookup = nil
+    local digitAliases = {
+        ["0"] = "Zero",
+        ["1"] = "One",
+        ["2"] = "Two",
+        ["3"] = "Three",
+        ["4"] = "Four",
+        ["5"] = "Five",
+        ["6"] = "Six",
+        ["7"] = "Seven",
+        ["8"] = "Eight",
+        ["9"] = "Nine",
+    }
+
+    local function buildKeyLookup()
+        if keyLookup then
+            return
+        end
+
+        keyLookup = {}
+        for _, keyCode in ipairs(Enum.KeyCode:GetEnumItems()) do
+            local name = keyCode.Name
+            local lower = name:lower()
+            keyLookup[lower] = keyCode
+            keyLookup[lower:gsub("[%s_%-%p]", "")] = keyCode
+        end
+    end
+
     local function toKeyCode(value)
         if typeof(value) == "EnumItem" and value.EnumType == Enum.KeyCode then
             return value
         end
 
-        if type(value) == "string" then
-            local trimmed = value:gsub("^%s+", ""):gsub("%s+$", "")
-            if trimmed == "" then
-                return nil
+        if type(value) ~= "string" then
+            return nil
+        end
+
+        local trimmed = value:gsub("^%s+", ""):gsub("%s+$", "")
+        if trimmed == "" then
+            return nil
+        end
+
+        buildKeyLookup()
+
+        local lower = trimmed:lower()
+        local direct = keyLookup[lower] or keyLookup[lower:gsub("[%s_%-%p]", "")]
+        if direct then
+            return direct
+        end
+
+        if #trimmed == 1 then
+            local upper = trimmed:upper()
+            if upper:match("[A-Z]") then
+                return Enum.KeyCode[upper]
             end
-            return Enum.KeyCode[trimmed]
+            local alias = digitAliases[upper]
+            if alias then
+                return Enum.KeyCode[alias]
+            end
         end
 
         return nil
+    end
+
+    local function toMode(value)
+        if type(value) == "string" and value:lower() == "hold" then
+            return "hold"
+        end
+        return "toggle"
     end
 
     local function isRecordAlive(record)
@@ -23,10 +78,7 @@ return function(Library, context)
         end
 
         local control = record.Control
-        if type(control) ~= "table" then
-            return false
-        end
-        if control._destroyed then
+        if type(control) ~= "table" or control._destroyed then
             return false
         end
 
@@ -59,15 +111,63 @@ return function(Library, context)
         local recordsByControl = {}
         local orderedRecords = {}
         local recordsByKey = {}
+        local holdActive = {}
         local showList = true
         local captureRecord = nil
         local editorOpen = false
+
+        local manager = {}
+
+        local function removeRecordFromOrdered(record)
+            for index = #orderedRecords, 1, -1 do
+                if orderedRecords[index] == record then
+                    table.remove(orderedRecords, index)
+                    break
+                end
+            end
+        end
+
+        local function detachFromKey(record)
+            local keyCode = record.KeyCode
+            if not keyCode then
+                return
+            end
+
+            local bucket = recordsByKey[keyCode]
+            if bucket then
+                for index = #bucket, 1, -1 do
+                    if bucket[index] == record then
+                        table.remove(bucket, index)
+                    end
+                end
+                if #bucket == 0 then
+                    recordsByKey[keyCode] = nil
+                end
+            end
+
+            record.KeyCode = nil
+            holdActive[record] = nil
+        end
+
+        local function attachToKey(record, keyCode)
+            if not keyCode then
+                return
+            end
+
+            local bucket = recordsByKey[keyCode]
+            if not bucket then
+                bucket = {}
+                recordsByKey[keyCode] = bucket
+            end
+            table.insert(bucket, record)
+            record.KeyCode = keyCode
+        end
 
         local keybindsPanel = Instance.new("Frame", main)
         keybindsPanel.Name = "KeybindsPanel"
         keybindsPanel.AnchorPoint = Vector2.new(0, 0)
         keybindsPanel.Position = UDim2.new(0, 8, 0, (config.HeaderHeight or 40) + 8)
-        keybindsPanel.Size = UDim2.fromOffset(190, 0)
+        keybindsPanel.Size = UDim2.fromOffset(220, 0)
         keybindsPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
         keybindsPanel.BorderSizePixel = 0
         keybindsPanel.ClipsDescendants = true
@@ -114,11 +214,13 @@ return function(Library, context)
 
         win._floatingPanels[keybindsPanel] = { Active = false }
 
+        local editorWidth = 220
+        local editorOpenHeight = 126
         local bindEditor = Instance.new("Frame", clipFrame)
         bindEditor.Name = "KeybindEditor"
         bindEditor.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
         bindEditor.BorderSizePixel = 0
-        bindEditor.Size = UDim2.fromOffset(190, 0)
+        bindEditor.Size = UDim2.fromOffset(editorWidth, 0)
         bindEditor.Visible = false
         bindEditor.ClipsDescendants = true
         bindEditor.ZIndex = 170
@@ -132,118 +234,161 @@ return function(Library, context)
         bindEditorTitle.Position = UDim2.new(0, 8, 0, 6)
         bindEditorTitle.Size = UDim2.new(1, -16, 0, 14)
         bindEditorTitle.Font = config.Font
-        bindEditorTitle.Text = "Set Keybind"
+        bindEditorTitle.Text = "Keybind"
         bindEditorTitle.TextColor3 = colors.TextStrong
         bindEditorTitle.TextSize = 11
         bindEditorTitle.TextXAlignment = Enum.TextXAlignment.Left
         bindEditorTitle.ZIndex = 171
 
+        local bindEditorTarget = Instance.new("TextLabel", bindEditor)
+        bindEditorTarget.BackgroundTransparency = 1
+        bindEditorTarget.Position = UDim2.new(0, 8, 0, 20)
+        bindEditorTarget.Size = UDim2.new(1, -16, 0, 14)
+        bindEditorTarget.Font = config.FontMedium
+        bindEditorTarget.Text = "Toggle"
+        bindEditorTarget.TextColor3 = colors.TextDim
+        bindEditorTarget.TextSize = 10
+        bindEditorTarget.TextXAlignment = Enum.TextXAlignment.Left
+        bindEditorTarget.ZIndex = 171
+
+        local keyLabel = Instance.new("TextLabel", bindEditor)
+        keyLabel.BackgroundTransparency = 1
+        keyLabel.Position = UDim2.new(0, 8, 0, 38)
+        keyLabel.Size = UDim2.new(0.3, 0, 0, 16)
+        keyLabel.Font = config.FontMedium
+        keyLabel.Text = "Key"
+        keyLabel.TextColor3 = colors.Text
+        keyLabel.TextSize = 10
+        keyLabel.TextXAlignment = Enum.TextXAlignment.Left
+        keyLabel.ZIndex = 171
+
+        local keyInput = Instance.new("TextBox", bindEditor)
+        keyInput.AnchorPoint = Vector2.new(1, 0)
+        keyInput.Position = UDim2.new(1, -8, 0, 38)
+        keyInput.Size = UDim2.new(0.68, 0, 0, 18)
+        keyInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        keyInput.BorderSizePixel = 0
+        keyInput.Font = config.FontMedium
+        keyInput.Text = ""
+        keyInput.TextColor3 = colors.TextStrong
+        keyInput.TextSize = 10
+        keyInput.PlaceholderText = "Press or type key"
+        keyInput.ClearTextOnFocus = false
+        keyInput.TextXAlignment = Enum.TextXAlignment.Left
+        keyInput.ZIndex = 172
+        Instance.new("UICorner", keyInput).CornerRadius = UDim.new(0, 3)
+        local keyInputStroke = Instance.new("UIStroke", keyInput)
+        keyInputStroke.Color = colors.Line
+        keyInputStroke.Transparency = 0.45
+
+        local modeLabel = Instance.new("TextLabel", bindEditor)
+        modeLabel.BackgroundTransparency = 1
+        modeLabel.Position = UDim2.new(0, 8, 0, 62)
+        modeLabel.Size = UDim2.new(0.3, 0, 0, 16)
+        modeLabel.Font = config.FontMedium
+        modeLabel.Text = "Mode"
+        modeLabel.TextColor3 = colors.Text
+        modeLabel.TextSize = 10
+        modeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        modeLabel.ZIndex = 171
+
+        local toggleModeBtn = Instance.new("TextButton", bindEditor)
+        toggleModeBtn.AnchorPoint = Vector2.new(1, 0)
+        toggleModeBtn.Position = UDim2.new(1, -79, 0, 62)
+        toggleModeBtn.Size = UDim2.new(0, 67, 0, 18)
+        toggleModeBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        toggleModeBtn.BorderSizePixel = 0
+        toggleModeBtn.Font = config.FontMedium
+        toggleModeBtn.Text = "Toggle"
+        toggleModeBtn.TextColor3 = colors.TextStrong
+        toggleModeBtn.TextSize = 10
+        toggleModeBtn.ZIndex = 172
+        toggleModeBtn.AutoButtonColor = false
+        toggleModeBtn.Selectable = false
+        Instance.new("UICorner", toggleModeBtn).CornerRadius = UDim.new(0, 3)
+
+        local holdModeBtn = Instance.new("TextButton", bindEditor)
+        holdModeBtn.AnchorPoint = Vector2.new(1, 0)
+        holdModeBtn.Position = UDim2.new(1, -8, 0, 62)
+        holdModeBtn.Size = UDim2.new(0, 67, 0, 18)
+        holdModeBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        holdModeBtn.BorderSizePixel = 0
+        holdModeBtn.Font = config.FontMedium
+        holdModeBtn.Text = "Hold"
+        holdModeBtn.TextColor3 = colors.TextStrong
+        holdModeBtn.TextSize = 10
+        holdModeBtn.ZIndex = 172
+        holdModeBtn.AutoButtonColor = false
+        holdModeBtn.Selectable = false
+        Instance.new("UICorner", holdModeBtn).CornerRadius = UDim.new(0, 3)
+
+        local clearBtn = Instance.new("TextButton", bindEditor)
+        clearBtn.Position = UDim2.new(0, 8, 0, 86)
+        clearBtn.Size = UDim2.new(1, -16, 0, 18)
+        clearBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        clearBtn.BorderSizePixel = 0
+        clearBtn.Font = config.FontMedium
+        clearBtn.Text = "Clear Keybind"
+        clearBtn.TextColor3 = colors.TextStrong
+        clearBtn.TextSize = 10
+        clearBtn.ZIndex = 172
+        clearBtn.AutoButtonColor = false
+        clearBtn.Selectable = false
+        Instance.new("UICorner", clearBtn).CornerRadius = UDim.new(0, 3)
+
         local bindEditorHint = Instance.new("TextLabel", bindEditor)
         bindEditorHint.BackgroundTransparency = 1
-        bindEditorHint.Position = UDim2.new(0, 8, 0, 24)
-        bindEditorHint.Size = UDim2.new(1, -16, 0, 32)
+        bindEditorHint.Position = UDim2.new(0, 8, 0, 108)
+        bindEditorHint.Size = UDim2.new(1, -16, 0, 14)
         bindEditorHint.Font = config.FontMedium
-        bindEditorHint.Text = "Press any key\nBackspace = clear | Esc = cancel"
+        bindEditorHint.Text = "Right click toggle opens this panel."
         bindEditorHint.TextColor3 = colors.TextDim
         bindEditorHint.TextSize = 10
         bindEditorHint.TextXAlignment = Enum.TextXAlignment.Left
-        bindEditorHint.TextYAlignment = Enum.TextYAlignment.Top
         bindEditorHint.ZIndex = 171
 
         bindTheme(bindEditor, "BackgroundColor3", "Panel")
         bindTheme(bindEditor, "BackgroundTransparency", "PanelTransparency")
         bindTheme(bindEditorStroke, "Color", "Line")
         bindTheme(bindEditorTitle, "TextColor3", "TextStrong")
+        bindTheme(bindEditorTarget, "TextColor3", "TextDim")
+        bindTheme(keyLabel, "TextColor3", "Text")
+        bindTheme(modeLabel, "TextColor3", "Text")
+        bindTheme(keyInput, "BackgroundColor3", "ControlAlt")
+        bindTheme(keyInput, "BackgroundTransparency", "ControlTransparency")
+        bindTheme(keyInput, "TextColor3", "TextStrong")
+        bindTheme(keyInput, "PlaceholderColor3", "TextMuted")
+        bindTheme(keyInputStroke, "Color", "Line")
+        bindTheme(clearBtn, "BackgroundColor3", "Control")
+        bindTheme(clearBtn, "BackgroundTransparency", "ControlTransparency")
+        bindTheme(clearBtn, "TextColor3", "TextStrong")
         bindTheme(bindEditorHint, "TextColor3", "TextDim")
 
         local editorPopupConfig = {
-            ClosedSize = UDim2.fromOffset(190, 0),
-            OpenSize = UDim2.fromOffset(190, 62),
+            ClosedSize = UDim2.fromOffset(editorWidth, 0),
+            OpenSize = UDim2.fromOffset(editorWidth, editorOpenHeight),
             OpenToken = "Open",
             CloseToken = "Close",
             HideDelay = 0.2,
         }
 
-        local manager = {}
-
-        local function removeRecordFromOrder(record)
-            for index = #orderedRecords, 1, -1 do
-                if orderedRecords[index] == record then
-                    table.remove(orderedRecords, index)
-                    break
-                end
-            end
-        end
-
-        local function detachFromKey(record)
-            local keyCode = record.KeyCode
-            if not keyCode then
-                return
-            end
-
-            local bucket = recordsByKey[keyCode]
-            if not bucket then
-                record.KeyCode = nil
-                return
-            end
-
-            for index = #bucket, 1, -1 do
-                if bucket[index] == record then
-                    table.remove(bucket, index)
-                end
-            end
-
-            if #bucket == 0 then
-                recordsByKey[keyCode] = nil
-            end
-
-            record.KeyCode = nil
-        end
-
-        local function attachToKey(record, keyCode)
-            if not keyCode then
-                return
-            end
-
-            local bucket = recordsByKey[keyCode]
-            if not bucket then
-                bucket = {}
-                recordsByKey[keyCode] = bucket
-            end
-
-            table.insert(bucket, record)
-            record.KeyCode = keyCode
-        end
-
-        function manager:DetachControl(control)
-            local record = recordsByControl[control]
-            if not record then
-                return
-            end
-
-            if captureRecord == record then
-                captureRecord = nil
-            end
-
-            recordsByControl[control] = nil
-            detachFromKey(record)
-            removeRecordFromOrder(record)
-        end
-
-        local function pruneRecords()
-            for index = #orderedRecords, 1, -1 do
-                local record = orderedRecords[index]
-                if not isRecordAlive(record) then
-                    manager:DetachControl(record and record.Control)
-                end
-            end
+        local function setModeButtonsVisual(mode)
+            local toggleActive = mode ~= "hold"
+            local holdActiveMode = mode == "hold"
+            Library:Animate(toggleModeBtn, "Hover", {
+                BackgroundColor3 = toggleActive and colors.Main or colors.Control,
+                BackgroundTransparency = toggleActive and (colors.AccentTransparency or 0) or (colors.ControlTransparency or 0),
+            })
+            Library:Animate(holdModeBtn, "Hover", {
+                BackgroundColor3 = holdActiveMode and colors.Main or colors.Control,
+                BackgroundTransparency = holdActiveMode and (colors.AccentTransparency or 0) or (colors.ControlTransparency or 0),
+            })
         end
 
         local function setEditorOpen(nextOpen)
             if editorOpen == nextOpen then
                 return
             end
-
             editorOpen = nextOpen
             if not editorOpen then
                 captureRecord = nil
@@ -257,20 +402,22 @@ return function(Library, context)
             end
         end
 
-        local function positionEditor(mousePos)
+        local function positionEditor(anchorPos)
             local clipPos = clipFrame.AbsolutePosition
             local clipSize = clipFrame.AbsoluteSize
-            local x = math.clamp(
-                mousePos.X - clipPos.X + 6,
-                4,
-                math.max(4, clipSize.X - 194)
-            )
-            local y = math.clamp(
-                mousePos.Y - clipPos.Y + 6,
-                4,
-                math.max(4, clipSize.Y - 66)
-            )
+            local x = math.clamp(anchorPos.X - clipPos.X + 6, 4, math.max(4, clipSize.X - editorWidth - 4))
+            local y = math.clamp(anchorPos.Y - clipPos.Y + 6, 4, math.max(4, clipSize.Y - editorOpenHeight - 4))
             bindEditor.Position = UDim2.fromOffset(x, y)
+        end
+
+        local function applyEditorRecord()
+            if not captureRecord then
+                return
+            end
+            bindEditorTarget.Text = tostring(captureRecord.Name or "Toggle")
+            keyInput.Text = captureRecord.KeyCode and captureRecord.KeyCode.Name or ""
+            setModeButtonsVisual(captureRecord.Mode or "toggle")
+            bindEditorHint.Text = "Press key while key field is focused."
         end
 
         registerTransientPopup(bindEditor, function()
@@ -292,28 +439,31 @@ return function(Library, context)
             })
         end
 
-        local function buildDisplayRows()
-            local rows = {}
-            for _, record in ipairs(orderedRecords) do
-                if record.KeyCode then
-                    table.insert(rows, record)
+        local function pruneRecords()
+            for index = #orderedRecords, 1, -1 do
+                local record = orderedRecords[index]
+                if not isRecordAlive(record) then
+                    manager:DetachControl(record and record.Control)
                 end
             end
-            return rows
         end
 
         local function refreshListPanel()
             pruneRecords()
-
             for _, child in ipairs(keybindsList:GetChildren()) do
                 if child:IsA("GuiObject") then
                     child:Destroy()
                 end
             end
 
-            local rows = buildDisplayRows()
-            local visibleCount = math.min(#rows, 10)
+            local rows = {}
+            for _, record in ipairs(orderedRecords) do
+                if record.KeyCode then
+                    table.insert(rows, record)
+                end
+            end
 
+            local visibleCount = math.min(#rows, 10)
             for index = 1, visibleCount do
                 local record = rows[index]
                 local row = Instance.new("TextLabel", keybindsList)
@@ -321,7 +471,7 @@ return function(Library, context)
                 row.Size = UDim2.new(1, 0, 0, 14)
                 row.LayoutOrder = index
                 row.Font = config.FontMedium
-                row.Text = ("[%s] %s"):format(record.KeyCode.Name, tostring(record.Name))
+                row.Text = ("[%s] %s (%s)"):format(record.KeyCode.Name, tostring(record.Name), record.Mode == "hold" and "HOLD" or "TOGGLE")
                 row.TextColor3 = colors.Text
                 row.TextSize = 10
                 row.TextXAlignment = Enum.TextXAlignment.Left
@@ -345,7 +495,7 @@ return function(Library, context)
 
             local hasRows = #rows > 0
             local targetHeight = hasRows and (30 + (math.min(#rows, 10) * 18) + (#rows > 10 and 14 or 0)) or 0
-            keybindsPanel.Size = UDim2.fromOffset(190, targetHeight)
+            keybindsPanel.Size = UDim2.fromOffset(220, targetHeight)
             keybindsList.Size = UDim2.new(1, -16, 0, math.max(0, targetHeight - 30))
 
             local panelState = win._floatingPanels[keybindsPanel]
@@ -355,7 +505,7 @@ return function(Library, context)
             syncFloatingPanels()
         end
 
-        local function setRecordBind(record, value, shouldMarkDirty)
+        local function setRecordKey(record, value, shouldMarkDirty)
             if type(record) ~= "table" then
                 return false
             end
@@ -364,7 +514,6 @@ return function(Library, context)
             if value == nil or value == false or value == "" then
                 keyCode = nil
             end
-
             if keyCode and keyCode == Enum.KeyCode.Unknown then
                 return false
             end
@@ -389,20 +538,51 @@ return function(Library, context)
             return true
         end
 
+        local function setRecordMode(record, mode, shouldMarkDirty)
+            if type(record) ~= "table" then
+                return false
+            end
+
+            record.Mode = toMode(mode)
+            if shouldMarkDirty then
+                Library:_markDirty()
+            end
+            if captureRecord == record then
+                setModeButtonsVisual(record.Mode)
+            end
+            refreshListPanel()
+            return true
+        end
+
         function manager:SetControlKeybind(control, value, shouldMarkDirty)
             local record = recordsByControl[control]
             if not record then
                 return false
             end
-            return setRecordBind(record, value, shouldMarkDirty == true)
+
+            local keyValue = value
+            local modeValue = nil
+            if type(value) == "table" then
+                keyValue = value.key or value.Key or value.value or value.Value
+                modeValue = value.mode or value.Mode
+            end
+
+            local ok = setRecordKey(record, keyValue, shouldMarkDirty == true)
+            if modeValue ~= nil then
+                setRecordMode(record, modeValue, shouldMarkDirty == true)
+            end
+            return ok
         end
 
         function manager:GetControlKeybind(control)
             local record = recordsByControl[control]
-            if not record or not record.KeyCode then
+            if not record then
                 return nil
             end
-            return record.KeyCode.Name
+            return {
+                key = record.KeyCode and record.KeyCode.Name or nil,
+                mode = record.Mode or "toggle",
+            }
         end
 
         function manager:SetListEnabled(enabled, shouldMarkDirty)
@@ -421,6 +601,40 @@ return function(Library, context)
             setEditorOpen(false)
         end
 
+        function manager:DetachControl(control)
+            local record = recordsByControl[control]
+            if not record then
+                return
+            end
+
+            if captureRecord == record then
+                captureRecord = nil
+            end
+
+            recordsByControl[control] = nil
+            holdActive[record] = nil
+            detachFromKey(record)
+            removeRecordFromOrdered(record)
+        end
+
+        local function openEditorForRecord(record)
+            if not isRecordAlive(record) then
+                return
+            end
+            if record.Control.Disabled then
+                return
+            end
+            if not isRuntimeEnabled() then
+                return
+            end
+
+            captureRecord = record
+            applyEditorRecord()
+            positionEditor(UserInputService:GetMouseLocation())
+            closeTransientPopups(bindEditor)
+            setEditorOpen(true)
+        end
+
         function manager:AttachToggle(control, meta)
             if not control or recordsByControl[control] then
                 return
@@ -429,37 +643,22 @@ return function(Library, context)
             meta = meta or {}
             local record = {
                 Control = control,
-                Name = tostring(meta.Name or "Toggle"),
-                MenuName = tostring(meta.MenuName or ""),
-                SectionName = tostring(meta.SectionName or ""),
                 ConfigKey = meta.ConfigKey,
                 KeyCode = nil,
+                Mode = "toggle",
+                Name = tostring(meta.Name or "Toggle"),
             }
 
             recordsByControl[control] = record
             table.insert(orderedRecords, record)
 
-            local function openEditorForRecord()
-                if control.Disabled then
-                    return
-                end
-                if not isRuntimeEnabled() then
-                    return
-                end
-
-                captureRecord = record
-                bindEditorTitle.Text = "Set Keybind: " .. record.Name
-                bindEditorHint.Text = "Press any key\nBackspace = clear | Esc = cancel"
-                positionEditor(UserInputService:GetMouseLocation())
-                closeTransientPopups(bindEditor)
-                setEditorOpen(true)
-            end
-
             local targets = meta.Targets
             if type(targets) == "table" then
                 for _, target in ipairs(targets) do
                     if target and target:IsA("GuiButton") then
-                        control:TrackConnection(target.MouseButton2Click:Connect(openEditorForRecord))
+                        control:TrackConnection(target.MouseButton2Click:Connect(function()
+                            openEditorForRecord(record)
+                        end))
                     end
                 end
             end
@@ -478,10 +677,13 @@ return function(Library, context)
                 Library:RegisterConfig(bindConfigKey, "keybind",
                     function()
                         local current = recordsByControl[control]
-                        if current and current.KeyCode then
-                            return current.KeyCode.Name
+                        if not current then
+                            return nil
                         end
-                        return nil
+                        return {
+                            key = current.KeyCode and current.KeyCode.Name or nil,
+                            mode = current.Mode or "toggle",
+                        }
                     end,
                     function(value)
                         manager:SetControlKeybind(control, value, false)
@@ -491,6 +693,59 @@ return function(Library, context)
 
             refreshListPanel()
         end
+
+        local function applyTextInputKey()
+            if not captureRecord then
+                return
+            end
+
+            local raw = tostring(keyInput.Text or "")
+            if raw == "" then
+                setRecordKey(captureRecord, nil, true)
+                applyEditorRecord()
+                return
+            end
+
+            if setRecordKey(captureRecord, raw, true) then
+                applyEditorRecord()
+            else
+                bindEditorHint.Text = "Invalid key."
+            end
+        end
+
+        keyInput.Focused:Connect(function()
+            bindEditorHint.Text = "Press a key now or type key name."
+            Library:Animate(keyInputStroke, "Hover", { Color = colors.Main, Transparency = 0.2 })
+        end)
+
+        keyInput.FocusLost:Connect(function()
+            Library:Animate(keyInputStroke, "Hover", { Color = colors.Line, Transparency = 0.45 })
+            applyTextInputKey()
+        end)
+
+        clearBtn.Activated:Connect(function()
+            if not captureRecord then
+                return
+            end
+            setRecordKey(captureRecord, nil, true)
+            applyEditorRecord()
+        end)
+
+        toggleModeBtn.Activated:Connect(function()
+            if not captureRecord then
+                return
+            end
+            setRecordMode(captureRecord, "toggle", true)
+            applyEditorRecord()
+        end)
+
+        holdModeBtn.Activated:Connect(function()
+            if not captureRecord then
+                return
+            end
+            setRecordMode(captureRecord, "hold", true)
+            applyEditorRecord()
+        end)
 
         trackGlobal(UserInputService.InputBegan:Connect(function(input, gpe)
             if input.UserInputType ~= Enum.UserInputType.Keyboard then
@@ -503,21 +758,28 @@ return function(Library, context)
             end
 
             if editorOpen and captureRecord then
-                if keyCode == Enum.KeyCode.Escape then
+                local focused = UserInputService:GetFocusedTextBox()
+                if focused == keyInput then
+                    if keyCode == Enum.KeyCode.Escape then
+                        setEditorOpen(false)
+                        return
+                    end
+                    if keyCode == Enum.KeyCode.Backspace or keyCode == Enum.KeyCode.Delete then
+                        keyInput.Text = ""
+                        setRecordKey(captureRecord, nil, true)
+                        applyEditorRecord()
+                        return
+                    end
+                    if keyCode ~= Enum.KeyCode.Return and keyCode ~= Enum.KeyCode.KeypadEnter and keyCode ~= Enum.KeyCode.Tab then
+                        if setRecordKey(captureRecord, keyCode, true) then
+                            applyEditorRecord()
+                        end
+                        return
+                    end
+                elseif keyCode == Enum.KeyCode.Escape then
                     setEditorOpen(false)
                     return
                 end
-
-                if keyCode == Enum.KeyCode.Backspace or keyCode == Enum.KeyCode.Delete then
-                    setRecordBind(captureRecord, nil, true)
-                    setEditorOpen(false)
-                    return
-                end
-
-                if setRecordBind(captureRecord, keyCode, true) then
-                    setEditorOpen(false)
-                end
-                return
             end
 
             if gpe or not isRuntimeEnabled() then
@@ -536,9 +798,13 @@ return function(Library, context)
             for _, entry in ipairs(bucket) do
                 table.insert(snapshot, entry)
             end
+
             for _, record in ipairs(snapshot) do
                 local control = record and record.Control
-                if control and not control._destroyed and not control.Disabled then
+                if not isRecordAlive(record) then
+                    manager:DetachControl(control)
+                elseif control and not control.Disabled then
+                    local mode = record.Mode or "toggle"
                     local currentState = nil
                     if type(control.Get) == "function" then
                         local ok, value = pcall(control.Get, control)
@@ -550,17 +816,56 @@ return function(Library, context)
                     end
 
                     if type(currentState) == "boolean" and type(control.Set) == "function" then
-                        pcall(control.Set, control, not currentState)
+                        if mode == "hold" then
+                            holdActive[record] = true
+                            pcall(control.Set, control, true)
+                        else
+                            pcall(control.Set, control, not currentState)
+                        end
                     end
-                else
-                    manager:DetachControl(control)
                 end
             end
 
             refreshListPanel()
-        end), "ToggleKeybindWidgets")
+        end), "ToggleKeybindWidgetsBegan")
+
+        trackGlobal(UserInputService.InputEnded:Connect(function(input, gpe)
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then
+                return
+            end
+            if gpe or not isRuntimeEnabled() then
+                return
+            end
+
+            local keyCode = input.KeyCode
+            local bucket = recordsByKey[keyCode]
+            if type(bucket) ~= "table" or #bucket == 0 then
+                return
+            end
+
+            local snapshot = {}
+            for _, entry in ipairs(bucket) do
+                table.insert(snapshot, entry)
+            end
+
+            for _, record in ipairs(snapshot) do
+                local control = record and record.Control
+                if not isRecordAlive(record) then
+                    manager:DetachControl(control)
+                elseif record.Mode == "hold" and holdActive[record] and control and not control.Disabled then
+                    holdActive[record] = nil
+                    if type(control.Get) == "function" and type(control.Set) == "function" then
+                        local ok, value = pcall(control.Get, control)
+                        if ok and type(value) == "boolean" then
+                            pcall(control.Set, control, false)
+                        end
+                    end
+                end
+            end
+        end), "ToggleKeybindWidgetsEnded")
 
         refreshListPanel()
+
         return manager
     end
 end
