@@ -2436,7 +2436,7 @@ function Library:CreateWindow(opts)
     local kbListening = false
     local kbConn = nil
 
-    local function updateKeybindVisual(currentKey)
+    win._updateGuiKeybindVisual = function(currentKey)
         if typeof(currentKey) == "EnumItem" then
             kbValueBtn.Text = currentKey.Name
         elseif typeof(currentKey) == "string" then
@@ -2446,7 +2446,7 @@ function Library:CreateWindow(opts)
         end
     end
 
-    local function setGuiKeybind(newKey, shouldSave)
+    win._setGuiKeybind = function(newKey, shouldSave)
         if typeof(newKey) == "string" then
             local enumKey = Enum.KeyCode[newKey]
             if enumKey then
@@ -2459,7 +2459,9 @@ function Library:CreateWindow(opts)
         end
 
         guiKeybind = newKey
-        updateKeybindVisual(newKey)
+        if type(win._updateGuiKeybindVisual) == "function" then
+            win._updateGuiKeybindVisual(newKey)
+        end
 
         if shouldSave then
             pcall(function() Library:SaveConfig() end)
@@ -2468,7 +2470,9 @@ function Library:CreateWindow(opts)
         return true
     end
 
-    updateKeybindVisual(guiKeybind)
+    if type(win._updateGuiKeybindVisual) == "function" then
+        win._updateGuiKeybindVisual(guiKeybind)
+    end
 
     kbValueBtn.Activated:Connect(function()
         if kbListening then return end
@@ -2480,7 +2484,9 @@ function Library:CreateWindow(opts)
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 -- Ignore modifier keys alone
                 if input.KeyCode == Enum.KeyCode.Unknown then return end
-                setGuiKeybind(input.KeyCode, true)
+                if type(win._setGuiKeybind) == "function" then
+                    win._setGuiKeybind(input.KeyCode, true)
+                end
                 Library:Spring(kbStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                 kbListening = false
                 if kbConn then
@@ -2527,7 +2533,9 @@ function Library:CreateWindow(opts)
             return tostring(guiKeybind)
         end,
         function(val)
-            setGuiKeybind(val, false)
+            if type(win._setGuiKeybind) == "function" then
+                win._setGuiKeybind(val, false)
+            end
         end
     )
 
