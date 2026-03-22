@@ -915,7 +915,7 @@ return function(Library, context)
                         local mode = record.Mode or "toggle"
                         if mode == "hold" then
                             holdActive[record] = true
-                            pcall(control.Set, control, true)
+                            pcall(control.Set, control, true, { fireCallbacks = true })
                         else
                             local current = false
                             if type(control.Get) == "function" then
@@ -924,7 +924,7 @@ return function(Library, context)
                                     current = value
                                 end
                             end
-                            pcall(control.Set, control, not current)
+                            pcall(control.Set, control, not current, { fireCallbacks = true })
                         end
                     end
                 end
@@ -958,7 +958,7 @@ return function(Library, context)
                     holdActive[record] = nil
                     local control = record.Control
                     if control and not control.Disabled and type(control.Set) == "function" then
-                        pcall(control.Set, control, false)
+                        pcall(control.Set, control, false, { fireCallbacks = true })
                     end
                 end
             end
