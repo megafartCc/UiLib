@@ -2553,6 +2553,23 @@ function Library:CreateWindow(opts)
         end
     )
 
+    Library:RegisterConfig("__uilib.settings.keybind_list_position", "setting",
+        function()
+            if keybindManager and type(keybindManager.GetListPosition) == "function" then
+                return keybindManager:GetListPosition()
+            end
+            return { mode = "auto" }
+        end,
+        function(val)
+            if keybindManager and type(keybindManager.SetListPosition) == "function" then
+                keybindManager:SetListPosition(val, false)
+            end
+        end,
+        {
+            Aliases = { "__uilib.settings.keybind_panel_position" },
+        }
+    )
+
     win._setKeyChromeLocked = function(locked)
         if locked then
             closeTransientPopups()

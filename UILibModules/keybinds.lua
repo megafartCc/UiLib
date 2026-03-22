@@ -111,6 +111,8 @@ return function(Library, context)
         local recordsByKey = {}
         local holdActive = {}
         local showList = true
+        local listPositionMode = "auto"
+        local listCustomPosition = nil
         local captureRecord = nil
         local editorOpen = false
         local captureKeyFromNextInput = false
@@ -159,6 +161,16 @@ return function(Library, context)
         listLayout.SortOrder = Enum.SortOrder.LayoutOrder
         listLayout.Padding = UDim.new(0, 4)
 
+        local listDragHandle = Instance.new("TextButton", listPanel)
+        listDragHandle.Name = "DragHandle"
+        listDragHandle.BackgroundTransparency = 1
+        listDragHandle.Position = UDim2.fromOffset(0, 0)
+        listDragHandle.Size = UDim2.new(1, 0, 0, 24)
+        listDragHandle.Text = ""
+        listDragHandle.AutoButtonColor = false
+        listDragHandle.Selectable = false
+        listDragHandle.ZIndex = 122
+
         bindTheme(listPanel, "BackgroundColor3", "Panel")
         bindTheme(listPanel, "BackgroundTransparency", "PanelTransparency")
         bindTheme(listPanelStroke, "Color", "Line")
@@ -166,6 +178,65 @@ return function(Library, context)
         bindTheme(listSep, "BackgroundColor3", "Line")
 
         win._floatingPanels[listPanel] = { Active = false }
+
+        local listDragInputType = nil
+        local listDragStart = nil
+        local listDragPanelStart = nil
+        local listDragPending = false
+        local listDragging = false
+        local listDragMoved = false
+        local listDragThreshold = 3
+
+        local function getViewportSize()
+            local camera = workspace.CurrentCamera
+            if camera and typeof(camera.ViewportSize) == "Vector2" then
+                return camera.ViewportSize
+            end
+            return Vector2.new(1920, 1080)
+        end
+
+        local function getListPanelBounds()
+            local width = listPanel.AbsoluteSize.X
+            local height = listPanel.AbsoluteSize.Y
+            if width <= 0 then
+                width = 230
+            end
+            if height <= 0 then
+                height = math.max(40, listPanel.Size.Y.Offset)
+            end
+            return width, height
+        end
+
+        local function clampListPanelPosition(x, y)
+            local viewport = getViewportSize()
+            local width, height = getListPanelBounds()
+            local clampedX = math.clamp(math.floor(tonumber(x) or 0), 8, math.max(8, viewport.X - width - 8))
+            local clampedY = math.clamp(math.floor(tonumber(y) or 0), 8, math.max(8, viewport.Y - height - 8))
+            return clampedX, clampedY
+        end
+
+        local function applyCustomListPosition(x, y)
+            local clampedX, clampedY = clampListPanelPosition(x, y)
+            listPositionMode = "custom"
+            listCustomPosition = {
+                x = clampedX,
+                y = clampedY,
+            }
+            listPanel.Position = UDim2.fromOffset(clampedX, clampedY)
+        end
+
+        local function stopListDrag(markDirty)
+            local shouldMarkDirty = markDirty and listDragMoved
+            listDragInputType = nil
+            listDragStart = nil
+            listDragPanelStart = nil
+            listDragPending = false
+            listDragging = false
+            listDragMoved = false
+            if shouldMarkDirty then
+                Library:_markDirty()
+            end
+        end
 
         local editorWidth = 230
         local editorHeight = 124
@@ -449,6 +520,10 @@ return function(Library, context)
                 panelState.Active = showList and hasRows
             end
             syncFloatingPanels()
+
+            if listPositionMode == "custom" and type(listCustomPosition) == "table" then
+                applyCustomListPosition(listCustomPosition.x, listCustomPosition.y)
+            end
         end
 
         local function removeRecordFromOrdered(record)
@@ -562,6 +637,55 @@ return function(Library, context)
 
         function manager:GetListEnabled()
             return showList
+        end
+
+        function manager:SetListPosition(value, shouldMarkDirty)
+            if value == nil or value == false then
+                listPositionMode = "auto"
+                listCustomPosition = nil
+                if shouldMarkDirty then
+                    Library:_markDirty()
+                end
+                return true
+            end
+
+            if type(value) == "table" and type(value.mode) == "string" and value.mode:lower() == "auto" then
+                listPositionMode = "auto"
+                listCustomPosition = nil
+                if shouldMarkDirty then
+                    Library:_markDirty()
+                end
+                return true
+            end
+
+            if type(value) ~= "table" then
+                return false
+            end
+
+            local x = tonumber(value.x or value.X)
+            local y = tonumber(value.y or value.Y)
+            if type(x) ~= "number" or type(y) ~= "number" then
+                return false
+            end
+
+            applyCustomListPosition(x, y)
+            if shouldMarkDirty then
+                Library:_markDirty()
+            end
+            return true
+        end
+
+        function manager:GetListPosition()
+            if listPositionMode == "custom" and type(listCustomPosition) == "table" then
+                return {
+                    mode = "custom",
+                    x = tonumber(listCustomPosition.x) or 0,
+                    y = tonumber(listCustomPosition.y) or 0,
+                }
+            end
+            return {
+                mode = "auto",
+            }
         end
 
         function manager:CloseEditor()
@@ -678,6 +802,66 @@ return function(Library, context)
             end
         end)
 
+        trackGlobal(listDragHandle.InputBegan:Connect(function(input)
+            local isPointerDown = input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch
+            if not isPointerDown then
+                return
+            end
+            if not listPanel.Visible then
+                return
+            end
+
+            listDragPending = true
+            listDragging = false
+            listDragMoved = false
+            listDragStart = input.Position
+            listDragPanelStart = listPanel.AbsolutePosition
+            listDragInputType = input.UserInputType == Enum.UserInputType.Touch
+                and Enum.UserInputType.Touch
+                or Enum.UserInputType.MouseMovement
+        end), "KeybindPanelDragBegan")
+
+        trackGlobal(UserInputService.InputChanged:Connect(function(input)
+            if not (listDragPending or listDragging) then
+                return
+            end
+            if listDragInputType and input.UserInputType ~= listDragInputType then
+                return
+            end
+            if not listDragStart or not listDragPanelStart then
+                return
+            end
+
+            local delta = input.Position - listDragStart
+            if listDragPending then
+                if math.abs(delta.X) < listDragThreshold and math.abs(delta.Y) < listDragThreshold then
+                    return
+                end
+                listDragPending = false
+                listDragging = true
+            end
+
+            if listDragging then
+                listDragMoved = true
+                local x = listDragPanelStart.X + delta.X
+                local y = listDragPanelStart.Y + delta.Y
+                applyCustomListPosition(x, y)
+            end
+        end), "KeybindPanelDragChanged")
+
+        trackGlobal(UserInputService.InputEnded:Connect(function(input)
+            if not (listDragPending or listDragging) then
+                return
+            end
+
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch
+            then
+                stopListDrag(true)
+            end
+        end), "KeybindPanelDragEnded")
+
         trackGlobal(UserInputService.InputBegan:Connect(function(input, gpe)
             if input.UserInputType ~= Enum.UserInputType.Keyboard then
                 return
@@ -784,19 +968,28 @@ return function(Library, context)
             if not listPanel.Visible then
                 return
             end
+
+            if listPositionMode == "custom" and type(listCustomPosition) == "table" then
+                applyCustomListPosition(listCustomPosition.x, listCustomPosition.y)
+                return
+            end
+
             local windowPos, windowSize = getWindowRect()
             if not windowPos or not windowSize then
                 return
             end
 
-            local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+            local viewport = getViewportSize()
+            local panelWidth, panelHeight = getListPanelBounds()
             local x = windowPos.X + windowSize.X + 12
             local y = windowPos.Y + 8
-            if x + 230 > viewport.X - 8 then
-                x = windowPos.X - 230 - 12
+            if x + panelWidth > viewport.X - 8 then
+                x = windowPos.X - panelWidth - 12
             end
-            x = math.clamp(x, 8, math.max(8, viewport.X - 238))
-            y = math.clamp(y, 8, math.max(8, viewport.Y - math.max(40, listPanel.AbsoluteSize.Y + 8)))
+            x, y = clampListPanelPosition(x, y)
+            if panelHeight <= 0 then
+                y = math.clamp(y, 8, math.max(8, viewport.Y - 40))
+            end
             listPanel.Position = UDim2.fromOffset(x, y)
         end), "KeybindPanelReposition")
 
