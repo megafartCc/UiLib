@@ -2917,12 +2917,20 @@ function Library:CreateWindow(opts)
             for _, refreshScroll in ipairs(self._columnScrollers) do
                 refreshScroll()
             end
+            if type(self._widePanels) == "table" then
+                for _, panel in ipairs(self._widePanels) do
+                    if panel and panel.RefreshLayout then
+                        panel:RefreshLayout()
+                    end
+                end
+            end
         end
 
         menu._btn = menuBtn
         menu._label = menuLabel
         menu._page = pageFrame
         menu._stroke = btnStroke
+        menu._widePanels = {}
 
         -- Select/deselect
         local function selectMenu(selected)
@@ -2969,6 +2977,116 @@ function Library:CreateWindow(opts)
         if #win.Menus == 1 then
             win.ActiveMenu = menu
             selectMenu(true)
+        end
+
+        -- ==============================
+        -- AddWidePanel (full-width panel anchored below columns)
+        -- ==============================
+        function menu:AddWidePanel(panelOpts)
+            panelOpts = panelOpts or {}
+
+            local panelName = panelOpts.Name or panelOpts.Title or "PANEL"
+            local panelHeight = math.max(80, tonumber(panelOpts.Height) or 220)
+            local topPadding = math.max(0, tonumber(panelOpts.TopPadding) or 10)
+            local sidePadding = math.max(0, tonumber(panelOpts.SidePadding) or 4)
+            local panel = {}
+            local panelCleanup = Cleaner.new()
+
+            local panelFrame = Instance.new("Frame", pageFrame)
+            panelFrame.Name = "WidePanel_" .. panelName
+            panelFrame.BackgroundColor3 = colors.Section
+            panelFrame.BorderSizePixel = 0
+            panelFrame.Position = UDim2.new(0, sidePadding, 0, 4)
+            panelFrame.Size = UDim2.new(1, -(sidePadding * 2), 0, panelHeight)
+            panelFrame.ZIndex = 4
+            panelFrame.ClipsDescendants = true
+            bindTheme(panelFrame, "BackgroundColor3", "Section")
+            bindTheme(panelFrame, "BackgroundTransparency", "SectionTransparency")
+            Instance.new("UICorner", panelFrame).CornerRadius = UDim.new(0, 4)
+
+            local panelTitle = Instance.new("TextLabel", panelFrame)
+            panelTitle.Name = "PanelTitle"
+            panelTitle.BackgroundTransparency = 1
+            panelTitle.Position = UDim2.new(0, 8, 0, -6)
+            panelTitle.Size = UDim2.new(1, -16, 0, 14)
+            panelTitle.Font = config.Font
+            panelTitle.Text = panelName
+            panelTitle.TextColor3 = colors.Text
+            panelTitle.TextSize = 10
+            panelTitle.TextXAlignment = Enum.TextXAlignment.Left
+            panelTitle.ZIndex = 5
+            bindTheme(panelTitle, "TextColor3", "Text")
+
+            local contentContainer = Instance.new("Frame", panelFrame)
+            contentContainer.Name = "Content"
+            contentContainer.BackgroundTransparency = 1
+            contentContainer.BorderSizePixel = 0
+            contentContainer.Position = UDim2.new(0, 0, 0, 0)
+            contentContainer.Size = UDim2.new(1, 0, 1, 0)
+            contentContainer.ZIndex = 4
+
+            local panelPadding = Instance.new("UIPadding", contentContainer)
+            panelPadding.PaddingTop = UDim.new(0, 10)
+            panelPadding.PaddingBottom = UDim.new(0, 8)
+            panelPadding.PaddingLeft = UDim.new(0, 10)
+            panelPadding.PaddingRight = UDim.new(0, 10)
+
+            panel.Frame = panelFrame
+            panel.Container = contentContainer
+            panel.Content = contentContainer
+            panel.TitleLabel = panelTitle
+            panel._cleanup = panelCleanup
+            panel._menu = menu
+
+            function panel:TrackConnection(conn, key)
+                return self._cleanup:Add(conn, "Disconnect", key)
+            end
+
+            function panel:RefreshLayout()
+                if not panelFrame.Parent or not pageFrame.Parent then
+                    return
+                end
+
+                local bottom = 4
+                for _, section in ipairs(menu.Sections) do
+                    if section and section.Frame and section.Frame.Parent then
+                        local relativeTop = section.Frame.AbsolutePosition.Y - pageFrame.AbsolutePosition.Y
+                        bottom = math.max(bottom, relativeTop + section.Frame.AbsoluteSize.Y)
+                    end
+                end
+
+                panelFrame.Position = UDim2.new(0, sidePadding, 0, math.floor(bottom + topPadding + 0.5))
+                panelFrame.Size = UDim2.new(1, -(sidePadding * 2), 0, panelHeight)
+            end
+
+            function panel:Destroy()
+                if self._destroyed then
+                    return
+                end
+                self._destroyed = true
+                self._cleanup:Cleanup()
+                for index = #menu._widePanels, 1, -1 do
+                    if menu._widePanels[index] == self then
+                        table.remove(menu._widePanels, index)
+                        break
+                    end
+                end
+                if panelFrame.Parent then
+                    panelFrame:Destroy()
+                end
+            end
+
+            table.insert(menu._widePanels, panel)
+            panel:TrackConnection(pageFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                panel:RefreshLayout()
+            end), nextCleanupKey("WidePanelAbsoluteSize"))
+            task.defer(function()
+                if panel.RefreshLayout then
+                    panel:RefreshLayout()
+                end
+            end)
+
+            return panel
         end
 
         -- ==============================
