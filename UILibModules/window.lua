@@ -2985,10 +2985,12 @@ function Library:CreateWindow(opts)
         function menu:AddWidePanel(panelOpts)
             panelOpts = panelOpts or {}
 
-            local panelName = panelOpts.Name or panelOpts.Title or "PANEL"
+            local panelName = string.upper(tostring(panelOpts.Name or panelOpts.Title or "PANEL"))
             local panelHeight = math.max(80, tonumber(panelOpts.Height) or 220)
             local topPadding = math.max(0, tonumber(panelOpts.TopPadding) or 10)
             local sidePadding = math.max(0, tonumber(panelOpts.SidePadding) or 4)
+            local headerInset = 10
+            local titleOverlapPadding = 8
             local panel = {}
             local panelCleanup = Cleaner.new()
 
@@ -2996,10 +2998,10 @@ function Library:CreateWindow(opts)
             panelFrame.Name = "WidePanel_" .. panelName
             panelFrame.BackgroundColor3 = colors.Section
             panelFrame.BorderSizePixel = 0
-            panelFrame.Position = UDim2.new(0, sidePadding, 0, 4)
+            panelFrame.Position = UDim2.new(0, sidePadding, 0, 4 + titleOverlapPadding)
             panelFrame.Size = UDim2.new(1, -(sidePadding * 2), 0, panelHeight)
             panelFrame.ZIndex = 4
-            panelFrame.ClipsDescendants = true
+            panelFrame.ClipsDescendants = false
             bindTheme(panelFrame, "BackgroundColor3", "Section")
             bindTheme(panelFrame, "BackgroundTransparency", "SectionTransparency")
             Instance.new("UICorner", panelFrame).CornerRadius = UDim.new(0, 4)
@@ -3008,13 +3010,14 @@ function Library:CreateWindow(opts)
             panelTitle.Name = "PanelTitle"
             panelTitle.BackgroundTransparency = 1
             panelTitle.Position = UDim2.new(0, 8, 0, -6)
-            panelTitle.Size = UDim2.new(1, -16, 0, 14)
+            panelTitle.Size = UDim2.new(1, -16, 0, 18)
             panelTitle.Font = config.Font
             panelTitle.Text = panelName
             panelTitle.TextColor3 = colors.Text
             panelTitle.TextSize = 10
             panelTitle.TextXAlignment = Enum.TextXAlignment.Left
-            panelTitle.ZIndex = 5
+            panelTitle.TextYAlignment = Enum.TextYAlignment.Center
+            panelTitle.ZIndex = 7
             bindTheme(panelTitle, "TextColor3", "Text")
 
             local contentContainer = Instance.new("Frame", panelFrame)
@@ -3026,7 +3029,7 @@ function Library:CreateWindow(opts)
             contentContainer.ZIndex = 4
 
             local panelPadding = Instance.new("UIPadding", contentContainer)
-            panelPadding.PaddingTop = UDim.new(0, 10)
+            panelPadding.PaddingTop = UDim.new(0, headerInset)
             panelPadding.PaddingBottom = UDim.new(0, 8)
             panelPadding.PaddingLeft = UDim.new(0, 10)
             panelPadding.PaddingRight = UDim.new(0, 10)
@@ -3055,7 +3058,7 @@ function Library:CreateWindow(opts)
                     end
                 end
 
-                panelFrame.Position = UDim2.new(0, sidePadding, 0, math.floor(bottom + topPadding + 0.5))
+                panelFrame.Position = UDim2.new(0, sidePadding, 0, math.floor(bottom + topPadding + titleOverlapPadding + 0.5))
                 panelFrame.Size = UDim2.new(1, -(sidePadding * 2), 0, panelHeight)
             end
 
