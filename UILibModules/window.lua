@@ -2594,6 +2594,7 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- KEYBIND CHANGER (in settings panel)
     -- ==============================
+    local function buildKeyControlsSection()
     local kbRow = Instance.new("Frame", settingsPanel)
     kbRow.Position = UDim2.new(0, 10, 0, 114)
     kbRow.Size = UDim2.new(1, -20, 0, 20)
@@ -2995,6 +2996,9 @@ function Library:CreateWindow(opts)
     end)
 
     win._setKeyChromeLocked(keySystemActive and not keyGateUnlocked)
+    end
+
+    buildKeyControlsSection()
 
     -- ==============================
     -- AddMenu (creates tab + page)
