@@ -462,10 +462,15 @@ function Library:CreateWindow(opts)
     local hardcodedKeySystemActive = (not luarmorKeySystemEnabled) and keySystemEnabled and requiredKey ~= ""
     local keyValidationMode = luarmorKeySystemEnabled and "luarmor" or (hardcodedKeySystemActive and "hardcoded" or "none")
     local keySystemActive = luarmorKeySystemEnabled or hardcodedKeySystemActive
+    local waitForKeyVerification = keySystemActive and opts.WaitForKey ~= false and opts.BlockUntilKeyVerified ~= false
     local keyGateUnlocked = not keySystemActive
     local keyContentBootstrapped = false
     local keyValidationBusy = false
     local initialKeyInputText = ""
+
+    if waitForKeyVerification and keyValidationMode == "luarmor" and luarmorScriptId == "" then
+        error("LuarmorKey is enabled but LuarmorScriptId is missing.")
+    end
 
     if type(keyStorageTag) ~= "string" or keyStorageTag == "" then
         if keyValidationMode == "luarmor" and luarmorScriptId ~= "" then
@@ -1657,6 +1662,8 @@ function Library:CreateWindow(opts)
     local uiScaleDropdownOpen = false
     local setUiScaleDropdownOpen = function()
     end
+    local updateContentScaleVisual = function()
+    end
 
     -- Toggle settings panel
     local settingsOpen = false
@@ -2390,6 +2397,7 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- CONTENT SCALE (settings panel)
     -- ==============================
+    local function buildUiScaleSection()
     local uiScaleRow = Instance.new("Frame", settingsPanel)
     uiScaleRow.Position = UDim2.new(0, 10, 0, 88)
     uiScaleRow.Size = UDim2.new(1, -20, 0, 20)
@@ -2435,7 +2443,7 @@ function Library:CreateWindow(opts)
     uiScaleArrow.TextSize = 7
     uiScaleArrow.ZIndex = 103
 
-    local function updateContentScaleVisual()
+    updateContentScaleVisual = function()
         uiScaleValueBtn.Text = getContentScaleOption(currentContentScale).Label
     end
 
@@ -2579,6 +2587,9 @@ function Library:CreateWindow(opts)
             return { uiScalePanel, uiScaleValueBtn }
         end,
     })
+    end
+
+    buildUiScaleSection()
 
     -- ==============================
     -- KEYBIND CHANGER (in settings panel)
@@ -6384,6 +6395,18 @@ function Library:CreateWindow(opts)
         syncMobileRestoreButton()
         syncFloatingPanels()
     end)
+
+    if waitForKeyVerification and not keyGateUnlocked then
+        -- Hard-gate the caller so script logic after CreateWindow does not run
+        -- until the key UI has been successfully unlocked.
+        while not keyGateUnlocked and not win._destroyed do
+            task.wait()
+        end
+
+        if not keyGateUnlocked then
+            error("Key window was closed before verification completed.")
+        end
+    end
 
     return win
 end
