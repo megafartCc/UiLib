@@ -449,8 +449,8 @@ return function(Library, context)
         vertical.Name = "Vertical"
         vertical.BackgroundColor3 = branchColor
         vertical.BorderSizePixel = 0
-        vertical.Position = UDim2.new(0, 2, 0, -12)
-        vertical.Size = UDim2.new(0, 2, 0.5, 13)
+        vertical.Position = UDim2.new(0, 2, 0, -8)
+        vertical.Size = UDim2.new(0, 2, 0.5, 9)
         vertical.ZIndex = branch.ZIndex
         Instance.new("UICorner", vertical).CornerRadius = UDim.new(1, 0)
 
