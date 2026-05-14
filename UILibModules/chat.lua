@@ -315,12 +315,6 @@ return function(Library, context)
             end
 
             local envTable = nil
-            if type(getgenv) == "function" then
-                local okEnv, envResult = pcall(getgenv)
-                if okEnv and type(envResult) == "table" then
-                    envTable = envResult
-                end
-            end
 
             local panelSdk = chatOpts.PanelSDK or chatOpts.SDK or (type(envTable) == "table" and (envTable.PanelSDK or envTable.panelSdk))
             if type(panelSdk) ~= "table" then
