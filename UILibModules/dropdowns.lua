@@ -434,6 +434,38 @@ return function(Library, context)
         return control
     end
 
+    local function addSubControlBranch(parent, colors, zIndex)
+        local branch = Instance.new("Frame", parent)
+        branch.Name = "SubControlBranch"
+        branch.BackgroundTransparency = 1
+        branch.BorderSizePixel = 0
+        branch.Position = UDim2.new(0, 0, 0, 0)
+        branch.Size = UDim2.new(0, 14, 1, 0)
+        branch.ZIndex = zIndex or 5
+
+        local branchColor = colors.Main or colors.Text
+
+        local vertical = Instance.new("Frame", branch)
+        vertical.Name = "Vertical"
+        vertical.BackgroundColor3 = branchColor
+        vertical.BorderSizePixel = 0
+        vertical.Position = UDim2.new(0, 2, 0, 0)
+        vertical.Size = UDim2.new(0, 2, 0.5, 1)
+        vertical.ZIndex = branch.ZIndex
+        Instance.new("UICorner", vertical).CornerRadius = UDim.new(1, 0)
+
+        local horizontal = Instance.new("Frame", branch)
+        horizontal.Name = "Horizontal"
+        horizontal.BackgroundColor3 = branchColor
+        horizontal.BorderSizePixel = 0
+        horizontal.Position = UDim2.new(0, 2, 0.5, 0)
+        horizontal.Size = UDim2.new(1, -2, 0, 2)
+        horizontal.ZIndex = branch.ZIndex
+        Instance.new("UICorner", horizontal).CornerRadius = UDim.new(1, 0)
+
+        return branch
+    end
+
     local function addToggleDropdown(base, dropOpts)
         dropOpts = dropOpts or {}
         local dName = dropOpts.Name or dropOpts.Title or "Dropdown"
@@ -456,12 +488,15 @@ return function(Library, context)
         dRow.ZIndex = 5
         dRow.ClipsDescendants = false
 
+        addSubControlBranch(dRow, base.colors, 5)
+
         local dLabel = Instance.new("TextLabel", dRow)
         dLabel.BackgroundTransparency = 1
-        dLabel.Size = UDim2.new(0.4, 0, 1, 0)
+        dLabel.Position = UDim2.new(0, 18, 0, 0)
+        dLabel.Size = UDim2.new(0.4, -18, 1, 0)
         dLabel.Font = base.config.FontMedium
         dLabel.Text = dName
-        dLabel.TextColor3 = base.colors.TextDim
+        dLabel.TextColor3 = base.colors.Text
         dLabel.TextSize = 11
         dLabel.TextXAlignment = Enum.TextXAlignment.Left
         dLabel.ZIndex = 5

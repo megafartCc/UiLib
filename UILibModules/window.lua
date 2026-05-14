@@ -4002,16 +4002,45 @@ function Library:CreateWindow(opts)
                     sRow.Size = UDim2.new(1, 0, 0, 20)
                     sRow.ZIndex = 5
 
+                    local sBranch = Instance.new("Frame", sRow)
+                    sBranch.Name = "SubControlBranch"
+                    sBranch.BackgroundTransparency = 1
+                    sBranch.BorderSizePixel = 0
+                    sBranch.Position = UDim2.new(0, 0, 0, 0)
+                    sBranch.Size = UDim2.new(0, 14, 1, 0)
+                    sBranch.ZIndex = 5
+
+                    local sBranchVertical = Instance.new("Frame", sBranch)
+                    sBranchVertical.Name = "Vertical"
+                    sBranchVertical.BackgroundColor3 = colors.Main
+                    sBranchVertical.BorderSizePixel = 0
+                    sBranchVertical.Position = UDim2.new(0, 2, 0, 0)
+                    sBranchVertical.Size = UDim2.new(0, 2, 0.5, 1)
+                    sBranchVertical.ZIndex = 5
+                    bindTheme(sBranchVertical, "BackgroundColor3", "Main")
+                    Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)
+
+                    local sBranchHorizontal = Instance.new("Frame", sBranch)
+                    sBranchHorizontal.Name = "Horizontal"
+                    sBranchHorizontal.BackgroundColor3 = colors.Main
+                    sBranchHorizontal.BorderSizePixel = 0
+                    sBranchHorizontal.Position = UDim2.new(0, 2, 0.5, 0)
+                    sBranchHorizontal.Size = UDim2.new(1, -2, 0, 2)
+                    sBranchHorizontal.ZIndex = 5
+                    bindTheme(sBranchHorizontal, "BackgroundColor3", "Main")
+                    Instance.new("UICorner", sBranchHorizontal).CornerRadius = UDim.new(1, 0)
+
                     local sLabel = Instance.new("TextLabel", sRow)
                     sLabel.BackgroundTransparency = 1
-                    sLabel.Size = UDim2.new(0.4, 0, 1, 0)
+                    sLabel.Position = UDim2.new(0, 18, 0, 0)
+                    sLabel.Size = UDim2.new(0.4, -18, 1, 0)
                     sLabel.Font = config.FontMedium
                     sLabel.Text = sName
-                    sLabel.TextColor3 = colors.TextDim
+                    sLabel.TextColor3 = colors.Text
                     sLabel.TextSize = 11
                     sLabel.TextXAlignment = Enum.TextXAlignment.Left
                     sLabel.ZIndex = 5
-                    bindTheme(sLabel, "TextColor3", "TextDim")
+                    bindTheme(sLabel, "TextColor3", "Text")
 
                     local barBg = Instance.new("Frame", sRow)
                     barBg.AnchorPoint = Vector2.new(1, 0.5)
