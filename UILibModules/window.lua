@@ -3976,7 +3976,7 @@ function Library:CreateWindow(opts)
                     sBranchVertical.BackgroundColor3 = colors.Main
                     sBranchVertical.BorderSizePixel = 0
                     sBranchVertical.Position = UDim2.new(0, 2, 0, -8)
-                    sBranchVertical.Size = UDim2.new(0, 2, 0.5, 9)
+                    sBranchVertical.Size = UDim2.new(0, 2, 1, 14)
                     sBranchVertical.ZIndex = 5
                     bindTheme(sBranchVertical, "BackgroundColor3", "Main")
                     Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)
@@ -4210,7 +4210,7 @@ function Library:CreateWindow(opts)
                     sBranchVertical.BackgroundColor3 = colors.Main
                     sBranchVertical.BorderSizePixel = 0
                     sBranchVertical.Position = UDim2.new(0, 2, 0, -8)
-                    sBranchVertical.Size = UDim2.new(0, 2, 0.5, 9)
+                    sBranchVertical.Size = UDim2.new(0, 2, 1, 14)
                     sBranchVertical.ZIndex = 5
                     bindTheme(sBranchVertical, "BackgroundColor3", "Main")
                     Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)
