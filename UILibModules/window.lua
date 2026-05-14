@@ -2913,13 +2913,16 @@ function Library:CreateWindow(opts)
         end
 
         if type(Library.WriteData) == "function" then
-            Library:WriteData(keyStorageTag, {
+            local saved, saveErr = Library:WriteData(keyStorageTag, {
                 key = submitted,
                 value = submitted,
                 verified = true,
                 mode = keyValidationMode,
                 script_id = luarmorScriptId,
             })
+            if not saved then
+                warn("[UILib] Key accepted, but saving it failed: " .. tostring(saveErr))
+            end
         end
 
         win._setKeyVerified(true)
@@ -2963,8 +2966,9 @@ function Library:CreateWindow(opts)
         local menuName = menuOpts.Name or menuOpts.Title or "TAB"
         local menuIcon = menuOpts.Icon or "eye"
         local numColumns = menuOpts.Columns or 3
+        local menuIsSettings = string.upper(tostring(menuName)) == "SETTINGS"
 
-        local menu = { Sections = {}, _columns = {}, _columnScrollers = {} }
+        local menu = { Sections = {}, _columns = {}, _columnScrollers = {}, _isSettingsMenu = menuIsSettings }
 
         -- Tab button (in header scroll)
         local menuBtn = Instance.new("Frame", tbc)
@@ -2974,6 +2978,7 @@ function Library:CreateWindow(opts)
         menuBtn.BorderSizePixel = 0
         menuBtn.Size = UDim2.new(0, 80, 0.85, 0)
         menuBtn.ZIndex = 5
+        menuBtn.LayoutOrder = menuIsSettings and 1000000 or (#win.Menus + 1)
         bindTheme(menuBtn, "BackgroundColor3", "TabBg")
 
         Instance.new("UICorner", menuBtn).CornerRadius = UDim.new(0, 3)
@@ -3197,8 +3202,29 @@ function Library:CreateWindow(opts)
 
         table.insert(win.Menus, menu)
 
-        -- Auto-select first menu
-        if #win.Menus == 1 then
+        if win._settingsMenu and win._settingsMenu ~= menu then
+            for i = #win.Menus, 1, -1 do
+                if win.Menus[i] == win._settingsMenu then
+                    table.remove(win.Menus, i)
+                    break
+                end
+            end
+            table.insert(win.Menus, win._settingsMenu)
+        end
+
+        for i, existingMenu in ipairs(win.Menus) do
+            if existingMenu and existingMenu._btn then
+                existingMenu._btn.LayoutOrder = existingMenu._isSettingsMenu and 1000000 or i
+            end
+        end
+        task.defer(refreshMenuScrolls)
+
+        -- Auto-select the first user page. SETTINGS can be bootstrapped before
+        -- user pages for config loading, but it should stay at the end.
+        if not menuIsSettings and (not win.ActiveMenu or win.ActiveMenu._isSettingsMenu) then
+            if win.ActiveMenu and win.ActiveMenu._select then
+                win.ActiveMenu._select(false)
+            end
             win.ActiveMenu = menu
             selectMenu(true)
         end

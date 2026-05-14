@@ -50,12 +50,86 @@ return function(Library, context)
         return CONFIG_FOLDER .. "/" .. self:_getStorageBaseName() .. "_" .. sanitizePathSegment(tag) .. ".json"
     end
 
+    function Library:_getFlatDataPath(tag)
+        if type(tag) ~= "string" or tag == "" then
+            return nil
+        end
+        return CONFIG_FOLDER .. "_" .. self:_getStorageBaseName() .. "_" .. sanitizePathSegment(tag) .. ".json"
+    end
+
+    function Library:_readJsonFile(path)
+        if type(path) ~= "string" or path == "" or type(readfile) ~= "function" then
+            return nil
+        end
+
+        if type(isfile) == "function" then
+            local okExists, exists = pcall(isfile, path)
+            if okExists and not exists then
+                return nil
+            end
+        end
+
+        local ok, raw = pcall(readfile, path)
+        if not ok or type(raw) ~= "string" or raw == "" then
+            return nil
+        end
+
+        local okDecode, decoded = pcall(function()
+            return HttpService:JSONDecode(raw)
+        end)
+        if not okDecode then
+            return nil
+        end
+
+        return decoded
+    end
+
     function Library:ReadData(tag)
-        return nil
+        local primary = self:_getDataPath(tag)
+        local fallback = self:_getFlatDataPath(tag)
+
+        local decoded = self:_readJsonFile(primary)
+        if decoded ~= nil then
+            return decoded
+        end
+
+        return self:_readJsonFile(fallback)
     end
 
     function Library:WriteData(tag, value)
-        return false, "storage disabled"
+        local path = self:_getDataPath(tag)
+        if not path or type(writefile) ~= "function" then
+            return false, "writefile unavailable"
+        end
+
+        local okEncode, encoded = pcall(function()
+            return HttpService:JSONEncode(value)
+        end)
+        if not okEncode or type(encoded) ~= "string" then
+            return false, "json encode failed"
+        end
+
+        local paths = {}
+        if self:_ensureFolder() then
+            table.insert(paths, path)
+        end
+
+        local flatPath = self:_getFlatDataPath(tag)
+        if flatPath and flatPath ~= path then
+            table.insert(paths, flatPath)
+        end
+
+        local lastError = "writefile failed"
+        for _, candidatePath in ipairs(paths) do
+            local okWrite, writeErr = pcall(writefile, candidatePath, encoded)
+            if okWrite then
+                return true, candidatePath
+            end
+            lastError = tostring(writeErr or lastError)
+        end
+
+        lastError = lastError:gsub("[%c\r\n]+", " ")
+        return false, lastError
     end
 
     function Library:_resolveLoadedConfigEntry(key, item)
