@@ -791,7 +791,6 @@ function Library:CreateWindow(opts)
         UserInputService = UserInputService,
         win = win,
     })
-    local chatModule = { attach = function() end }
     local controlBase = moduleRequire("controls_base.lua")(Library, context)
     local dropdownControls = moduleRequire("dropdowns.lua")(Library, context)
     local createKeybindManager = moduleRequire("keybinds.lua")(Library, context)
@@ -1745,15 +1744,6 @@ function Library:CreateWindow(opts)
         Library:Animate(searchBtn, "Hover", { ImageColor3 = colors.TextDim })
     end)
 
-    function win:SetChatProvider()
-        return false
-    end
-    win.RefreshChat = function()
-    end
-    win.SetChatRoom = function()
-    end
-    win._setChatOpen = nil
-
     -- ==============================
     -- SEARCH FLOATING PANEL
     -- ==============================
@@ -2000,26 +1990,6 @@ function Library:CreateWindow(opts)
         end,
         targets = function()
             return { searchPanel, searchBtn }
-        end,
-    })
-
-    chatModule.attach({
-        win = win,
-        opts = opts,
-        main = main,
-        bottom = bottom,
-        colors = colors,
-        config = config,
-        bindTheme = bindTheme,
-        onThemeChanged = onThemeChanged,
-        closeTransientPopups = closeTransientPopups,
-        registerTransientPopup = registerTransientPopup,
-        setPopupOpen = setPopupOpen,
-        popupManager = popupManager,
-        trackGlobal = trackGlobal,
-        nextCleanupKey = nextCleanupKey,
-        canUseUi = function()
-            return win.Visible and keyGateUnlocked
         end,
     })
 
@@ -2774,9 +2744,6 @@ function Library:CreateWindow(opts)
             end
             settingsOpen = false
             searchOpen = false
-            if type(win._setChatOpen) == "function" then
-                win._setChatOpen(false)
-            end
             uiScaleDropdownOpen = false
             settingsPanel.Visible = false
             searchPanel.Visible = false
