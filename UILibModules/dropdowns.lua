@@ -489,6 +489,9 @@ return function(Library, context)
         dRow.ClipsDescendants = false
 
         addSubControlBranch(dRow, base.colors, 5)
+        if type(base.registerSubControlRow) == "function" then
+            base.registerSubControlRow(dRow)
+        end
 
         local dLabel = Instance.new("TextLabel", dRow)
         dLabel.BackgroundTransparency = 1

@@ -3540,6 +3540,25 @@ function Library:CreateWindow(opts)
 
                 -- Lazy sub-container (only created when AddDropdown/AddSlider is called)
                 local subContainer = nil
+                local subControlRows = {}
+
+                local function refreshSubBranches()
+                    local lastRow = subControlRows[#subControlRows]
+                    for _, childRow in ipairs(subControlRows) do
+                        local branch = childRow:FindFirstChild("SubControlBranch")
+                        local vertical = branch and branch:FindFirstChild("Vertical")
+                        if vertical then
+                            vertical.Position = UDim2.new(0, 2, 0, -8)
+                            vertical.Size = childRow == lastRow and UDim2.new(0, 2, 0.5, 8) or UDim2.new(0, 2, 1, 14)
+                        end
+                    end
+                end
+
+                local function registerSubControlRow(childRow)
+                    table.insert(subControlRows, childRow)
+                    refreshSubBranches()
+                end
+
                 local function ensureSubContainer()
                     if subContainer then return subContainer end
                     subContainer = Instance.new("Frame", contentContainer)
@@ -3936,6 +3955,7 @@ function Library:CreateWindow(opts)
                         end,
                         menuName = menuName,
                         nextCleanupKey = nextCleanupKey,
+                        registerSubControlRow = registerSubControlRow,
                         registerTransientPopup = registerTransientPopup,
                         secName = secName,
                         section = section,
@@ -3990,6 +4010,7 @@ function Library:CreateWindow(opts)
                     sBranchHorizontal.ZIndex = 5
                     bindTheme(sBranchHorizontal, "BackgroundColor3", "Main")
                     Instance.new("UICorner", sBranchHorizontal).CornerRadius = UDim.new(1, 0)
+                    registerSubControlRow(sRow)
 
                     local sLabel = Instance.new("TextLabel", sRow)
                     sLabel.BackgroundTransparency = 1
@@ -4224,6 +4245,7 @@ function Library:CreateWindow(opts)
                     sBranchHorizontal.ZIndex = 5
                     bindTheme(sBranchHorizontal, "BackgroundColor3", "Main")
                     Instance.new("UICorner", sBranchHorizontal).CornerRadius = UDim.new(1, 0)
+                    registerSubControlRow(sRow)
 
                     local sLabel = Instance.new("TextLabel", sRow)
                     sLabel.BackgroundTransparency = 1
