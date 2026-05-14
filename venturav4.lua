@@ -1,1 +1,0 @@
-local b="https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules/";local L=loadstring(game:HttpGet(b.."init.lua"))()(function(x)return loadstring(game:HttpGet(b..x))()end);L:CreateWindow({Name="UNKNOWN HUB"})

@@ -8,6 +8,7 @@
 ]]
 
 local moduleCache = {}
+local remoteModuleBase = "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules/"
 
 local function normalizePath(path)
     path = string.gsub(path, "\\", "/")
@@ -66,6 +67,28 @@ local function fileExists(path)
     return ok
 end
 
+local function canHttpGet()
+    return typeof(game) == "Instance" and type(game.HttpGet) == "function"
+end
+
+local function remoteModulePath(path)
+    local normalized = normalizePath(path)
+    normalized = string.gsub(normalized, "^UILibModules/", "")
+    normalized = string.gsub(normalized, "^UILib/UILibModules/", "")
+    return normalized
+end
+
+local function readModuleSource(path)
+    local normalized = normalizePath(path)
+    if fileExists(normalized) then
+        return readfile(normalized)
+    end
+    if canHttpGet() then
+        return game:HttpGet(remoteModuleBase .. remoteModulePath(normalized))
+    end
+    error("UILib module source not found: " .. tostring(normalized))
+end
+
 local function loadModule(path)
     local normalized = normalizePath(path)
     local cached = moduleCache[normalized]
@@ -73,7 +96,7 @@ local function loadModule(path)
         return cached
     end
 
-    local source = readfile(normalized)
+    local source = readModuleSource(normalized)
     local chunk, err = loadstring(source, "@" .. normalized)
     if not chunk then
         error(string.format("UILib module load failed for %s: %s", normalized, tostring(err)))
@@ -95,6 +118,10 @@ local function findEntryPath()
         if fileExists(normalized) then
             return normalized
         end
+    end
+
+    if canHttpGet() then
+        return "UILibModules/init.lua"
     end
 
     error("UILib bootstrap could not find UILibModules/init.lua")
