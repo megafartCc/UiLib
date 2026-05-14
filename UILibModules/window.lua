@@ -3945,6 +3945,175 @@ function Library:CreateWindow(opts)
                 end
 
                 -- ==============================
+                -- Toggle:AddToggle (chained)
+                -- ==============================
+                function toggle:AddToggle(subToggleOpts)
+                    subToggleOpts = subToggleOpts or {}
+                    local sName = subToggleOpts.Name or subToggleOpts.Title or "Toggle"
+                    local sDefault = subToggleOpts.Default or false
+                    local sCallback = subToggleOpts.Callback or function() end
+                    local sSaveKey = subToggleOpts.SaveKey
+                    local sConfigKey, sConfigAliases = resolveSectionConfigKey(sSaveKey, tName .. "_" .. sName)
+
+                    local subToggle = { Value = sDefault }
+                    local sRow = Instance.new("Frame", ensureSubContainer())
+                    sRow.Name = "SubToggle_" .. sName
+                    sRow.BackgroundTransparency = 1
+                    sRow.BorderSizePixel = 0
+                    sRow.Size = UDim2.new(1, 0, 0, 22)
+                    sRow.ZIndex = 5
+
+                    local sBranch = Instance.new("Frame", sRow)
+                    sBranch.Name = "SubControlBranch"
+                    sBranch.BackgroundTransparency = 1
+                    sBranch.BorderSizePixel = 0
+                    sBranch.Position = UDim2.new(0, 0, 0, 0)
+                    sBranch.Size = UDim2.new(0, 14, 1, 0)
+                    sBranch.ZIndex = 5
+
+                    local sBranchVertical = Instance.new("Frame", sBranch)
+                    sBranchVertical.Name = "Vertical"
+                    sBranchVertical.BackgroundColor3 = colors.Main
+                    sBranchVertical.BorderSizePixel = 0
+                    sBranchVertical.Position = UDim2.new(0, 2, 0, -8)
+                    sBranchVertical.Size = UDim2.new(0, 2, 0.5, 9)
+                    sBranchVertical.ZIndex = 5
+                    bindTheme(sBranchVertical, "BackgroundColor3", "Main")
+                    Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)
+
+                    local sBranchHorizontal = Instance.new("Frame", sBranch)
+                    sBranchHorizontal.Name = "Horizontal"
+                    sBranchHorizontal.BackgroundColor3 = colors.Main
+                    sBranchHorizontal.BorderSizePixel = 0
+                    sBranchHorizontal.Position = UDim2.new(0, 2, 0.5, 0)
+                    sBranchHorizontal.Size = UDim2.new(1, -2, 0, 2)
+                    sBranchHorizontal.ZIndex = 5
+                    bindTheme(sBranchHorizontal, "BackgroundColor3", "Main")
+                    Instance.new("UICorner", sBranchHorizontal).CornerRadius = UDim.new(1, 0)
+
+                    local sLabel = Instance.new("TextLabel", sRow)
+                    sLabel.BackgroundTransparency = 1
+                    sLabel.Position = UDim2.new(0, 18, 0, 0)
+                    sLabel.Size = UDim2.new(1, -48, 1, 0)
+                    sLabel.Font = config.FontMedium
+                    sLabel.Text = sName
+                    sLabel.TextColor3 = colors.Text
+                    sLabel.TextSize = 11
+                    sLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    sLabel.ZIndex = 5
+                    bindTheme(sLabel, "TextColor3", "Text")
+
+                    local sCheckFrame, sCheckStroke, sCheckIcon = controlBase.createCheckbox(sRow, colors, {
+                        Name = "Check",
+                        Width = 18,
+                        Height = 18,
+                        ImageTransparency = sDefault and 0 or 1,
+                        ThemeBackgroundKey = "Control",
+                        ThemeTransparencyKey = "ControlTransparency",
+                        ThemeStrokeKey = "Line",
+                        ThemeImageKey = "Main",
+                    })
+
+                    local sClickBtn = controlBase.createOverlayButton(sRow)
+                    local sCheckBtn = controlBase.createOverlayButton(sRow, {
+                        Name = "CheckButton",
+                        Position = sCheckFrame.Position,
+                        Size = sCheckFrame.Size,
+                        ZIndex = sCheckFrame.ZIndex + 2,
+                    })
+                    sCheckBtn.AnchorPoint = sCheckFrame.AnchorPoint
+
+                    local function updateSubVisual()
+                        if subToggle.Value then
+                            Library:Spring(sCheckIcon, "Smooth", { ImageTransparency = 0 })
+                            Library:Spring(sCheckFrame, "Smooth", { BackgroundColor3 = colors.AccentSurface, BackgroundTransparency = colors.AccentTransparency })
+                            Library:Spring(sCheckStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                        else
+                            Library:Spring(sCheckIcon, "Smooth", { ImageTransparency = 1 })
+                            Library:Spring(sCheckFrame, "Smooth", { BackgroundColor3 = colors.Control, BackgroundTransparency = colors.ControlTransparency })
+                            Library:Spring(sCheckStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                        end
+                    end
+
+                    local function setSubToggleValue(nextValue, shouldMarkDirty)
+                        subToggle.Value = nextValue and true or false
+                        updateSubVisual()
+                        if not callbacksSuppressed() then
+                            pcall(sCallback, subToggle.Value)
+                        end
+                        if shouldMarkDirty then
+                            Library:_markDirty()
+                        end
+                    end
+
+                    subToggle = controlBase.attachControlLifecycle(section, subToggle, {
+                        clickTargets = { sClickBtn, sCheckBtn },
+                        getValue = function()
+                            return subToggle.Value
+                        end,
+                        root = sRow,
+                        saveKey = sConfigKey,
+                        searchName = tName .. " " .. sName,
+                        setValue = function(val)
+                            setSubToggleValue(val == true, true)
+                        end,
+                        updateDisabled = function(disabled)
+                            sLabel.TextTransparency = disabled and 0.35 or 0
+                            sClickBtn.Active = not disabled
+                            sCheckBtn.Active = not disabled
+                        end,
+                    })
+
+                    local function handleSubToggleActivated()
+                        if subToggle.Disabled then
+                            return
+                        end
+
+                        setSubToggleValue(not subToggle.Value, true)
+                    end
+
+                    subToggle:TrackConnection(sClickBtn.Activated:Connect(handleSubToggleActivated), "SubToggleClick")
+                    subToggle:TrackConnection(sCheckBtn.Activated:Connect(handleSubToggleActivated), "SubToggleCheckClick")
+                    subToggle:TrackConnection(sClickBtn.MouseEnter:Connect(function()
+                        if subToggle.Disabled then
+                            return
+                        end
+                        Library:Spring(sLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                    end), "SubToggleHoverEnter")
+                    subToggle:TrackConnection(sClickBtn.MouseLeave:Connect(function()
+                        Library:Spring(sLabel, "Smooth", { TextColor3 = colors.Text })
+                    end), "SubToggleHoverLeave")
+                    subToggle:TrackConnection(sCheckBtn.MouseEnter:Connect(function()
+                        if subToggle.Disabled then
+                            return
+                        end
+                        Library:Spring(sLabel, "Smooth", { TextColor3 = Color3.fromRGB(255, 255, 255) })
+                    end), "SubToggleCheckHoverEnter")
+                    subToggle:TrackConnection(sCheckBtn.MouseLeave:Connect(function()
+                        Library:Spring(sLabel, "Smooth", { TextColor3 = colors.Text })
+                    end), "SubToggleCheckHoverLeave")
+
+                    controlBase.bindAdaptiveLabel(subToggle, sLabel, {
+                        BaseTextSize = 11,
+                        MinTextSize = 9,
+                        WidthPadding = 2,
+                    })
+
+                    updateSubVisual()
+                    if sConfigKey then
+                        Library:RegisterConfig(sConfigKey, "toggle",
+                            function() return subToggle.Value end,
+                            function(val)
+                                setSubToggleValue(val == true, false)
+                            end,
+                            { Aliases = sConfigAliases }
+                        )
+                    end
+
+                    return subToggle
+                end
+
+                -- ==============================
                 -- Toggle:AddSlider (chained)
                 -- ==============================
                 function toggle:AddSlider(sliderOpts)
