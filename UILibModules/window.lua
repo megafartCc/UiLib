@@ -791,7 +791,7 @@ function Library:CreateWindow(opts)
         UserInputService = UserInputService,
         win = win,
     })
-    local chatModule = moduleRequire("chat.lua")(Library, context)
+    local chatModule = { attach = function() end }
     local controlBase = moduleRequire("controls_base.lua")(Library, context)
     local dropdownControls = moduleRequire("dropdowns.lua")(Library, context)
     local createKeybindManager = moduleRequire("keybinds.lua")(Library, context)
