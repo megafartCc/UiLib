@@ -3549,7 +3549,7 @@ function Library:CreateWindow(opts)
                         local vertical = branch and branch:FindFirstChild("Vertical")
                         if vertical then
                             vertical.Position = UDim2.new(0, 2, 0, -8)
-                            vertical.Size = childRow == lastRow and UDim2.new(0, 2, 0.5, 8) or UDim2.new(0, 2, 1, 14)
+                            vertical.Size = childRow == lastRow and UDim2.new(0, 2, 0.5, 10) or UDim2.new(0, 2, 1, 14)
                         end
                     end
                 end
