@@ -2779,20 +2779,8 @@ function Library:CreateWindow(opts)
         end
 
         if type(keyLink) == "string" and keyLink ~= "" then
-            local copied = false
-            if type(setclipboard) == "function" then
-                copied = pcall(setclipboard, keyLink)
-            elseif type(toclipboard) == "function" then
-                copied = pcall(toclipboard, keyLink)
-            end
-
-            if copied then
-                keyUi.StatusLabel.Text = "Key link copied to clipboard."
-                keyUi.StatusLabel.TextColor3 = colors.Main
-            else
-                keyUi.StatusLabel.Text = tostring(keyLink)
-                keyUi.StatusLabel.TextColor3 = colors.TextDim
-            end
+            keyUi.StatusLabel.Text = tostring(keyLink)
+            keyUi.StatusLabel.TextColor3 = colors.TextDim
             handled = true
         end
 

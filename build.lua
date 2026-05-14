@@ -3,7 +3,7 @@
     Bootstrap loader for the modular build.
 
     Usage:
-        local Library = loadstring(readfile("build.lua"))()
+        local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/megafartCc/UiLib/main/build.lua"))()
         local Window = Library:CreateWindow({ Name = "FATALITY", Expire = "never" })
 ]]
 
@@ -58,15 +58,6 @@ local function resolvePath(baseDir, relativePath)
     return normalizePath(baseDir .. "/" .. relativePath)
 end
 
-local function fileExists(path)
-    if typeof(isfile) == "function" then
-        return isfile(path)
-    end
-
-    local ok = pcall(readfile, path)
-    return ok
-end
-
 local function canHttpGet()
     return typeof(game) == "Instance" and type(game.HttpGet) == "function"
 end
@@ -80,9 +71,6 @@ end
 
 local function readModuleSource(path)
     local normalized = normalizePath(path)
-    if fileExists(normalized) then
-        return readfile(normalized)
-    end
     if canHttpGet() then
         return game:HttpGet(remoteModuleBase .. remoteModulePath(normalized))
     end
@@ -108,18 +96,6 @@ local function loadModule(path)
 end
 
 local function findEntryPath()
-    local candidates = {
-        "UILibModules/init.lua",
-        "UILib/UILibModules/init.lua",
-    }
-
-    for _, candidate in ipairs(candidates) do
-        local normalized = normalizePath(candidate)
-        if fileExists(normalized) then
-            return normalized
-        end
-    end
-
     if canHttpGet() then
         return "UILibModules/init.lua"
     end

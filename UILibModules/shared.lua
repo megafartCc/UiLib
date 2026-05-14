@@ -15,23 +15,17 @@ return function(moduleRequire)
     local Animator = createAnimator(RunService)
 
     local function getHiddenParent()
-        local ok, ui = pcall(function()
-            if typeof(gethui) == "function" then
-                return gethui()
+        if Client then
+            local playerGui = Client:FindFirstChildOfClass("PlayerGui") or Client:WaitForChild("PlayerGui")
+            if playerGui then
+                return playerGui
             end
-        end)
-        if ok and typeof(ui) == "Instance" then
-            return ui
         end
-        error("UILib requires gethui() for UI parenting")
+        error("UILib requires PlayerGui for UI parenting")
     end
 
     local function protectGui(gui)
-        if syn and typeof(syn.protect_gui) == "function" then
-            pcall(syn.protect_gui, gui)
-        elseif typeof(protect_gui) == "function" then
-            pcall(protect_gui, gui)
-        end
+        return gui
     end
 
     local function randomStr(len)
