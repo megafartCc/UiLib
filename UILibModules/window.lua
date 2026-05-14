@@ -305,12 +305,22 @@ return function(Library, context, moduleRequire)
             return false
         end
 
-        local candidates = {
-            rawget(_G, "setclipboard"),
-            rawget(_G, "toclipboard"),
-            rawget(_G, "set_clipboard"),
-            rawget(_G, "writeclipboard"),
-        }
+        local candidates = {}
+        local function addCandidate(fn)
+            if type(fn) == "function" then
+                table.insert(candidates, fn)
+            end
+        end
+
+        addCandidate(setclipboard)
+        addCandidate(toclipboard)
+        addCandidate(set_clipboard)
+        addCandidate(writeclipboard)
+
+        if type(syn) == "table" then
+            addCandidate(syn.write_clipboard)
+            addCandidate(syn.writeclipboard)
+        end
 
         for _, fn in ipairs(candidates) do
             if type(fn) == "function" then
@@ -321,11 +331,11 @@ return function(Library, context, moduleRequire)
             end
         end
 
-        local clipboard = rawget(_G, "Clipboard") or rawget(_G, "clipboard")
-        if type(clipboard) == "table" then
-            local method = clipboard.set or clipboard.Set or clipboard.write or clipboard.Write
+        local clipboardApi = Clipboard or clipboard
+        if type(clipboardApi) == "table" then
+            local method = clipboardApi.set or clipboardApi.Set or clipboardApi.write or clipboardApi.Write
             if type(method) == "function" then
-                local ok = pcall(method, clipboard, text)
+                local ok = pcall(method, clipboardApi, text)
                 if ok then
                     return true
                 end
