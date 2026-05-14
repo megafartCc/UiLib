@@ -299,6 +299,47 @@ return function(Library, context, moduleRequire)
         return text
     end
 
+    local function copyTextToClipboard(value)
+        local text = trimText(value)
+        if text == "" then
+            return false
+        end
+
+        local candidates = {
+            rawget(_G, "setclipboard"),
+            rawget(_G, "toclipboard"),
+            rawget(_G, "set_clipboard"),
+            rawget(_G, "writeclipboard"),
+        }
+
+        for _, fn in ipairs(candidates) do
+            if type(fn) == "function" then
+                local ok = pcall(fn, text)
+                if ok then
+                    return true
+                end
+            end
+        end
+
+        local clipboard = rawget(_G, "Clipboard") or rawget(_G, "clipboard")
+        if type(clipboard) == "table" then
+            local method = clipboard.set or clipboard.Set or clipboard.write or clipboard.Write
+            if type(method) == "function" then
+                local ok = pcall(method, clipboard, text)
+                if ok then
+                    return true
+                end
+
+                ok = pcall(method, text)
+                if ok then
+                    return true
+                end
+            end
+        end
+
+        return false
+    end
+
     local function cloneTableShallow(source)
         if type(source) ~= "table" then
             return source
@@ -1246,6 +1287,8 @@ function Library:CreateWindow(opts)
         keyStatus.Text = ""
         keyStatus.TextColor3 = colors.TextDim
         keyStatus.TextSize = 10
+        keyStatus.TextTruncate = Enum.TextTruncate.AtEnd
+        keyStatus.TextWrapped = false
         keyStatus.TextXAlignment = Enum.TextXAlignment.Left
         keyStatus.ZIndex = 5
 
@@ -1259,6 +1302,7 @@ function Library:CreateWindow(opts)
         keyGetButton.Text = keyLinkText
         keyGetButton.TextColor3 = colors.Text
         keyGetButton.TextSize = 11
+        keyGetButton.TextTruncate = Enum.TextTruncate.AtEnd
         keyGetButton.ZIndex = 5
         keyGetButton.AutoButtonColor = false
         keyGetButton.Selectable = false
@@ -1279,6 +1323,7 @@ function Library:CreateWindow(opts)
         keySubmitButton.Text = keySubmitText
         keySubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
         keySubmitButton.TextSize = 11
+        keySubmitButton.TextTruncate = Enum.TextTruncate.AtEnd
         keySubmitButton.ZIndex = 5
         keySubmitButton.AutoButtonColor = false
         keySubmitButton.Selectable = false
@@ -2772,15 +2817,21 @@ function Library:CreateWindow(opts)
 
     keyUi.RunGetKeyAction = function()
         local handled = false
+        local linkText = trimText(keyLink)
 
         if type(onGetKey) == "function" then
-            local ok = pcall(onGetKey)
-            handled = ok or handled
+            local ok, result = pcall(onGetKey, linkText)
+            handled = ok and result == true
         end
 
-        if type(keyLink) == "string" and keyLink ~= "" then
-            keyUi.StatusLabel.Text = tostring(keyLink)
-            keyUi.StatusLabel.TextColor3 = colors.TextDim
+        if not handled and linkText ~= "" then
+            if copyTextToClipboard(linkText) then
+                keyUi.StatusLabel.Text = "Key Copied To Clipboard"
+                keyUi.StatusLabel.TextColor3 = colors.Main
+            else
+                keyUi.StatusLabel.Text = "Clipboard unavailable."
+                keyUi.StatusLabel.TextColor3 = Color3.fromRGB(255, 188, 120)
+            end
             handled = true
         end
 
