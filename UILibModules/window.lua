@@ -1291,8 +1291,8 @@ function Library:CreateWindow(opts)
 
         local keyStatus = Instance.new("TextLabel", keyGateCard)
         keyStatus.BackgroundTransparency = 1
-        keyStatus.Position = UDim2.new(0, 18, 0, 112)
-        keyStatus.Size = UDim2.new(1, -36, 0, 18)
+        keyStatus.Position = UDim2.new(0, 18, 0, 109)
+        keyStatus.Size = UDim2.new(1, -36, 0, 14)
         keyStatus.Font = config.FontMedium
         keyStatus.Text = ""
         keyStatus.TextColor3 = colors.TextDim
@@ -1300,6 +1300,7 @@ function Library:CreateWindow(opts)
         keyStatus.TextTruncate = Enum.TextTruncate.AtEnd
         keyStatus.TextWrapped = false
         keyStatus.TextXAlignment = Enum.TextXAlignment.Left
+        keyStatus.TextYAlignment = Enum.TextYAlignment.Center
         keyStatus.ZIndex = 5
 
         local keyGetButton = Instance.new("TextButton", keyGateCard)
