@@ -3656,6 +3656,46 @@ function Library:CreateWindow(opts)
                     return subContainer
                 end
 
+                local function createSubControlRow(rowName)
+                    local sRow = Instance.new("Frame", ensureSubContainer())
+                    sRow.Name = rowName
+                    sRow.BackgroundTransparency = 1
+                    sRow.BorderSizePixel = 0
+                    sRow.Size = UDim2.new(1, 0, 0, 22)
+                    sRow.ZIndex = 5
+
+                    local sBranch = Instance.new("Frame", sRow)
+                    sBranch.Name = "SubControlBranch"
+                    sBranch.BackgroundTransparency = 1
+                    sBranch.BorderSizePixel = 0
+                    sBranch.Position = UDim2.new(0, 0, 0, 0)
+                    sBranch.Size = UDim2.new(0, 14, 1, 0)
+                    sBranch.ZIndex = 5
+
+                    local sBranchVertical = Instance.new("Frame", sBranch)
+                    sBranchVertical.Name = "Vertical"
+                    sBranchVertical.BackgroundColor3 = colors.Main
+                    sBranchVertical.BorderSizePixel = 0
+                    sBranchVertical.Position = UDim2.new(0, 2, 0, -8)
+                    sBranchVertical.Size = UDim2.new(0, 2, 1, 14)
+                    sBranchVertical.ZIndex = 5
+                    bindTheme(sBranchVertical, "BackgroundColor3", "Main")
+                    Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)
+
+                    local sBranchHorizontal = Instance.new("Frame", sBranch)
+                    sBranchHorizontal.Name = "Horizontal"
+                    sBranchHorizontal.BackgroundColor3 = colors.Main
+                    sBranchHorizontal.BorderSizePixel = 0
+                    sBranchHorizontal.Position = UDim2.new(0, 2, 0.5, 0)
+                    sBranchHorizontal.Size = UDim2.new(1, -2, 0, 2)
+                    sBranchHorizontal.ZIndex = 5
+                    bindTheme(sBranchHorizontal, "BackgroundColor3", "Main")
+                    Instance.new("UICorner", sBranchHorizontal).CornerRadius = UDim.new(1, 0)
+
+                    registerSubControlRow(sRow)
+                    return sRow
+                end
+
                 local function updateVisual()
                     if toggle.Value then
                         Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
@@ -4201,6 +4241,266 @@ function Library:CreateWindow(opts)
                     end
 
                     return subToggle
+                end
+
+                function toggle:AddInputBox(inputOpts)
+                    inputOpts = inputOpts or {}
+                    local iName = inputOpts.Name or inputOpts.Title or "Input"
+                    local iCallback = inputOpts.Callback or function() end
+                    local iSaveKey = inputOpts.SaveKey
+                    local iConfigKey, iConfigAliases = resolveSectionConfigKey(iSaveKey, tName .. "_" .. iName)
+
+                    local function normalizeInputText(value, fallbackText)
+                        if value == nil then
+                            return fallbackText or ""
+                        end
+                        local valueType = typeof(value)
+                        if valueType == "string" then
+                            return value
+                        end
+                        if valueType == "number" or valueType == "boolean" then
+                            return tostring(value)
+                        end
+                        if valueType == "table" then
+                            local candidate = value.Text
+                            if candidate == nil then
+                                candidate = value.text
+                            end
+                            if candidate == nil then
+                                candidate = value.Value
+                            end
+                            if candidate == nil then
+                                candidate = value.value
+                            end
+                            if candidate ~= nil then
+                                return normalizeInputText(candidate, fallbackText)
+                            end
+                        end
+                        return fallbackText or ""
+                    end
+
+                    local iDefault = normalizeInputText(inputOpts.Default, normalizeInputText(inputOpts.Placeholder, ""))
+                    local inputControl = { Value = iDefault }
+                    local sRow = createSubControlRow("SubInput_" .. iName)
+
+                    local sLabel = Instance.new("TextLabel", sRow)
+                    sLabel.BackgroundTransparency = 1
+                    sLabel.Position = UDim2.new(0, 18, 0, 0)
+                    sLabel.Size = UDim2.new(0.36, -18, 1, 0)
+                    sLabel.Font = config.FontMedium
+                    sLabel.Text = iName
+                    sLabel.TextColor3 = colors.Text
+                    sLabel.TextSize = 11
+                    sLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    sLabel.ZIndex = 5
+                    bindTheme(sLabel, "TextColor3", "Text")
+
+                    local box = Instance.new("TextBox", sRow)
+                    box.AnchorPoint = Vector2.new(1, 0.5)
+                    box.Position = UDim2.new(1, 0, 0.5, 0)
+                    box.Size = UDim2.new(0.58, 0, 0, 18)
+                    box.BackgroundColor3 = colors.ControlAlt
+                    box.BorderSizePixel = 0
+                    box.TextXAlignment = Enum.TextXAlignment.Left
+                    box.Font = config.FontMedium
+                    box.TextSize = 11
+                    box.TextColor3 = colors.Text
+                    box.ClearTextOnFocus = inputOpts.ClearTextOnFocus == true
+                    box.PlaceholderText = tostring(inputOpts.Placeholder or "")
+                    box.Text = iDefault
+                    box.ZIndex = 6
+                    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 3)
+                    bindTheme(box, "BackgroundColor3", "ControlAlt")
+                    bindTheme(box, "BackgroundTransparency", "ControlTransparency")
+                    bindTheme(box, "TextColor3", "Text")
+                    bindTheme(box, "PlaceholderColor3", "TextMuted")
+
+                    local function applyInputValue(rawValue, fireCallback, shouldMarkDirty)
+                        local nextText = normalizeInputText(rawValue, "")
+                        local changed = inputControl.Value ~= nextText or box.Text ~= nextText
+
+                        inputControl.Value = nextText
+                        if box.Text ~= nextText then
+                            box.Text = nextText
+                        end
+
+                        if fireCallback and not callbacksSuppressed() then
+                            pcall(iCallback, nextText)
+                        end
+                        if changed and shouldMarkDirty then
+                            Library:_markDirty()
+                        end
+
+                        return changed
+                    end
+
+                    inputControl = controlBase.attachControlLifecycle(section, inputControl, {
+                        clickTargets = { box },
+                        getValue = function()
+                            return inputControl.Value
+                        end,
+                        refresh = function()
+                            applyInputValue(inputControl.Value, false, false)
+                        end,
+                        root = sRow,
+                        saveKey = iConfigKey,
+                        searchName = tName .. " " .. iName,
+                        setValue = function(value)
+                            applyInputValue(value, true, true)
+                        end,
+                        updateDisabled = function(disabled)
+                            sLabel.TextTransparency = disabled and 0.35 or 0
+                            box.Active = not disabled
+                            box.TextEditable = not disabled
+                        end,
+                    })
+
+                    inputControl.Object = box
+                    inputControl.GetText = function()
+                        return box.Text
+                    end
+                    inputControl.SetText = function(value)
+                        inputControl:Set(value)
+                        return inputControl
+                    end
+
+                    inputControl:TrackConnection(box.FocusLost:Connect(function()
+                        if inputControl.Disabled then
+                            return
+                        end
+                        applyInputValue(box.Text, true, true)
+                    end), "SubInputBoxFocusLost")
+                    controlBase.bindAdaptiveLabel(inputControl, sLabel, {
+                        BaseTextSize = 11,
+                        MinTextSize = 9,
+                        WidthPadding = 2,
+                    })
+
+                    if iConfigKey then
+                        Library:RegisterConfig(iConfigKey, "input",
+                            function()
+                                return inputControl.Value
+                            end,
+                            function(value)
+                                applyInputValue(value, true, false)
+                            end,
+                            { Aliases = iConfigAliases }
+                        )
+                    end
+
+                    return inputControl
+                end
+
+                function toggle:AddButton(btnOpts)
+                    btnOpts = btnOpts or {}
+                    local bName = btnOpts.Name or btnOpts.Title or "Button"
+                    local bCallback = btnOpts.Callback or function() end
+                    local buttonControl = {}
+                    local sRow = createSubControlRow("SubButton_" .. bName)
+
+                    local sLabel = Instance.new("TextLabel", sRow)
+                    sLabel.BackgroundTransparency = 1
+                    sLabel.Position = UDim2.new(0, 18, 0, 0)
+                    sLabel.Size = UDim2.new(1, -48, 1, 0)
+                    sLabel.Font = config.FontMedium
+                    sLabel.Text = bName
+                    sLabel.TextColor3 = colors.Text
+                    sLabel.TextSize = 11
+                    sLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    sLabel.ZIndex = 5
+                    bindTheme(sLabel, "TextColor3", "Text")
+
+                    local btnBox, boxStroke = controlBase.createRightBox(sRow, {
+                        ClassName = "TextButton",
+                        Width = 18,
+                        Height = 18,
+                        StrokeColor = colors.Line,
+                        StrokeTransparency = 0.5,
+                        ThemeBackgroundKey = "Control",
+                        ThemeTransparencyKey = "ControlTransparency",
+                        ThemeStrokeKey = "Line",
+                    })
+
+                    local icon = Instance.new("ImageLabel", btnBox)
+                    icon.BackgroundTransparency = 1
+                    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+                    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+                    icon.Size = UDim2.new(0, 12, 0, 12)
+                    icon.Image = "rbxassetid://124717201027551"
+                    icon.ImageColor3 = colors.TextDim
+                    icon.ZIndex = 9
+                    bindTheme(icon, "ImageColor3", "TextDim")
+
+                    local rowBtn = controlBase.createOverlayButton(sRow, {
+                        Name = "ButtonRow",
+                        ZIndex = 7,
+                    })
+                    btnBox.ZIndex = 8
+
+                    local function flashButton()
+                        Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Main, BackgroundTransparency = colors.AccentTransparency })
+                        task.delay(0.2, function()
+                            if btnBox.Parent then
+                                Library:Spring(btnBox, "Smooth", { BackgroundColor3 = colors.Control, BackgroundTransparency = colors.ControlTransparency })
+                            end
+                        end)
+                    end
+
+                    buttonControl = controlBase.attachControlLifecycle(section, buttonControl, {
+                        clickTargets = { btnBox, rowBtn },
+                        root = sRow,
+                        saveKey = btnOpts.SaveKey,
+                        searchName = tName .. " " .. bName,
+                        updateDisabled = function(disabled)
+                            sLabel.TextTransparency = disabled and 0.35 or 0
+                            btnBox.Active = not disabled
+                            rowBtn.Active = not disabled
+                            icon.ImageTransparency = disabled and 0.4 or 0
+                        end,
+                    })
+
+                    local function onHoverEnter()
+                        if buttonControl.Disabled then
+                            return
+                        end
+                        Library:Spring(boxStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
+                        Library:Spring(icon, "Smooth", { ImageColor3 = colors.Main })
+                        Library:Spring(sLabel, "Smooth", { TextColor3 = colors.Main })
+                    end
+                    local function onHoverLeave()
+                        Library:Spring(boxStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
+                        Library:Spring(icon, "Smooth", { ImageColor3 = colors.TextDim })
+                        Library:Spring(sLabel, "Smooth", { TextColor3 = colors.Text })
+                    end
+
+                    buttonControl:TrackConnection(btnBox.MouseEnter:Connect(onHoverEnter), "SubButtonHoverEnter")
+                    buttonControl:TrackConnection(rowBtn.MouseEnter:Connect(onHoverEnter), "SubButtonRowHoverEnter")
+                    buttonControl:TrackConnection(btnBox.MouseLeave:Connect(onHoverLeave), "SubButtonHoverLeave")
+                    buttonControl:TrackConnection(rowBtn.MouseLeave:Connect(onHoverLeave), "SubButtonRowHoverLeave")
+
+                    local function activateButton()
+                        if buttonControl.Disabled then
+                            return
+                        end
+
+                        flashButton()
+                        pcall(bCallback)
+                    end
+
+                    buttonControl:TrackConnection(btnBox.Activated:Connect(activateButton), "SubButtonActivated")
+                    buttonControl:TrackConnection(rowBtn.Activated:Connect(activateButton), "SubButtonRowActivated")
+                    controlBase.bindAdaptiveLabel(buttonControl, sLabel, {
+                        BaseTextSize = 11,
+                        MinTextSize = 9,
+                        WidthPadding = 2,
+                    })
+
+                    function buttonControl:Fire()
+                        flashButton()
+                        return bCallback()
+                    end
+
+                    return buttonControl
                 end
 
                 -- ==============================
@@ -5467,7 +5767,7 @@ function Library:CreateWindow(opts)
                             return inputControl.Value
                         end,
                         function(value)
-                            applyInputValue(value, false, false)
+                            applyInputValue(value, true, false)
                         end,
                         { Aliases = iConfigAliases }
                     )
