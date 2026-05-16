@@ -31,12 +31,33 @@ return function(Library, context)
     local CONFIG_FOLDER = "Eps1lonScript"
 
     function Library:_ensureFolder()
-        return false
+        if type(isfolder) == "function" then
+            local ok, exists = pcall(isfolder, CONFIG_FOLDER)
+            if ok and exists then
+                return true
+            end
+        end
+
+        if type(makefolder) == "function" then
+            pcall(makefolder, CONFIG_FOLDER)
+        end
+
+        if type(isfolder) == "function" then
+            local ok, exists = pcall(isfolder, CONFIG_FOLDER)
+            return ok and exists
+        end
+
+        return type(makefolder) ~= "function"
     end
 
     function Library:_getConfigPath()
         if not self._configName then return nil end
         return CONFIG_FOLDER .. "/" .. self._configName .. ".json"
+    end
+
+    function Library:_getFlatConfigPath()
+        if not self._configName then return nil end
+        return CONFIG_FOLDER .. "_" .. sanitizePathSegment(self._configName) .. ".json"
     end
 
     function Library:_getStorageBaseName()
@@ -249,12 +270,84 @@ return function(Library, context)
     end
 
     function Library:SaveConfig()
-        return false, "storage disabled"
+        local path = self:_getConfigPath()
+        if not path or type(writefile) ~= "function" then
+            return false, "writefile unavailable"
+        end
+
+        local data = {}
+        for key, item in pairs(self._configItems) do
+            local ok, value = pcall(item.get)
+            if ok then
+                data[key] = {
+                    type = item.type,
+                    value = value,
+                }
+            end
+        end
+
+        local okEncode, encoded = pcall(function()
+            return HttpService:JSONEncode(data)
+        end)
+        if not okEncode or type(encoded) ~= "string" then
+            return false, "json encode failed"
+        end
+
+        local paths = {}
+        if self:_ensureFolder() then
+            table.insert(paths, path)
+        end
+
+        local flatPath = self:_getFlatConfigPath()
+        if flatPath and flatPath ~= path then
+            table.insert(paths, flatPath)
+        end
+
+        local lastError = "writefile failed"
+        for _, candidatePath in ipairs(paths) do
+            local okWrite, writeErr = pcall(writefile, candidatePath, encoded)
+            if okWrite then
+                self._dirty = false
+                return true, candidatePath
+            end
+            lastError = tostring(writeErr or lastError)
+        end
+
+        lastError = lastError:gsub("[%c\r\n]+", " ")
+        return false, lastError
     end
 
     function Library:LoadConfig()
-        self._loadedConfigData = nil
-        return false, "storage disabled"
+        local path = self:_getConfigPath()
+        if not path then
+            self._loadedConfigData = nil
+            return false, "config name missing"
+        end
+
+        local data = self:_readJsonFile(path)
+        if data == nil then
+            data = self:_readJsonFile(self:_getFlatConfigPath())
+        end
+
+        if type(data) ~= "table" then
+            self._loadedConfigData = nil
+            return false, "config not found"
+        end
+
+        self._loadedConfigData = data
+        self:_beginConfigReplay()
+        for _, key in ipairs(self._configItemOrder) do
+            local item = self._configItems[key]
+            local entry = self:_resolveLoadedConfigEntry(key, item)
+            if item and entry and entry.value ~= nil then
+                self:_beginControlSync()
+                pcall(item.set, entry.value)
+                self:_endControlSync()
+            end
+        end
+        self:_endConfigReplay()
+        self:_scheduleConfigReplay()
+        return true, path
     end
 
     function Library:_markDirty()
@@ -558,11 +651,59 @@ return function(Library, context)
     end
 
     function Library:SaveThemePreset(name)
-        return false, "storage disabled"
+        local trimmedName = tostring(name or ""):match("^%s*(.-)%s*$")
+        if trimmedName == "" then
+            return false, "enter a preset name"
+        end
+
+        local tag = self:_getThemePresetTag(name)
+        if not tag then
+            return false, "invalid preset name"
+        end
+
+        local success, writeResult = self:WriteData(tag, {
+            Name = trimmedName,
+            Theme = getSerializedThemeSnapshot(self.Theme),
+        })
+        if not success then
+            return false, writeResult or "failed to write preset"
+        end
+
+        local payload = self:ReadData(tag)
+        if type(payload) ~= "table" or type(payload.Theme) ~= "table" then
+            return false, "preset write verification failed"
+        end
+
+        local presets = self:_readThemePresetIndex()
+        table.insert(presets, trimmedName)
+        local cleaned, indexResult = self:_writeThemePresetIndex(presets)
+        if not cleaned then
+            return false, indexResult or "failed to update preset list"
+        end
+
+        return true, string.format("saved preset: %s", trimmedName)
     end
 
     function Library:LoadThemePreset(name)
-        return false, "storage disabled"
+        local trimmedName = tostring(name or ""):match("^%s*(.-)%s*$")
+        if trimmedName == "" then
+            return false, "select a preset to load"
+        end
+
+        local tag = self:_getThemePresetTag(name)
+        if not tag then
+            return false, "invalid preset name"
+        end
+
+        local payload = self:ReadData(tag)
+        if type(payload) ~= "table" or type(payload.Theme) ~= "table" then
+            return false, string.format("preset not found: %s", trimmedName)
+        end
+
+        applyThemeSnapshot(self, payload.Theme)
+        self:ApplyTheme()
+        self:SaveTheme()
+        return true, string.format("loaded preset: %s", trimmedName)
     end
 
     function Library:ListThemePresets()
@@ -570,6 +711,37 @@ return function(Library, context)
         if #presets > 0 then
             return presets
         end
+
+        if type(listfiles) ~= "function" then
+            return {}
+        end
+
+        self:_ensureFolder()
+
+        local ok, files = pcall(listfiles, CONFIG_FOLDER)
+        if not ok or type(files) ~= "table" then
+            return {}
+        end
+
+        local prefix = self:_getStorageBaseName() .. "_theme_preset_"
+        for _, filePath in ipairs(files) do
+            local normalized = tostring(filePath):gsub("\\", "/")
+            local fileName = normalized:match("([^/]+)$")
+            if fileName and fileName:sub(1, #prefix) == prefix and fileName:sub(-5) == ".json" then
+                local presetTagName = fileName:sub(#prefix + 1, -6)
+                local payload = self:ReadData("theme_preset_" .. presetTagName)
+                local presetName = normalizePresetName(type(payload) == "table" and payload.Name or presetTagName)
+                if presetName then
+                    table.insert(presets, presetName)
+                end
+            end
+        end
+
+        local cleaned = self:_writeThemePresetIndex(presets)
+        if cleaned then
+            return cleaned
+        end
+
         return {}
     end
 

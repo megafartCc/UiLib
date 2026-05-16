@@ -1620,6 +1620,8 @@ function Library:CreateWindow(opts)
     asBtn.Selectable = false
     asBtn.BorderSizePixel = 0
 
+    local settingsAutoSaveToggle
+
     local function updateAutoSaveVisual(enabled, animate)
         local checkTransparency = enabled and 0 or 1
         local frameColor = enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
@@ -1642,6 +1644,11 @@ function Library:CreateWindow(opts)
     local function setAutoSaveEnabled(enabled, animate)
         Library._autoSave = enabled and true or false
         updateAutoSaveVisual(Library._autoSave, animate)
+        if settingsAutoSaveToggle and settingsAutoSaveToggle.Value ~= Library._autoSave then
+            pcall(function()
+                settingsAutoSaveToggle:Set(Library._autoSave)
+            end)
+        end
     end
 
     updateAutoSaveVisual(Library._autoSave, false)
@@ -6303,11 +6310,12 @@ function Library:CreateWindow(opts)
             table.insert(uiScaleOptions, option.Label)
         end
 
-        uiFunctionSection:AddToggle({
+        settingsAutoSaveToggle = uiFunctionSection:AddToggle({
             Name = "Auto Save UI",
             Default = Library._autoSave,
+            SaveKey = false,
             Callback = function(enabled)
-                Library._autoSave = enabled and true or false
+                setAutoSaveEnabled(enabled, true)
                 pcall(function()
                     Library:SaveConfig()
                     Library:SaveTheme()
