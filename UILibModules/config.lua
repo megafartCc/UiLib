@@ -200,9 +200,9 @@ return function(Library, context)
 
         local loadedEntry = self:_resolveLoadedConfigEntry(key, self._configItems[key])
         if loadedEntry and loadedEntry.value ~= nil then
-            self:_beginControlSync()
+            self:_beginConfigReplay()
             pcall(setter, loadedEntry.value)
-            self:_endControlSync()
+            self:_endConfigReplay()
             self:_scheduleConfigReplay()
         end
     end
@@ -340,9 +340,7 @@ return function(Library, context)
             local item = self._configItems[key]
             local entry = self:_resolveLoadedConfigEntry(key, item)
             if item and entry and entry.value ~= nil then
-                self:_beginControlSync()
                 pcall(item.set, entry.value)
-                self:_endControlSync()
             end
         end
         self:_endConfigReplay()
