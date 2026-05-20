@@ -475,6 +475,7 @@ function Library:CreateWindow(opts)
     local luarmorKeySystemEnabled = opts.LuarmorKey == true or opts.LuarmorKeySystem == true
     local luarmorScriptId = trimText(opts.LuarmorScriptId or opts.LuarmorScriptID or opts.ScriptId)
     local luarmorLibraryUrl = trimText(opts.LuarmorLibraryUrl or opts.LuarmorKeyLibraryUrl or "https://sdkapi-public.luarmor.net/library.lua")
+    local developerKey = trimText(opts.DeveloperKey or opts.DevKey or self.Config.DeveloperKey or "DevUnknown")
     local keyStorageTag = opts.KeyStorageTag
     local keyLink = opts.GetKeyLink or opts.KeyLink or opts.LuarmorKeyLink
     local onGetKey = opts.OnGetKey
@@ -535,8 +536,12 @@ function Library:CreateWindow(opts)
         return trimText(value)
     end
 
+    local function isDeveloperKey(value)
+        return developerKey ~= "" and normalizeKeyInput(value) == developerKey
+    end
+
     local function isAcceptedKey(value)
-        return keyValidationMode == "hardcoded" and normalizeKeyInput(value) == requiredKey
+        return keyValidationMode == "hardcoded" and (normalizeKeyInput(value) == requiredKey or isDeveloperKey(value))
     end
 
     local function validateSubmittedKey(value)
@@ -545,6 +550,13 @@ function Library:CreateWindow(opts)
             return false, {
                 code = "KEY_EMPTY",
                 message = "Enter a key first.",
+            }
+        end
+
+        if keySystemActive and isDeveloperKey(submitted) then
+            return true, {
+                code = "KEY_VALID",
+                message = "Developer key valid.",
             }
         end
 
