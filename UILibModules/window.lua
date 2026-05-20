@@ -107,9 +107,7 @@ return function(Library, context, moduleRequire)
             local bodySize = 12
             local textWidth = 302
             local progressHeight = 3
-            local progressInset = 12
-            local progressBottomInset = 8
-            local contentBottomPadding = progressBottomInset + progressHeight + 8
+            local contentBottomPadding = progressHeight + 10
 
             local measuredBodyHeight = bodySize + 2
             local okMeasure, bounds = pcall(TextService.GetTextSize, TextService, body, bodySize, fontBody, Vector2.new(textWidth, 1000))
@@ -178,15 +176,14 @@ return function(Library, context, moduleRequire)
 
             local progressBack = Instance.new("Frame")
             progressBack.AnchorPoint = Vector2.new(0, 1)
-            progressBack.Position = UDim2.new(0, progressInset, 1, -progressBottomInset)
-            progressBack.Size = UDim2.new(1, -(progressInset * 2), 0, progressHeight)
+            progressBack.Position = UDim2.new(0, 0, 1, 0)
+            progressBack.Size = UDim2.new(1, 0, 0, progressHeight)
             progressBack.BackgroundColor3 = getThemeValueOr(self, "Line", Color3.fromRGB(54, 54, 54))
-            progressBack.BackgroundTransparency = 0.7
+            progressBack.BackgroundTransparency = 1
             progressBack.BorderSizePixel = 0
             progressBack.ClipsDescendants = true
             progressBack.ZIndex = 903
             progressBack.Parent = card
-            Instance.new("UICorner", progressBack).CornerRadius = UDim.new(1, 0)
 
             local progressFill = Instance.new("Frame")
             progressFill.Size = UDim2.new(1, 0, 1, 0)
@@ -194,7 +191,6 @@ return function(Library, context, moduleRequire)
             progressFill.BorderSizePixel = 0
             progressFill.ZIndex = 904
             progressFill.Parent = progressBack
-            Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1, 0)
 
             if type(self.RegisterThemeBinding) == "function" then
                 self:RegisterThemeBinding(card, "BackgroundColor3", "Panel")
