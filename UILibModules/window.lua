@@ -106,6 +106,10 @@ return function(Library, context, moduleRequire)
             local titleSize = 13
             local bodySize = 12
             local textWidth = 302
+            local progressHeight = 3
+            local progressInset = 12
+            local progressBottomInset = 8
+            local contentBottomPadding = progressBottomInset + progressHeight + 8
 
             local measuredBodyHeight = bodySize + 2
             local okMeasure, bounds = pcall(TextService.GetTextSize, TextService, body, bodySize, fontBody, Vector2.new(textWidth, 1000))
@@ -113,7 +117,7 @@ return function(Library, context, moduleRequire)
                 measuredBodyHeight = math.max(bodySize + 2, bounds.Y)
             end
 
-            local toastHeight = math.clamp(16 + titleSize + 3 + measuredBodyHeight + 14, 52, 130)
+            local toastHeight = math.clamp(16 + titleSize + 3 + measuredBodyHeight + contentBottomPadding, 58, 136)
             state.serial += 1
 
             local slot = Instance.new("Frame")
@@ -160,7 +164,7 @@ return function(Library, context, moduleRequire)
             local bodyLabel = Instance.new("TextLabel")
             bodyLabel.BackgroundTransparency = 1
             bodyLabel.Position = UDim2.new(0, 10, 0, 8 + titleSize + 3)
-            bodyLabel.Size = UDim2.new(1, -20, 0, toastHeight - (8 + titleSize + 3 + 8))
+            bodyLabel.Size = UDim2.new(1, -20, 0, toastHeight - (8 + titleSize + 3 + contentBottomPadding))
             bodyLabel.Font = fontBody
             bodyLabel.Text = body
             bodyLabel.TextColor3 = getThemeValueOr(self, "TextDim", Color3.fromRGB(194, 194, 194))
@@ -174,13 +178,15 @@ return function(Library, context, moduleRequire)
 
             local progressBack = Instance.new("Frame")
             progressBack.AnchorPoint = Vector2.new(0, 1)
-            progressBack.Position = UDim2.new(0, 0, 1, 0)
-            progressBack.Size = UDim2.new(1, 0, 0, 2)
+            progressBack.Position = UDim2.new(0, progressInset, 1, -progressBottomInset)
+            progressBack.Size = UDim2.new(1, -(progressInset * 2), 0, progressHeight)
             progressBack.BackgroundColor3 = getThemeValueOr(self, "Line", Color3.fromRGB(54, 54, 54))
-            progressBack.BackgroundTransparency = 0.55
+            progressBack.BackgroundTransparency = 0.7
             progressBack.BorderSizePixel = 0
+            progressBack.ClipsDescendants = true
             progressBack.ZIndex = 903
             progressBack.Parent = card
+            Instance.new("UICorner", progressBack).CornerRadius = UDim.new(1, 0)
 
             local progressFill = Instance.new("Frame")
             progressFill.Size = UDim2.new(1, 0, 1, 0)
@@ -188,6 +194,7 @@ return function(Library, context, moduleRequire)
             progressFill.BorderSizePixel = 0
             progressFill.ZIndex = 904
             progressFill.Parent = progressBack
+            Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1, 0)
 
             if type(self.RegisterThemeBinding) == "function" then
                 self:RegisterThemeBinding(card, "BackgroundColor3", "Panel")
