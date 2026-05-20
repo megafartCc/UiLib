@@ -1382,11 +1382,15 @@ function Library:CreateWindow(opts)
     end
 
     if isMobileClient then
+        local RESTORE_BAR_WIDTH = 154
+        local RESTORE_BAR_HEIGHT = 34
+        local RESTORE_BAR_TOP = 14
+
         local mobileRestoreBar = Instance.new("TextButton", sg)
         mobileRestoreBar.Name = "MobileRestoreBar"
-        mobileRestoreBar.AnchorPoint = Vector2.new(0.5, 0)
-        mobileRestoreBar.Position = UDim2.new(0.5, 0, 0, 14)
-        mobileRestoreBar.Size = UDim2.fromOffset(154, 34)
+        mobileRestoreBar.AnchorPoint = Vector2.new(0, 0)
+        mobileRestoreBar.Position = UDim2.fromOffset(0, RESTORE_BAR_TOP)
+        mobileRestoreBar.Size = UDim2.fromOffset(RESTORE_BAR_WIDTH, RESTORE_BAR_HEIGHT)
         mobileRestoreBar.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
         mobileRestoreBar.BorderSizePixel = 0
         mobileRestoreBar.Text = ""
@@ -1433,11 +1437,27 @@ function Library:CreateWindow(opts)
         local restoreDragInputType = nil
         local restoreDragStart = nil
         local restoreDragStartPosition = nil
-        local RESTORE_DRAG_THRESHOLD = 4
+        local RESTORE_DRAG_THRESHOLD = 8
+
+        local function getRestoreScreenSize()
+            local ok, screenSize = pcall(function()
+                return sg.AbsoluteSize
+            end)
+            if ok and screenSize and screenSize.X and screenSize.X > 0 then
+                return screenSize
+            end
+
+            local currentCamera = workspace.CurrentCamera
+            return currentCamera and currentCamera.ViewportSize or viewportSize
+        end
 
         local function clampRestoreBarPosition(left, top)
-            local screenSize = sg.AbsoluteSize
+            local screenSize = getRestoreScreenSize()
             local barSize = mobileRestoreBar.AbsoluteSize
+            if barSize.X <= 0 or barSize.Y <= 0 then
+                barSize = Vector2.new(RESTORE_BAR_WIDTH, RESTORE_BAR_HEIGHT)
+            end
+
             local maxLeft = math.max(0, screenSize.X - barSize.X)
             local maxTop = math.max(0, screenSize.Y - barSize.Y)
             return math.clamp(left, 0, maxLeft), math.clamp(top, 0, maxTop)
@@ -1445,8 +1465,37 @@ function Library:CreateWindow(opts)
 
         local function setRestoreBarOffset(left, top)
             local clampedLeft, clampedTop = clampRestoreBarPosition(left, top)
-            mobileRestoreBar.AnchorPoint = Vector2.new(0, 0)
             mobileRestoreBar.Position = UDim2.fromOffset(clampedLeft, clampedTop)
+        end
+
+        local function centerRestoreBar()
+            if mobileUi.RestoreBarMoved then
+                return
+            end
+
+            local screenSize = getRestoreScreenSize()
+            local barSize = mobileRestoreBar.AbsoluteSize
+            if barSize.X <= 0 or barSize.Y <= 0 then
+                barSize = Vector2.new(RESTORE_BAR_WIDTH, RESTORE_BAR_HEIGHT)
+            end
+
+            setRestoreBarOffset(math.floor((screenSize.X - barSize.X) * 0.5 + 0.5), RESTORE_BAR_TOP)
+        end
+
+        task.defer(centerRestoreBar)
+        trackGlobal(mobileRestoreBar:GetPropertyChangedSignal("AbsoluteSize"):Connect(centerRestoreBar), "MobileRestoreBarSize")
+        local okScreenSizeSignal, screenSizeSignal = pcall(function()
+            return sg:GetPropertyChangedSignal("AbsoluteSize")
+        end)
+        if okScreenSizeSignal and screenSizeSignal then
+            trackGlobal(screenSizeSignal:Connect(function()
+                if mobileUi.RestoreBarMoved then
+                    local absolutePosition = mobileRestoreBar.AbsolutePosition
+                    setRestoreBarOffset(absolutePosition.X, absolutePosition.Y)
+                else
+                    centerRestoreBar()
+                end
+            end), "MobileRestoreBarScreenSize")
         end
 
         mobileRestoreBar.InputBegan:Connect(function(input)
@@ -1473,6 +1522,7 @@ function Library:CreateWindow(opts)
                 end
                 mobileUi.RestoreBarDragging = true
                 mobileUi.RestoreBarDragged = true
+                mobileUi.RestoreBarMoved = true
             end
 
             setRestoreBarOffset(restoreDragStartPosition.X + delta.X, restoreDragStartPosition.Y + delta.Y)
