@@ -1033,6 +1033,7 @@ function Library:CreateWindow(opts)
     headerText.TextColor3 = colors.Text
     headerText.TextSize = 21
     headerText.TextXAlignment = Enum.TextXAlignment.Left
+    headerText.TextTruncate = Enum.TextTruncate.AtEnd
     headerText.TextStrokeColor3 = Color3.fromRGB(205, 67, 218)
     headerText.TextStrokeTransparency = 0.64
     bindTheme(headerText, "TextColor3", "Text")
@@ -1100,6 +1101,7 @@ function Library:CreateWindow(opts)
     userProfile.AnchorPoint = Vector2.new(1, 0.5)
     userProfile.BackgroundTransparency = 1
     userProfile.BorderSizePixel = 0
+    userProfile.ClipsDescendants = true
     userProfile.Position = UDim2.new(1, USER_PROFILE_OFFSET_X, 0.5, 0)
     userProfile.Size = UDim2.new(0, USER_PROFILE_WIDTH, 0.75, 0)
     userProfile.ZIndex = 4
@@ -1113,11 +1115,13 @@ function Library:CreateWindow(opts)
     end
 
     local function refreshHeaderLayout()
-        local titleWidth = measureTitleWidth()
+        local headerWidth = header.AbsoluteSize.X > 0 and header.AbsoluteSize.X or initialWindowWidth
+        local rightReserved = USER_PROFILE_WIDTH + HEADER_RIGHT_PADDING + 12
+        local maxTitleWidth = math.max(72, headerWidth - HEADER_LEFT_PADDING - HEADER_TITLE_GAP - rightReserved - TABS_MIN_WIDTH)
+        local titleWidth = math.min(measureTitleWidth(), maxTitleWidth)
         headerText.Size = UDim2.new(0, titleWidth, 1, 0)
 
         local tabsStartX = HEADER_LEFT_PADDING + titleWidth + HEADER_TITLE_GAP
-        local rightReserved = USER_PROFILE_WIDTH + HEADER_RIGHT_PADDING + 12
         local tabsWidth = math.max(TABS_MIN_WIDTH, header.AbsoluteSize.X - tabsStartX - rightReserved)
 
         menuBtnCont.Position = UDim2.new(0, tabsStartX, 0.5, 0)
@@ -1153,7 +1157,7 @@ function Library:CreateWindow(opts)
     userName.BackgroundTransparency = 1
     userName.BorderSizePixel = 0
     userName.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 3)
-    userName.Size = UDim2.new(0, 200, 0, 15)
+    userName.Size = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 15)
     userName.ZIndex = 4
     userName.Font = config.FontMedium
     userName.Text = Client.DisplayName
@@ -1161,6 +1165,7 @@ function Library:CreateWindow(opts)
     userName.TextSize = 13
     userName.TextStrokeTransparency = 0.7
     userName.TextXAlignment = Enum.TextXAlignment.Right
+    userName.TextTruncate = Enum.TextTruncate.AtEnd
     bindTheme(userName, "TextColor3", "TextStrong")
 
     -- Expire / Premium text
@@ -1170,7 +1175,7 @@ function Library:CreateWindow(opts)
     expireDays.BackgroundTransparency = 1
     expireDays.BorderSizePixel = 0
     expireDays.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 16)
-    expireDays.Size = UDim2.new(0, 200, 0, 15)
+    expireDays.Size = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 15)
     expireDays.ZIndex = 4
     expireDays.Font = config.FontMedium
     expireDays.RichText = true
@@ -1179,6 +1184,7 @@ function Library:CreateWindow(opts)
     expireDays.TextSize = 12
     expireDays.TextStrokeTransparency = 0.7
     expireDays.TextXAlignment = Enum.TextXAlignment.Right
+    expireDays.TextTruncate = Enum.TextTruncate.AtEnd
     bindTheme(expireDays, "TextColor3", "TextStrong")
 
     local mobileUi = {}
@@ -1371,8 +1377,8 @@ function Library:CreateWindow(opts)
     if isMobileClient then
         local mobileRestoreBar = Instance.new("TextButton", sg)
         mobileRestoreBar.Name = "MobileRestoreBar"
-        mobileRestoreBar.AnchorPoint = Vector2.new(1, 0)
-        mobileRestoreBar.Position = UDim2.new(1, -14, 0, 14)
+        mobileRestoreBar.AnchorPoint = Vector2.new(0.5, 0)
+        mobileRestoreBar.Position = UDim2.new(0.5, 0, 0, 14)
         mobileRestoreBar.Size = UDim2.fromOffset(154, 34)
         mobileRestoreBar.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
         mobileRestoreBar.BorderSizePixel = 0
@@ -1397,6 +1403,7 @@ function Library:CreateWindow(opts)
         restoreLabel.TextColor3 = colors.Text
         restoreLabel.TextSize = 11
         restoreLabel.TextXAlignment = Enum.TextXAlignment.Left
+        restoreLabel.TextTruncate = Enum.TextTruncate.AtEnd
         restoreLabel.ZIndex = 151
 
         local restoreIcon = Instance.new("ImageLabel", mobileRestoreBar)
@@ -1415,6 +1422,76 @@ function Library:CreateWindow(opts)
         mobileRestoreBar.MouseLeave:Connect(function()
             Library:Animate(mobileRestoreBar, "Hover", { BackgroundColor3 = Color3.fromRGB(24, 24, 24) })
         end)
+
+        local restoreDragInputType = nil
+        local restoreDragStart = nil
+        local restoreDragStartPosition = nil
+        local RESTORE_DRAG_THRESHOLD = 4
+
+        local function clampRestoreBarPosition(left, top)
+            local screenSize = sg.AbsoluteSize
+            local barSize = mobileRestoreBar.AbsoluteSize
+            local maxLeft = math.max(0, screenSize.X - barSize.X)
+            local maxTop = math.max(0, screenSize.Y - barSize.Y)
+            return math.clamp(left, 0, maxLeft), math.clamp(top, 0, maxTop)
+        end
+
+        local function setRestoreBarOffset(left, top)
+            local clampedLeft, clampedTop = clampRestoreBarPosition(left, top)
+            mobileRestoreBar.AnchorPoint = Vector2.new(0, 0)
+            mobileRestoreBar.Position = UDim2.fromOffset(clampedLeft, clampedTop)
+        end
+
+        mobileRestoreBar.InputBegan:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+                return
+            end
+
+            restoreDragInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
+            restoreDragStart = input.Position
+            restoreDragStartPosition = mobileRestoreBar.AbsolutePosition
+            mobileUi.RestoreBarDragging = false
+            mobileUi.RestoreBarDragged = false
+        end)
+
+        trackGlobal(UserInputService.InputChanged:Connect(function(input)
+            if not restoreDragInputType or input.UserInputType ~= restoreDragInputType or not restoreDragStart or not restoreDragStartPosition then
+                return
+            end
+
+            local delta = input.Position - restoreDragStart
+            if not mobileUi.RestoreBarDragging then
+                if math.abs(delta.X) < RESTORE_DRAG_THRESHOLD and math.abs(delta.Y) < RESTORE_DRAG_THRESHOLD then
+                    return
+                end
+                mobileUi.RestoreBarDragging = true
+                mobileUi.RestoreBarDragged = true
+            end
+
+            setRestoreBarOffset(restoreDragStartPosition.X + delta.X, restoreDragStartPosition.Y + delta.Y)
+        end), "MobileRestoreBarDrag")
+
+        trackGlobal(UserInputService.InputEnded:Connect(function(input)
+            if not restoreDragInputType then
+                return
+            end
+            local expectedInputType = restoreDragInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseButton1
+            if input.UserInputType ~= expectedInputType then
+                return
+            end
+
+            local wasDragged = mobileUi.RestoreBarDragging
+            restoreDragInputType = nil
+            restoreDragStart = nil
+            restoreDragStartPosition = nil
+            mobileUi.RestoreBarDragging = false
+
+            if wasDragged then
+                task.delay(0.15, function()
+                    mobileUi.RestoreBarDragged = false
+                end)
+            end
+        end), "MobileRestoreBarDragEnd")
 
         mobileUi.RestoreBar = mobileRestoreBar
     end
@@ -2435,6 +2512,10 @@ function Library:CreateWindow(opts)
 
     if mobileUi.RestoreBar then
         mobileUi.RestoreBar.Activated:Connect(function()
+            if mobileUi.RestoreBarDragged then
+                mobileUi.RestoreBarDragged = false
+                return
+            end
             smoothToggle()
         end)
     end
