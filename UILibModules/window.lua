@@ -1432,7 +1432,7 @@ function Library:CreateWindow(opts)
 
         local restoreDragInputType = nil
         local restoreDragStart = nil
-        local restoreDragStartPosition = nil
+        local restoreDragStartOffset = nil
         local RESTORE_DRAG_THRESHOLD = 8
 
         local function getRestoreScreenSize()
@@ -1464,8 +1464,13 @@ function Library:CreateWindow(opts)
             mobileRestoreBar.Position = UDim2.fromOffset(clampedLeft, clampedTop)
         end
 
+        local function getRestoreBarOffset()
+            local position = mobileRestoreBar.Position
+            return Vector2.new(position.X.Offset, position.Y.Offset)
+        end
+
         local function centerRestoreBar()
-            if mobileUi.RestoreBarMoved then
+            if mobileUi.RestoreBarMoved or mobileUi.RestoreBarHolding then
                 return
             end
 
@@ -1478,6 +1483,7 @@ function Library:CreateWindow(opts)
             setRestoreBarOffset(math.floor((screenSize.X - barSize.X) * 0.5 + 0.5), RESTORE_BAR_TOP)
         end
 
+        mobileUi.CenterRestoreBar = centerRestoreBar
         task.defer(centerRestoreBar)
         trackGlobal(mobileRestoreBar:GetPropertyChangedSignal("AbsoluteSize"):Connect(centerRestoreBar), "MobileRestoreBarSize")
         local okScreenSizeSignal, screenSizeSignal = pcall(function()
@@ -1486,8 +1492,8 @@ function Library:CreateWindow(opts)
         if okScreenSizeSignal and screenSizeSignal then
             trackGlobal(screenSizeSignal:Connect(function()
                 if mobileUi.RestoreBarMoved then
-                    local absolutePosition = mobileRestoreBar.AbsolutePosition
-                    setRestoreBarOffset(absolutePosition.X, absolutePosition.Y)
+                    local currentOffset = getRestoreBarOffset()
+                    setRestoreBarOffset(currentOffset.X, currentOffset.Y)
                 else
                     centerRestoreBar()
                 end
@@ -1501,13 +1507,14 @@ function Library:CreateWindow(opts)
 
             restoreDragInputType = input.UserInputType == Enum.UserInputType.Touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
             restoreDragStart = input.Position
-            restoreDragStartPosition = mobileRestoreBar.AbsolutePosition
+            restoreDragStartOffset = getRestoreBarOffset()
+            mobileUi.RestoreBarHolding = true
             mobileUi.RestoreBarDragging = false
             mobileUi.RestoreBarDragged = false
         end)
 
         trackGlobal(UserInputService.InputChanged:Connect(function(input)
-            if not restoreDragInputType or input.UserInputType ~= restoreDragInputType or not restoreDragStart or not restoreDragStartPosition then
+            if not restoreDragInputType or input.UserInputType ~= restoreDragInputType or not restoreDragStart or not restoreDragStartOffset then
                 return
             end
 
@@ -1521,7 +1528,7 @@ function Library:CreateWindow(opts)
                 mobileUi.RestoreBarMoved = true
             end
 
-            setRestoreBarOffset(restoreDragStartPosition.X + delta.X, restoreDragStartPosition.Y + delta.Y)
+            setRestoreBarOffset(restoreDragStartOffset.X + delta.X, restoreDragStartOffset.Y + delta.Y)
         end), "MobileRestoreBarDrag")
 
         trackGlobal(UserInputService.InputEnded:Connect(function(input)
@@ -1536,7 +1543,8 @@ function Library:CreateWindow(opts)
             local wasDragged = mobileUi.RestoreBarDragging
             restoreDragInputType = nil
             restoreDragStart = nil
-            restoreDragStartPosition = nil
+            restoreDragStartOffset = nil
+            mobileUi.RestoreBarHolding = false
             mobileUi.RestoreBarDragging = false
 
             if wasDragged then
@@ -2471,7 +2479,11 @@ function Library:CreateWindow(opts)
 
     local function syncMobileRestoreButton()
         if mobileUi.RestoreBar then
-            mobileUi.RestoreBar.Visible = startupReady and isMobileClient and not win.Visible
+            local shouldShow = startupReady and isMobileClient and not win.Visible
+            if shouldShow and mobileUi.CenterRestoreBar then
+                mobileUi.CenterRestoreBar()
+            end
+            mobileUi.RestoreBar.Visible = shouldShow
         end
     end
 
