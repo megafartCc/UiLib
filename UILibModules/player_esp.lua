@@ -135,7 +135,15 @@ return function(Library, context)
         }
     end
 
-    local function addPlayerEspSection(menu, opts)
+    local function addPlayerEspSection(selfOrMenu, menuOrOpts, maybeOpts)
+        local menu = selfOrMenu
+        local opts = menuOrOpts
+
+        if selfOrMenu == Library then
+            menu = menuOrOpts
+            opts = maybeOpts
+        end
+
         opts = opts or {}
         if type(menu) ~= "table" or type(menu.AddSection) ~= "function" then
             error("AddPlayerESPSection requires a UiLib menu", 2)
