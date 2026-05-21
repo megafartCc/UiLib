@@ -9,6 +9,7 @@
 
 local moduleCache = {}
 local remoteModuleBase = "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules/"
+local remoteCacheTag = tostring(os.time())
 
 local function normalizePath(path)
     path = string.gsub(path, "\\", "/")
@@ -69,10 +70,15 @@ local function remoteModulePath(path)
     return normalized
 end
 
+local function withCacheTag(url)
+    local separator = string.find(url, "?", 1, true) and "&" or "?"
+    return url .. separator .. "v=" .. remoteCacheTag
+end
+
 local function readModuleSource(path)
     local normalized = normalizePath(path)
     if canHttpGet() then
-        return game:HttpGet(remoteModuleBase .. remoteModulePath(normalized))
+        return game:HttpGet(withCacheTag(remoteModuleBase .. remoteModulePath(normalized)))
     end
     error("UILib module source not found: " .. tostring(normalized))
 end
