@@ -5439,7 +5439,6 @@ function Library:CreateWindow(opts)
                 label.TextTruncate = Enum.TextTruncate.AtEnd
                 local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
                     ImageTransparency = sEnabled and 0 or 1,
-                    RightOffset = 3,
                 })
                 local chkBtn = controlBase.createOverlayButton(chkFrame, {
                     ZIndex = 7,
