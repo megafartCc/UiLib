@@ -3751,6 +3751,7 @@ function Library:CreateWindow(opts)
                 local checkFrame, checkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
                     Name = "Check",
                     ImageTransparency = tDefault and 0 or 1,
+                    RightOffset = 3,
                     ThemeBackgroundKey = "Control",
                     ThemeTransparencyKey = "ControlTransparency",
                     ThemeStrokeKey = "Line",
@@ -5439,6 +5440,7 @@ function Library:CreateWindow(opts)
                 label.TextTruncate = Enum.TextTruncate.AtEnd
                 local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
                     ImageTransparency = sEnabled and 0 or 1,
+                    RightOffset = 3,
                 })
                 local chkBtn = controlBase.createOverlayButton(chkFrame, {
                     ZIndex = 7,
