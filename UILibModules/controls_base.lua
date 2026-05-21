@@ -189,6 +189,7 @@ return function(Library, context)
             Name = opts.Name or "Check",
             Width = opts.Width or 18,
             Height = opts.Height or 18,
+            RightOffset = opts.RightOffset,
             ZIndex = opts.ZIndex or 5,
             BackgroundColor3 = opts.BackgroundColor3 or Color3.fromRGB(35, 35, 35),
             StrokeColor = opts.StrokeColor or colors.Line,

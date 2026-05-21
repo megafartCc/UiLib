@@ -5439,6 +5439,7 @@ function Library:CreateWindow(opts)
                 label.TextTruncate = Enum.TextTruncate.AtEnd
                 local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
                     ImageTransparency = sEnabled and 0 or 1,
+                    RightOffset = 3,
                 })
                 local chkBtn = controlBase.createOverlayButton(chkFrame, {
                     ZIndex = 7,
@@ -5448,7 +5449,7 @@ function Library:CreateWindow(opts)
                 local barBg = Instance.new("Frame", row)
                 barBg.AnchorPoint = Vector2.new(1, 0.5)
                 barBg.Position = UDim2.new(1, -20, 0.5, 0)
-                barBg.Size = UDim2.new(0.45, 0, 0, 16)
+                barBg.Size = UDim2.new(0.45, 0, 0, 18)
                 barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
                 barBg.BorderSizePixel = 0
                 barBg.ClipsDescendants = true
@@ -5477,7 +5478,7 @@ function Library:CreateWindow(opts)
                     local barWidth = math.max(minBarWidth, rowWidth - labelWidth - checkboxInset - labelGap)
 
                     label.Size = UDim2.new(0, labelWidth, 1, 0)
-                    barBg.Size = UDim2.new(0, barWidth, 0, 16)
+                    barBg.Size = UDim2.new(0, barWidth, 0, 18)
                 end
 
                 local fill = Instance.new("Frame", barBg)
