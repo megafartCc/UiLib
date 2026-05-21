@@ -3752,7 +3752,8 @@ function Library:CreateWindow(opts)
                     Name = "Check",
                     ImageTransparency = tDefault and 0 or 1,
                     RightOffset = 3,
-                    ThemeBackgroundKey = "Control",
+                    BackgroundColor3 = colors.ControlAlt,
+                    ThemeBackgroundKey = "ControlAlt",
                     ThemeTransparencyKey = "ControlTransparency",
                     ThemeStrokeKey = "Line",
                     ThemeImageKey = "Main",
@@ -3863,7 +3864,7 @@ function Library:CreateWindow(opts)
                         if subContainer then subContainer.Visible = true end
                     else
                         Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
-                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = colors.Control, BackgroundTransparency = colors.ControlTransparency })
+                        Library:Spring(checkFrame, "Smooth", { BackgroundColor3 = colors.ControlAlt, BackgroundTransparency = colors.ControlTransparency })
                         Library:Spring(checkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                         if subContainer then subContainer.Visible = false end
                     end
@@ -4297,7 +4298,8 @@ function Library:CreateWindow(opts)
                         Width = 18,
                         Height = 18,
                         ImageTransparency = sDefault and 0 or 1,
-                        ThemeBackgroundKey = "Control",
+                        BackgroundColor3 = colors.ControlAlt,
+                        ThemeBackgroundKey = "ControlAlt",
                         ThemeTransparencyKey = "ControlTransparency",
                         ThemeStrokeKey = "Line",
                         ThemeImageKey = "Main",
@@ -4319,7 +4321,7 @@ function Library:CreateWindow(opts)
                             Library:Spring(sCheckStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
                         else
                             Library:Spring(sCheckIcon, "Smooth", { ImageTransparency = 1 })
-                            Library:Spring(sCheckFrame, "Smooth", { BackgroundColor3 = colors.Control, BackgroundTransparency = colors.ControlTransparency })
+                            Library:Spring(sCheckFrame, "Smooth", { BackgroundColor3 = colors.ControlAlt, BackgroundTransparency = colors.ControlTransparency })
                             Library:Spring(sCheckStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                         end
                     end
@@ -5439,6 +5441,7 @@ function Library:CreateWindow(opts)
                 })
                 label.TextTruncate = Enum.TextTruncate.AtEnd
                 local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
+                    BackgroundColor3 = colors.ControlAlt,
                     ImageTransparency = sEnabled and 0 or 1,
                     RightOffset = 3,
                 })
@@ -5509,7 +5512,7 @@ function Library:CreateWindow(opts)
                         Library:Spring(chkStroke, "Smooth", { Color = colors.Main, Transparency = 0.3 })
                     else
                         Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
-                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                        Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = colors.ControlAlt })
                         Library:Spring(chkStroke, "Smooth", { Color = colors.Line, Transparency = 0.5 })
                     end
 
