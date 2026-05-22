@@ -46,34 +46,57 @@ return function(Library, context)
     local function makePreview(menu, controlsSection, state, opts)
         opts = opts or {}
 
-        local previewSection = menu:AddSection({
-            Name = opts.PreviewName or "ESP PREVIEW",
-            Column = opts.PreviewColumn or 2,
-        })
+        local win = controlsSection and controlsSection._win
+        local main = win and win._main
+        if not main then
+            return nil
+        end
 
-        local row = Instance.new("Frame", previewSection.Container)
-        row.Name = "PlayerEspPreview"
-        row.BackgroundColor3 = themeColor("ControlAlt", Color3.fromRGB(30, 30, 30))
-        row.BorderSizePixel = 0
-        row.ClipsDescendants = true
-        row.Size = UDim2.new(1, 0, 0, 96)
-        row.ZIndex = 5
-        bindTheme(row, "BackgroundColor3", "ControlAlt")
-        bindTheme(row, "BackgroundTransparency", "ControlTransparency")
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 4)
+        local initialVisible = true
+        if menu._page then
+            initialVisible = menu._page.Visible == true
+        end
 
-        local rowStroke = Instance.new("UIStroke", row)
-        rowStroke.Color = themeColor("Line", Color3.fromRGB(60, 60, 60))
-        rowStroke.Transparency = 0.45
-        bindTheme(rowStroke, "Color", "Line")
+        local panel = Instance.new("Frame", main)
+        panel.Name = "PlayerEspPreviewPanel"
+        panel.AnchorPoint = Vector2.new(0, 0.5)
+        panel.BackgroundColor3 = themeColor("Section", Color3.fromRGB(18, 18, 18))
+        panel.BorderSizePixel = 0
+        panel.ClipsDescendants = true
+        panel.Position = UDim2.new(1, opts.PreviewGap or 8, 0.5, 0)
+        panel.Size = UDim2.new(0, opts.PreviewWidth or 170, 1, -(opts.PreviewVerticalInset or 60))
+        panel.Visible = initialVisible
+        panel.ZIndex = 90
+        bindTheme(panel, "BackgroundColor3", "Section")
+        bindTheme(panel, "BackgroundTransparency", "SectionTransparency")
+        Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 5)
 
-        local sample = Instance.new("Frame", row)
+        local panelStroke = Instance.new("UIStroke", panel)
+        panelStroke.Color = themeColor("Line", Color3.fromRGB(60, 60, 60))
+        panelStroke.Transparency = 0.35
+        bindTheme(panelStroke, "Color", "Line")
+
+        local title = Instance.new("TextLabel", panel)
+        title.Name = "Title"
+        title.BackgroundTransparency = 1
+        title.BorderSizePixel = 0
+        title.Position = UDim2.new(0, 10, 0, 10)
+        title.Size = UDim2.new(1, -20, 0, 16)
+        title.Font = Enum.Font.GothamBold
+        title.Text = opts.PreviewName or "ESP PREVIEW"
+        title.TextColor3 = themeColor("Text", Color3.fromRGB(235, 235, 235))
+        title.TextSize = 10
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.ZIndex = 91
+        bindTheme(title, "TextColor3", "Text")
+
+        local sample = Instance.new("Frame", panel)
         sample.Name = "Box"
         sample.AnchorPoint = Vector2.new(0.5, 0.5)
         sample.BackgroundTransparency = 1
-        sample.Position = UDim2.new(0.5, 0, 0.5, 0)
-        sample.Size = UDim2.new(0, 48, 0, 88)
-        sample.ZIndex = 6
+        sample.Position = UDim2.new(0.5, 0, 0.48, 0)
+        sample.Size = UDim2.fromOffset(72, 150)
+        sample.ZIndex = 91
 
         local boxStroke = Instance.new("UIStroke", sample)
         boxStroke.Color = themeColor("Line", Color3.fromRGB(60, 60, 60))
@@ -81,13 +104,14 @@ return function(Library, context)
         boxStroke.Transparency = 0.65
 
         local function layoutPreview()
-            local height = row.AbsoluteSize.Y
-            if height <= 0 then
+            local panelHeight = panel.AbsoluteSize.Y
+            local panelWidth = panel.AbsoluteSize.X
+            if panelHeight <= 0 or panelWidth <= 0 then
                 return
             end
 
-            local boxHeight = math.clamp(height - 22, 48, 128)
-            local boxWidth = math.clamp(math.floor(boxHeight * 0.52), 28, 72)
+            local boxHeight = math.clamp(math.floor(panelHeight * 0.42), 120, math.max(120, panelHeight - 64))
+            local boxWidth = math.clamp(math.floor(boxHeight * 0.48), 56, math.max(56, panelWidth - 46))
             sample.Size = UDim2.fromOffset(boxWidth, boxHeight)
         end
 
@@ -104,32 +128,35 @@ return function(Library, context)
             end
         end
 
-        local function syncHeight()
-            local targetHeight = controlsSection.Frame and controlsSection.Frame.AbsoluteSize.Y or 0
-            if targetHeight > 0 then
-                row.Size = UDim2.new(1, 0, 0, math.max(70, targetHeight - 18))
-            end
+        local function syncVisibility()
+            panel.Visible = menu._page == nil or menu._page.Visible == true
+        end
+
+        local function syncLayout()
+            panel.Size = UDim2.new(0, opts.PreviewWidth or 170, 1, -(opts.PreviewVerticalInset or 60))
             layoutPreview()
         end
 
-        previewSection:TrackConnection(row:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutPreview), "PlayerEspPreviewLayout")
-        if controlsSection.Frame then
-            previewSection:TrackConnection(controlsSection.Frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncHeight), "PlayerEspPreviewHeight")
+        controlsSection:TrackInstance(panel, "PlayerEspPreviewPanel")
+        controlsSection:TrackConnection(panel:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutPreview), "PlayerEspPreviewLayout")
+        controlsSection:TrackConnection(main:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncLayout), "PlayerEspPreviewWindowLayout")
+        if menu._page then
+            controlsSection:TrackConnection(menu._page:GetPropertyChangedSignal("Visible"):Connect(syncVisibility), "PlayerEspPreviewVisibility")
         end
         if type(Library.RegisterThemeCallback) == "function" then
             Library:RegisterThemeCallback(function()
-                if row.Parent then
+                if panel.Parent then
                     refreshPreview()
                 end
             end)
         end
 
-        task.defer(syncHeight)
+        task.defer(syncLayout)
+        task.defer(syncVisibility)
         task.defer(refreshPreview)
 
         return {
-            Section = previewSection,
-            Frame = row,
+            Frame = panel,
             Box = sample,
             Refresh = refreshPreview,
         }
