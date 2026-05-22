@@ -3648,6 +3648,10 @@ function Library:CreateWindow(opts)
                 return self._cleanup:Add(conn, "Disconnect", key)
             end
 
+            function section:TrackInstance(instance, key)
+                return self._cleanup:Add(instance, "Destroy", key)
+            end
+
             function section:Destroy()
                 if self._destroyed then
                     return
