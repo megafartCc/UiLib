@@ -57,14 +57,17 @@ return function(Library, context)
             initialVisible = menu._page.Visible == true
         end
 
+        local previewWidth = opts.PreviewWidth or 205
+        local previewVerticalInset = opts.PreviewVerticalInset or 0
+
         local panel = Instance.new("Frame", main)
         panel.Name = "PlayerEspPreviewPanel"
         panel.AnchorPoint = Vector2.new(0, 0.5)
-        panel.BackgroundColor3 = themeColor("Section", Color3.fromRGB(18, 18, 18))
+        panel.BackgroundColor3 = themeColor("Section", Color3.fromRGB(24, 24, 24))
         panel.BorderSizePixel = 0
         panel.ClipsDescendants = true
         panel.Position = UDim2.new(1, opts.PreviewGap or 8, 0.5, 0)
-        panel.Size = UDim2.new(0, opts.PreviewWidth or 170, 1, -(opts.PreviewVerticalInset or 60))
+        panel.Size = UDim2.new(0, previewWidth, 1, -previewVerticalInset)
         panel.Visible = initialVisible
         panel.ZIndex = 90
         bindTheme(panel, "BackgroundColor3", "Section")
@@ -133,7 +136,7 @@ return function(Library, context)
         end
 
         local function syncLayout()
-            panel.Size = UDim2.new(0, opts.PreviewWidth or 170, 1, -(opts.PreviewVerticalInset or 60))
+            panel.Size = UDim2.new(0, previewWidth, 1, -previewVerticalInset)
             layoutPreview()
         end
 
