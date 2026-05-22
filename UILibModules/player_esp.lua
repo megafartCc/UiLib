@@ -140,7 +140,9 @@ return function(Library, context)
             layoutPreview()
         end
 
-        controlsSection:TrackInstance(panel, "PlayerEspPreviewPanel")
+        if controlsSection._cleanup and type(controlsSection._cleanup.Add) == "function" then
+            controlsSection._cleanup:Add(panel, "Destroy", "PlayerEspPreviewPanel")
+        end
         controlsSection:TrackConnection(panel:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutPreview), "PlayerEspPreviewLayout")
         controlsSection:TrackConnection(main:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncLayout), "PlayerEspPreviewWindowLayout")
         if menu._page then
