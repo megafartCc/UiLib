@@ -131,7 +131,7 @@ return function(Library, context)
         local teamLabel = makeText("TeamLabel", sample, 11, Enum.TextXAlignment.Left)
         teamLabel.Text = opts.PreviewTeamName or "No Team"
         teamLabel.Position = UDim2.new(1, 8, 0, 0)
-        teamLabel.Size = UDim2.new(0, 86, 0, 15)
+        teamLabel.Size = UDim2.new(0, 74, 0, 15)
 
         local healthBack = Instance.new("Frame", sample)
         healthBack.Name = "HealthBack"
@@ -186,19 +186,36 @@ return function(Library, context)
         end
 
         local skeleton = {
+            Shoulders = makeLine("SkeletonShoulders"),
+            Neck = makeLine("SkeletonNeck"),
             Spine = makeLine("SkeletonSpine"),
+            Hips = makeLine("SkeletonHips"),
             LeftArm = makeLine("SkeletonLeftArm"),
             RightArm = makeLine("SkeletonRightArm"),
             LeftLeg = makeLine("SkeletonLeftLeg"),
             RightLeg = makeLine("SkeletonRightLeg"),
         }
 
+        local function snapPixel(value)
+            return math.floor(value + 0.5)
+        end
+
         local function setLine(line, x1, y1, x2, y2, thickness)
+            x1 = snapPixel(x1)
+            y1 = snapPixel(y1)
+            x2 = snapPixel(x2)
+            y2 = snapPixel(y2)
+
             local dx = x2 - x1
             local dy = y2 - y1
             local length = math.sqrt((dx * dx) + (dy * dy))
+            local resolvedThickness = thickness
+            if not resolvedThickness then
+                resolvedThickness = (math.abs(dx) < 0.01 or math.abs(dy) < 0.01) and 2 or 1
+            end
+
             line.Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2)
-            line.Size = UDim2.fromOffset(length, thickness or 1)
+            line.Size = UDim2.fromOffset(math.max(1, length + 1), resolvedThickness)
             line.Rotation = math.deg((math.atan2 or math.atan)(dy, dx))
         end
 
@@ -210,23 +227,41 @@ return function(Library, context)
             end
 
             local boxHeight = math.clamp(math.floor(panelHeight * 0.42), 120, math.max(120, panelHeight - 64))
+            boxHeight = math.max(120, math.floor(boxHeight / 2) * 2)
             local boxWidth = math.clamp(math.floor(boxHeight * 0.48), 56, math.max(56, panelWidth - 46))
+            boxWidth = math.max(56, math.floor(boxWidth / 2) * 2)
             sample.Size = UDim2.fromOffset(boxWidth, boxHeight)
 
-            local boxCenterX = panelWidth * 0.44
-            local boxCenterY = panelHeight * 0.48
+            local boxCenterY = snapPixel(panelHeight * 0.48)
             local boxBottomY = boxCenterY + (boxHeight / 2)
+            local leftExtent = 58
+            local rightExtent = 58
+            local groupWidth = leftExtent + boxWidth + rightExtent
+            local groupLeft = math.max(0, math.floor(((panelWidth - groupWidth) / 2) + 0.5))
+            local boxCenterX = snapPixel(groupLeft + leftExtent + (boxWidth / 2))
+            sample.Position = UDim2.fromOffset(boxCenterX, boxCenterY)
             setLine(tracerLine, boxCenterX, panelHeight - 18, boxCenterX, boxBottomY, 1)
 
-            local cx = boxWidth / 2
-            local headY = boxHeight * 0.22
-            local chestY = boxHeight * 0.43
-            local hipY = boxHeight * 0.62
-            setLine(skeleton.Spine, cx, headY, cx, hipY, 1)
-            setLine(skeleton.LeftArm, cx, chestY, cx - (boxWidth * 0.30), chestY + (boxHeight * 0.12), 1)
-            setLine(skeleton.RightArm, cx, chestY, cx + (boxWidth * 0.30), chestY + (boxHeight * 0.12), 1)
-            setLine(skeleton.LeftLeg, cx, hipY, cx - (boxWidth * 0.22), boxHeight * 0.88, 1)
-            setLine(skeleton.RightLeg, cx, hipY, cx + (boxWidth * 0.22), boxHeight * 0.88, 1)
+            local cx = snapPixel(boxWidth / 2)
+            local headY = snapPixel(boxHeight * 0.23)
+            local shoulderY = snapPixel(boxHeight * 0.35)
+            local hipY = snapPixel(boxHeight * 0.61)
+            local handY = snapPixel(boxHeight * 0.55)
+            local footY = snapPixel(boxHeight * 0.91)
+
+            local shoulderHalf = snapPixel(boxWidth * 0.30)
+            local hipHalf = snapPixel(boxWidth * 0.17)
+            local handHalf = snapPixel(boxWidth * 0.43)
+            local footHalf = snapPixel(boxWidth * 0.28)
+
+            setLine(skeleton.Shoulders, cx - shoulderHalf, shoulderY, cx + shoulderHalf, shoulderY)
+            setLine(skeleton.Neck, cx, headY, cx, shoulderY)
+            setLine(skeleton.Spine, cx, shoulderY, cx, hipY)
+            setLine(skeleton.Hips, cx - hipHalf, hipY, cx + hipHalf, hipY)
+            setLine(skeleton.LeftArm, cx - shoulderHalf, shoulderY, cx - handHalf, handY)
+            setLine(skeleton.RightArm, cx + shoulderHalf, shoulderY, cx + handHalf, handY)
+            setLine(skeleton.LeftLeg, cx - hipHalf, hipY, cx - footHalf, footY)
+            setLine(skeleton.RightLeg, cx + hipHalf, hipY, cx + footHalf, footY)
         end
 
         local function refreshPreview()
