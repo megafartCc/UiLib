@@ -57,13 +57,14 @@ return function(Library, context)
             initialVisible = menu._page.Visible == true
         end
 
-        local previewWidth = opts.PreviewWidth or 205
+        local previewWidth = opts.PreviewWidth or 240
         local previewVerticalInset = opts.PreviewVerticalInset or 0
 
         local panel = Instance.new("Frame", main)
         panel.Name = "PlayerEspPreviewPanel"
         panel.AnchorPoint = Vector2.new(0, 0.5)
         panel.BackgroundColor3 = themeColor("Section", Color3.fromRGB(24, 24, 24))
+        panel.BackgroundTransparency = themeColor("SectionTransparency", 0)
         panel.BorderSizePixel = 0
         panel.ClipsDescendants = true
         panel.Position = UDim2.new(1, opts.PreviewGap or 8, 0.5, 0)
@@ -76,7 +77,7 @@ return function(Library, context)
 
         local panelStroke = Instance.new("UIStroke", panel)
         panelStroke.Color = themeColor("Line", Color3.fromRGB(60, 60, 60))
-        panelStroke.Transparency = 0.35
+        panelStroke.Transparency = 0.8
         bindTheme(panelStroke, "Color", "Line")
 
         local title = Instance.new("TextLabel", panel)
@@ -97,7 +98,7 @@ return function(Library, context)
         sample.Name = "Box"
         sample.AnchorPoint = Vector2.new(0.5, 0.5)
         sample.BackgroundTransparency = 1
-        sample.Position = UDim2.new(0.5, 0, 0.48, 0)
+        sample.Position = UDim2.new(0.44, 0, 0.48, 0)
         sample.Size = UDim2.fromOffset(72, 150)
         sample.ZIndex = 91
 
@@ -105,6 +106,101 @@ return function(Library, context)
         boxStroke.Color = themeColor("Line", Color3.fromRGB(60, 60, 60))
         boxStroke.Thickness = 1
         boxStroke.Transparency = 0.65
+
+        local function makeText(name, parent, textSize, align)
+            local label = Instance.new("TextLabel", parent)
+            label.Name = name
+            label.BackgroundTransparency = 1
+            label.BorderSizePixel = 0
+            label.Font = Enum.Font.GothamBold
+            label.TextColor3 = themeColor("Text", Color3.fromRGB(235, 235, 235))
+            label.TextSize = textSize or 11
+            label.TextStrokeTransparency = 0.35
+            label.TextXAlignment = align or Enum.TextXAlignment.Center
+            label.TextYAlignment = Enum.TextYAlignment.Center
+            label.ZIndex = 92
+            bindTheme(label, "TextColor3", "Text")
+            return label
+        end
+
+        local nameLabel = makeText("NameLabel", sample, 11)
+        nameLabel.Text = opts.PreviewPlayerName or "PreviewPlayer"
+        nameLabel.Position = UDim2.new(0, -70, 0, -24)
+        nameLabel.Size = UDim2.new(1, 140, 0, 16)
+
+        local teamLabel = makeText("TeamLabel", sample, 11, Enum.TextXAlignment.Left)
+        teamLabel.Text = opts.PreviewTeamName or "No Team"
+        teamLabel.Position = UDim2.new(1, 8, 0, 0)
+        teamLabel.Size = UDim2.new(0, 86, 0, 15)
+
+        local healthBack = Instance.new("Frame", sample)
+        healthBack.Name = "HealthBack"
+        healthBack.BackgroundColor3 = themeColor("Line", Color3.fromRGB(60, 60, 60))
+        healthBack.BorderSizePixel = 0
+        healthBack.Position = UDim2.new(0, -8, 0, 0)
+        healthBack.Size = UDim2.new(0, 3, 1, 0)
+        healthBack.ZIndex = 92
+        bindTheme(healthBack, "BackgroundColor3", "Line")
+
+        local healthFill = Instance.new("Frame", healthBack)
+        healthFill.Name = "HealthFill"
+        healthFill.AnchorPoint = Vector2.new(0, 1)
+        healthFill.BackgroundColor3 = Color3.fromRGB(76, 255, 115)
+        healthFill.BorderSizePixel = 0
+        healthFill.Position = UDim2.new(0, 0, 1, 0)
+        healthFill.Size = UDim2.new(1, 0, 0.82, 0)
+        healthFill.ZIndex = 93
+
+        local healthText = makeText("HealthText", sample, 10, Enum.TextXAlignment.Right)
+        healthText.Text = opts.PreviewHealthText or "82 HP"
+        healthText.Position = UDim2.new(0, -58, 0, 8)
+        healthText.Size = UDim2.new(0, 46, 0, 14)
+
+        local heldItemLabel = makeText("HeldItemLabel", sample, 11)
+        heldItemLabel.Text = opts.PreviewHeldItem or "Knife"
+        heldItemLabel.TextColor3 = themeColor("Main", Color3.fromRGB(245, 49, 116))
+        heldItemLabel.Position = UDim2.new(0, -45, 1, 5)
+        heldItemLabel.Size = UDim2.new(1, 90, 0, 16)
+        bindTheme(heldItemLabel, "TextColor3", "Main")
+
+        local tracerLine = Instance.new("Frame", panel)
+        tracerLine.Name = "Tracer"
+        tracerLine.AnchorPoint = Vector2.new(0.5, 0.5)
+        tracerLine.BackgroundColor3 = themeColor("Main", Color3.fromRGB(245, 49, 116))
+        tracerLine.BorderSizePixel = 0
+        tracerLine.Size = UDim2.fromOffset(1, 1)
+        tracerLine.ZIndex = 91
+        bindTheme(tracerLine, "BackgroundColor3", "Main")
+
+        local skeletonLines = {}
+        local function makeLine(name)
+            local line = Instance.new("Frame", sample)
+            line.Name = name
+            line.AnchorPoint = Vector2.new(0.5, 0.5)
+            line.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+            line.BorderSizePixel = 0
+            line.Size = UDim2.fromOffset(1, 1)
+            line.ZIndex = 92
+            table.insert(skeletonLines, line)
+            return line
+        end
+
+        local skeleton = {
+            Spine = makeLine("SkeletonSpine"),
+            LeftArm = makeLine("SkeletonLeftArm"),
+            RightArm = makeLine("SkeletonRightArm"),
+            LeftLeg = makeLine("SkeletonLeftLeg"),
+            RightLeg = makeLine("SkeletonRightLeg"),
+        }
+
+        local function setLine(line, x1, y1, x2, y2, thickness)
+            local dx = x2 - x1
+            local dy = y2 - y1
+            local length = math.sqrt((dx * dx) + (dy * dy))
+            line.Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2)
+            line.Size = UDim2.fromOffset(length, thickness or 1)
+            line.Rotation = math.deg((math.atan2 or math.atan)(dy, dx))
+        end
 
         local function layoutPreview()
             local panelHeight = panel.AbsoluteSize.Y
@@ -116,6 +212,21 @@ return function(Library, context)
             local boxHeight = math.clamp(math.floor(panelHeight * 0.42), 120, math.max(120, panelHeight - 64))
             local boxWidth = math.clamp(math.floor(boxHeight * 0.48), 56, math.max(56, panelWidth - 46))
             sample.Size = UDim2.fromOffset(boxWidth, boxHeight)
+
+            local boxCenterX = panelWidth * 0.44
+            local boxCenterY = panelHeight * 0.48
+            local boxBottomY = boxCenterY + (boxHeight / 2)
+            setLine(tracerLine, boxCenterX, panelHeight - 18, boxCenterX, boxBottomY, 1)
+
+            local cx = boxWidth / 2
+            local headY = boxHeight * 0.22
+            local chestY = boxHeight * 0.43
+            local hipY = boxHeight * 0.62
+            setLine(skeleton.Spine, cx, headY, cx, hipY, 1)
+            setLine(skeleton.LeftArm, cx, chestY, cx - (boxWidth * 0.30), chestY + (boxHeight * 0.12), 1)
+            setLine(skeleton.RightArm, cx, chestY, cx + (boxWidth * 0.30), chestY + (boxHeight * 0.12), 1)
+            setLine(skeleton.LeftLeg, cx, hipY, cx - (boxWidth * 0.22), boxHeight * 0.88, 1)
+            setLine(skeleton.RightLeg, cx, hipY, cx + (boxWidth * 0.22), boxHeight * 0.88, 1)
         end
 
         local function refreshPreview()
@@ -128,6 +239,16 @@ return function(Library, context)
             else
                 boxStroke.Color = inactiveColor
                 boxStroke.Transparency = 0.65
+            end
+
+            nameLabel.Visible = state.Name == true
+            teamLabel.Visible = state.Team == true
+            healthBack.Visible = state.Health == true
+            healthText.Visible = state.Health == true
+            tracerLine.Visible = state.Tracers == true
+            heldItemLabel.Visible = state.HeldItem == true
+            for _, line in ipairs(skeletonLines) do
+                line.Visible = state.Skeleton == true
             end
         end
 
