@@ -56,6 +56,7 @@ return function(Library, context)
         if menu._page then
             initialVisible = menu._page.Visible == true
         end
+        initialVisible = initialVisible and state.Preview == true
 
         local previewWidth = opts.PreviewWidth or 240
         local previewVerticalInset = opts.PreviewVerticalInset or 0
@@ -260,7 +261,11 @@ return function(Library, context)
             setLine(skeleton.RightLeg, cx + hipHalf, hipY, cx + footHalf, footY)
         end
 
+        local syncVisibility
+
         local function refreshPreview()
+            syncVisibility()
+
             local activeColor = themeColor("Main", Color3.fromRGB(245, 49, 116))
             local inactiveColor = themeColor("Line", Color3.fromRGB(60, 60, 60))
 
@@ -283,8 +288,8 @@ return function(Library, context)
             end
         end
 
-        local function syncVisibility()
-            panel.Visible = menu._page == nil or menu._page.Visible == true
+        syncVisibility = function()
+            panel.Visible = state.Preview == true and (menu._page == nil or menu._page.Visible == true)
         end
 
         local function syncLayout()
@@ -316,6 +321,10 @@ return function(Library, context)
             Frame = panel,
             Box = sample,
             Refresh = refreshPreview,
+            SetVisible = function(_, value)
+                state.Preview = value == true
+                syncVisibility()
+            end,
         }
     end
 
@@ -347,6 +356,7 @@ return function(Library, context)
         })
 
         local state = {
+            Preview = opts.PreviewDefault ~= false,
             Box = opts.BoxDefault == true,
             Name = opts.NameDefault == true,
             Health = opts.HealthDefault == true,
@@ -398,6 +408,18 @@ return function(Library, context)
             })
             api.Controls[key] = control
             return control
+        end
+
+        if opts.Preview ~= false then
+            api.Controls.Preview = section:AddToggle({
+                Name = opts.PreviewToggleName or "ESP Preview",
+                Default = state.Preview == true,
+                Callback = function(value)
+                    state.Preview = value == true
+                    refreshPreview()
+                    notifyChange("Preview", state.Preview)
+                end,
+            })
         end
 
         api.Controls.Box = addToggle("Box ESP", "Box", "SetBoxEsp", state.Box)
