@@ -98,7 +98,7 @@ return function(Library, context)
         sample.Name = "Box"
         sample.AnchorPoint = Vector2.new(0.5, 0.5)
         sample.BackgroundTransparency = 1
-        sample.Position = UDim2.new(0.44, 0, 0.48, 0)
+        sample.Position = UDim2.new(0.5, 0, 0.48, 0)
         sample.Size = UDim2.fromOffset(72, 150)
         sample.ZIndex = 91
 
@@ -234,11 +234,7 @@ return function(Library, context)
 
             local boxCenterY = snapPixel(panelHeight * 0.48)
             local boxBottomY = boxCenterY + (boxHeight / 2)
-            local leftExtent = 58
-            local rightExtent = 58
-            local groupWidth = leftExtent + boxWidth + rightExtent
-            local groupLeft = math.max(0, math.floor(((panelWidth - groupWidth) / 2) + 0.5))
-            local boxCenterX = snapPixel(groupLeft + leftExtent + (boxWidth / 2))
+            local boxCenterX = snapPixel(panelWidth / 2)
             sample.Position = UDim2.fromOffset(boxCenterX, boxCenterY)
             setLine(tracerLine, boxCenterX, panelHeight - 18, boxCenterX, boxBottomY, 1)
 
