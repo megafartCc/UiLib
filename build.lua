@@ -8,7 +8,7 @@
 ]]
 
 local moduleCache = {}
-local remoteModuleBase = "https://raw.githubusercontent.com/megafartCc/UiLib/da0abff11d360f2599244775fc0503a0a63d5b8b/UILibModules/"
+local remoteModuleBase = "https://raw.githubusercontent.com/megafartCc/UiLib/f80b2a48fc4d4fb7166349fc66ddf5d153fc429d/UILibModules/"
 local remoteCacheTag = tostring(os.time())
 
 local function normalizePath(path)
