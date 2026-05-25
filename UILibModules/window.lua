@@ -293,8 +293,6 @@ return function(Library, context, moduleRequire)
 
     ensureNotifyApi()
 
-    local luarmorLibraryCache = {}
-
     local function trimText(value)
         local text = tostring(value or "")
         text = string.gsub(text, "^%s+", "")
@@ -353,86 +351,48 @@ return function(Library, context, moduleRequire)
         return false
     end
 
-    local function cloneTableShallow(source)
-        if type(source) ~= "table" then
-            return source
+    local function getRequestFunction()
+        if type(request) == "function" then
+            return request
         end
-
-        local cloned = {}
-        for key, value in pairs(source) do
-            cloned[key] = value
+        if type(http_request) == "function" then
+            return http_request
         end
-
-        local metatableValue = getmetatable(source)
-        if metatableValue ~= nil then
-            setmetatable(cloned, metatableValue)
+        if type(http) == "table" and type(http.request) == "function" then
+            return http.request
         end
-
-        return cloned
+        if type(syn) == "table" and type(syn.request) == "function" then
+            return syn.request
+        end
+        if type(fluxus) == "table" and type(fluxus.request) == "function" then
+            return fluxus.request
+        end
+        return nil
     end
 
-    local function loadLuarmorApi(libraryUrl)
-        libraryUrl = trimText(libraryUrl)
-        if libraryUrl == "" then
-            return nil, "Luarmor library URL is missing."
+    local function getResponseStatusCode(response)
+        if type(response) ~= "table" then
+            return 0
         end
-
-        local cached = luarmorLibraryCache[libraryUrl]
-        if type(cached) == "table" and cached._error then
-            return nil, cached._error
-        end
-        if type(cached) == "table" then
-            return cloneTableShallow(cached), nil
-        end
-
-        local loader = loadstring or load
-        if type(loader) ~= "function" then
-            local errorMessage = "Executor does not support loadstring."
-            luarmorLibraryCache[libraryUrl] = { _error = errorMessage }
-            return nil, errorMessage
-        end
-
-        local okSource, source = pcall(function()
-            return game:HttpGet(libraryUrl)
-        end)
-        if not okSource or type(source) ~= "string" or source == "" then
-            local errorMessage = "Failed to fetch Luarmor key library."
-            luarmorLibraryCache[libraryUrl] = { _error = errorMessage }
-            return nil, errorMessage
-        end
-
-        local okChunk, chunkOrError = pcall(loader, source)
-        if not okChunk or type(chunkOrError) ~= "function" then
-            local errorMessage = "Failed to compile Luarmor key library."
-            luarmorLibraryCache[libraryUrl] = { _error = errorMessage }
-            return nil, errorMessage
-        end
-
-        local okApi, apiOrError = pcall(chunkOrError)
-        if not okApi or type(apiOrError) ~= "table" then
-            local errorMessage = "Failed to initialize Luarmor key library."
-            luarmorLibraryCache[libraryUrl] = { _error = errorMessage }
-            return nil, errorMessage
-        end
-
-        luarmorLibraryCache[libraryUrl] = apiOrError
-        return cloneTableShallow(apiOrError), nil
+        return tonumber(response.StatusCode or response.Status or response.status_code or response.status) or 0
     end
 
-    local function checkLuarmorKey(libraryUrl, scriptId, submittedKey)
-        local api, apiError = loadLuarmorApi(libraryUrl)
-        if type(api) ~= "table" then
-            return false, {
-                code = "LUARMOR_LIBRARY_ERROR",
-                message = apiError or "Failed to load Luarmor key library.",
-            }
+    local function getResponseBody(response)
+        if type(response) == "string" then
+            return response
         end
+        if type(response) ~= "table" then
+            return ""
+        end
+        return tostring(response.Body or response.body or response.ResponseBody or "")
+    end
 
+    local function checkUnknownHubKey(verifyUrl, scriptId, submittedKey)
         scriptId = trimText(scriptId)
         if scriptId == "" then
             return false, {
-                code = "LUARMOR_SCRIPT_ID_MISSING",
-                message = "LuarmorScriptId is missing.",
+                code = "UNKNOWNHUB_SCRIPT_ID_MISSING",
+                message = "ScriptId is missing.",
             }
         end
 
@@ -444,27 +404,65 @@ return function(Library, context, moduleRequire)
             }
         end
 
-        api.script_id = scriptId
-
-        local okStatus, status = pcall(api.check_key, keyValue)
-        if (not okStatus or type(status) ~= "table") and type(api.check_key) == "function" then
-            okStatus, status = pcall(function()
-                return api:check_key(keyValue)
-            end)
-        end
-
-        if not okStatus or type(status) ~= "table" then
+        local requestFn = getRequestFunction()
+        if type(requestFn) ~= "function" then
             return false, {
-                code = "LUARMOR_CHECK_FAILED",
-                message = "Luarmor key check failed.",
+                code = "UNKNOWNHUB_REQUEST_UNAVAILABLE",
+                message = "Executor HTTP request is unavailable.",
             }
         end
 
-        if status.code == "KEY_VALID" then
-            return true, status
+        local localPlayer = Players and Players.LocalPlayer
+        local body = HttpService:JSONEncode({
+            key = keyValue,
+            script_id = scriptId,
+            roblox_user_id = localPlayer and tostring(localPlayer.UserId) or "",
+            place_id = tostring(game.PlaceId or ""),
+            job_id = tostring(game.JobId or ""),
+        })
+
+        local okRequest, response = pcall(requestFn, {
+            Url = verifyUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+                ["Accept"] = "application/json",
+            },
+            Body = body,
+        })
+
+        if not okRequest then
+            return false, {
+                code = "UNKNOWNHUB_REQUEST_FAILED",
+                message = tostring(response or "Key verification request failed."),
+            }
         end
 
-        return false, status
+        local responseBody = getResponseBody(response)
+        local okDecode, payload = pcall(function()
+            return HttpService:JSONDecode(responseBody)
+        end)
+
+        if not okDecode or type(payload) ~= "table" then
+            local statusCode = getResponseStatusCode(response)
+            return false, {
+                code = "UNKNOWNHUB_BAD_RESPONSE",
+                message = statusCode > 0 and ("Key server returned HTTP " .. tostring(statusCode) .. ".") or "Key server returned an invalid response.",
+            }
+        end
+
+        if payload.valid == true then
+            return true, payload
+        end
+
+        if type(payload.code) ~= "string" or payload.code == "" then
+            payload.code = payload.error or "KEY_INVALID"
+        end
+        if type(payload.message) ~= "string" or payload.message == "" then
+            payload.message = payload.error or payload.code
+        end
+
+        return false, payload
     end
 
 function Library:CreateWindow(opts)
@@ -475,12 +473,14 @@ function Library:CreateWindow(opts)
     local configName = opts.ConfigName or nil
     local keySystemEnabled = opts.KeySystem == true
     local requiredKey = trimText(opts.Key)
-    local luarmorKeySystemEnabled = opts.LuarmorKey == true or opts.LuarmorKeySystem == true
-    local luarmorScriptId = trimText(opts.LuarmorScriptId or opts.LuarmorScriptID or opts.ScriptId)
-    local luarmorLibraryUrl = trimText(opts.LuarmorLibraryUrl or opts.LuarmorKeyLibraryUrl or "https://sdkapi-public.luarmor.net/library.lua")
-    local developerKey = trimText(opts.DeveloperKey or opts.DevKey or self.Config.DeveloperKey or "DevUnknown")
+    local unknownHubScriptId = trimText(opts.UnknownHubScriptId or opts.UnknownHubScriptID or opts.ScriptId or opts.ScriptID)
+    local unknownHubVerifyUrl = trimText(opts.UnknownHubVerifyUrl or opts.KeyVerifyUrl or "https://unknownhub.win/api/lua/key/verify")
+    local unknownHubKeySystemEnabled = opts.UnknownHubKey == true
+        or opts.UnknownHubKeySystem == true
+        or (keySystemEnabled and requiredKey == "" and unknownHubScriptId ~= "")
+    local developerKey = trimText(opts.DeveloperKey or opts.DevKey or self.Config.DeveloperKey or "")
     local keyStorageTag = opts.KeyStorageTag
-    local keyLink = opts.GetKeyLink or opts.KeyLink or opts.LuarmorKeyLink
+    local keyLink = opts.GetKeyLink or opts.KeyLink
     local onGetKey = opts.OnGetKey
     local keySubmitText = opts.SubmitKeyText or "Unlock"
     local keyLinkText = opts.GetKeyText or "Get Key"
@@ -514,22 +514,26 @@ function Library:CreateWindow(opts)
     self._loadedConfigData = nil
     self._configReplayToken = 0
 
-    local hardcodedKeySystemActive = (not luarmorKeySystemEnabled) and keySystemEnabled and requiredKey ~= ""
-    local keyValidationMode = luarmorKeySystemEnabled and "luarmor" or (hardcodedKeySystemActive and "hardcoded" or "none")
-    local keySystemActive = luarmorKeySystemEnabled or hardcodedKeySystemActive
+    if unknownHubKeySystemEnabled and trimText(keyLink) == "" then
+        keyLink = "https://unknownhub.win/#get-key"
+    end
+
+    local hardcodedKeySystemActive = (not unknownHubKeySystemEnabled) and keySystemEnabled and requiredKey ~= ""
+    local keyValidationMode = unknownHubKeySystemEnabled and "unknownhub" or (hardcodedKeySystemActive and "hardcoded" or "none")
+    local keySystemActive = unknownHubKeySystemEnabled or hardcodedKeySystemActive
     local waitForKeyVerification = keySystemActive and opts.WaitForKey ~= false and opts.BlockUntilKeyVerified ~= false
     local keyGateUnlocked = not keySystemActive
     local keyContentBootstrapped = false
     local keyValidationBusy = false
     local initialKeyInputText = ""
 
-    if waitForKeyVerification and keyValidationMode == "luarmor" and luarmorScriptId == "" then
-        error("LuarmorKey is enabled but LuarmorScriptId is missing.")
+    if waitForKeyVerification and keyValidationMode == "unknownhub" and unknownHubScriptId == "" then
+        error("UnknownHub key system is enabled but ScriptId is missing.")
     end
 
     if type(keyStorageTag) ~= "string" or keyStorageTag == "" then
-        if keyValidationMode == "luarmor" and luarmorScriptId ~= "" then
-            keyStorageTag = "__luarmor_key_system_" .. luarmorScriptId
+        if keyValidationMode == "unknownhub" then
+            keyStorageTag = "__unknownhub_key_system"
         else
             keyStorageTag = "__key_system"
         end
@@ -577,8 +581,8 @@ function Library:CreateWindow(opts)
             }
         end
 
-        if keyValidationMode == "luarmor" then
-            return checkLuarmorKey(luarmorLibraryUrl, luarmorScriptId, submitted)
+        if keyValidationMode == "unknownhub" then
+            return checkUnknownHubKey(unknownHubVerifyUrl, unknownHubScriptId, submitted)
         end
 
         return true, {
@@ -599,7 +603,7 @@ function Library:CreateWindow(opts)
         if savedKey ~= "" then
             if keyValidationMode == "hardcoded" then
                 savedKeyAccepted = isAcceptedKey(savedKey)
-            elseif keyValidationMode == "luarmor" and luarmorScriptId ~= "" then
+            elseif keyValidationMode == "unknownhub" and unknownHubScriptId ~= "" then
                 local okSaved = nil
                 okSaved = select(1, validateSubmittedKey(savedKey))
                 savedKeyAccepted = okSaved == true
@@ -3073,23 +3077,27 @@ function Library:CreateWindow(opts)
     local function describeKeyFailure(status)
         local code = trimText(type(status) == "table" and status.code or "")
         local message = type(status) == "table" and status.message or nil
+        local lowerCode = string.lower(code)
 
         if code == "KEY_EMPTY" then
             return "Enter a key first.", Color3.fromRGB(255, 160, 160)
         end
-        if code == "LUARMOR_SCRIPT_ID_MISSING" then
-            return "LuarmorScriptId is missing.", Color3.fromRGB(255, 160, 160)
+        if lowerCode == "unknownhub_script_id_missing" or lowerCode == "missing_script_id" then
+            return "ScriptId is missing.", Color3.fromRGB(255, 160, 160)
         end
-        if code == "LUARMOR_LIBRARY_ERROR" or code == "LUARMOR_CHECK_FAILED" then
-            return tostring(message or "Luarmor key check failed."), Color3.fromRGB(255, 160, 160)
+        if lowerCode == "unknownhub_request_unavailable" or lowerCode == "unknownhub_request_failed" or lowerCode == "unknownhub_bad_response" then
+            return tostring(message or "Key verification failed."), Color3.fromRGB(255, 188, 120)
         end
-        if code == "KEY_HWID_LOCKED" then
-            return "Key is locked to another HWID.", Color3.fromRGB(255, 188, 120)
+        if lowerCode == "script_disabled" then
+            return "The Owner has temporary disabled the script.", Color3.fromRGB(255, 188, 120)
         end
-        if code == "KEY_EXPIRED" then
+        if lowerCode == "script_unknown" then
+            return "Script is not registered.", Color3.fromRGB(255, 188, 120)
+        end
+        if lowerCode == "key_expired" or lowerCode == "expired" then
             return "Key expired. Get a new one and retry.", Color3.fromRGB(255, 188, 120)
         end
-        if code == "KEY_INCORRECT" or code == "KEY_INVALID" then
+        if lowerCode == "key_incorrect" or lowerCode == "key_invalid" or lowerCode == "invalid_key" then
             return "Invalid key.", Color3.fromRGB(255, 160, 160)
         end
         if type(message) == "string" and message ~= "" then
@@ -3101,7 +3109,7 @@ function Library:CreateWindow(opts)
     local function setKeyValidationBusy(isBusy)
         keyValidationBusy = isBusy == true
         if keyValidationBusy then
-            keyUi.SubmitButton.Text = keyValidationMode == "luarmor" and "Checking..." or keySubmitText
+            keyUi.SubmitButton.Text = keyValidationMode == "unknownhub" and "Checking..." or keySubmitText
         else
             keyUi.SubmitButton.Text = keySubmitText
         end
@@ -3124,7 +3132,7 @@ function Library:CreateWindow(opts)
             return false
         end
 
-        if keyValidationMode == "luarmor" then
+        if keyValidationMode == "unknownhub" then
             setKeyValidationBusy(true)
             setKeyStatus("Checking key...", colors.Main)
         end
@@ -3145,7 +3153,7 @@ function Library:CreateWindow(opts)
                 value = submitted,
                 verified = true,
                 mode = keyValidationMode,
-                script_id = luarmorScriptId,
+                script_id = unknownHubScriptId,
             })
             if not saved then
                 warn("[UILib] Key accepted, but saving it failed: " .. tostring(saveErr))
@@ -3156,8 +3164,8 @@ function Library:CreateWindow(opts)
         return true
     end
 
-    if keyValidationMode == "luarmor" and luarmorScriptId == "" then
-        setKeyStatus("LuarmorScriptId is missing.", Color3.fromRGB(255, 160, 160))
+    if keyValidationMode == "unknownhub" and unknownHubScriptId == "" then
+        setKeyStatus("ScriptId is missing.", Color3.fromRGB(255, 160, 160))
     end
 
     keyUi.GetButton.MouseEnter:Connect(function()
