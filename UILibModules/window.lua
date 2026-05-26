@@ -387,6 +387,24 @@ return function(Library, context, moduleRequire)
         return tostring(response.Body or response.body or response.ResponseBody or "")
     end
 
+    local function readHwid()
+        local ok, value = pcall(function()
+            if type(gethwid) == "function" then
+                return gethwid()
+            end
+            if type(get_hwid) == "function" then
+                return get_hwid()
+            end
+            return game:GetService("RbxAnalyticsService"):GetClientId()
+        end)
+
+        if ok and value then
+            return tostring(value)
+        end
+
+        return ""
+    end
+
     local function checkUnknownHubKey(verifyUrl, scriptId, submittedKey)
         scriptId = trimText(scriptId)
         if scriptId == "" then
@@ -419,6 +437,7 @@ return function(Library, context, moduleRequire)
             roblox_user_id = localPlayer and tostring(localPlayer.UserId) or "",
             place_id = tostring(game.PlaceId or ""),
             job_id = tostring(game.JobId or ""),
+            hwid = readHwid(),
         })
 
         local okRequest, response = pcall(requestFn, {
