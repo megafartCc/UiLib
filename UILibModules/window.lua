@@ -543,6 +543,64 @@ function Library:CreateWindow(opts)
         return trimText(value)
     end
 
+    local function publishVerifiedKey(value)
+        local keyValue = normalizeKeyInput(value)
+        if keyValue == "" then
+            return false
+        end
+
+        local function updateStore(store)
+            if type(store) ~= "table" then
+                return
+            end
+
+            store.UnknownHubKey = keyValue
+            store.unknownHubKey = keyValue
+            store.unknownhub_key = keyValue
+
+            local hub = store.UnknownHub
+            if type(hub) ~= "table" then
+                hub = {}
+                store.UnknownHub = hub
+            end
+
+            hub.key = keyValue
+            hub.Key = keyValue
+            hub.script_key = keyValue
+            hub.scriptKey = keyValue
+            hub.license_key = keyValue
+            hub.licenseKey = keyValue
+            hub.value = keyValue
+            hub.getKey = function()
+                return keyValue
+            end
+            hub.GetKey = hub.getKey
+        end
+
+        if type(getgenv) == "function" then
+            local ok, env = pcall(getgenv)
+            if ok then
+                updateStore(env)
+            end
+        end
+
+        updateStore(_G)
+
+        if type(shared) == "table" then
+            updateStore(shared)
+        end
+
+        Library.UnknownHubKey = keyValue
+        Library.key = keyValue
+        Library.Key = keyValue
+        Library.getKey = function()
+            return keyValue
+        end
+        Library.GetKey = Library.getKey
+
+        return true
+    end
+
     local function isDeveloperKey(value)
         return developerKey ~= "" and normalizeKeyInput(value) == developerKey
     end
@@ -611,6 +669,7 @@ function Library:CreateWindow(opts)
         end
         if savedKeyAccepted then
             keyGateUnlocked = true
+            publishVerifiedKey(savedKey)
         end
     end
 
@@ -3160,6 +3219,7 @@ function Library:CreateWindow(opts)
             end
         end
 
+        publishVerifiedKey(submitted)
         win._setKeyVerified(true)
         return true
     end
