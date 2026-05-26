@@ -3782,6 +3782,9 @@ function Library:CreateWindow(opts)
                 -- Lazy sub-container (only created when AddDropdown/AddSlider is called)
                 local subContainer = nil
                 local subControlRows = {}
+                local subControlSpacing = 5
+                local subBranchTopOverlap = subControlSpacing
+                local subBranchTail = 2
 
                 local function refreshSubBranches()
                     local lastRow = subControlRows[#subControlRows]
@@ -3789,8 +3792,10 @@ function Library:CreateWindow(opts)
                         local branch = childRow:FindFirstChild("SubControlBranch")
                         local vertical = branch and branch:FindFirstChild("Vertical")
                         if vertical then
-                            vertical.Position = UDim2.new(0, 2, 0, -8)
-                            vertical.Size = childRow == lastRow and UDim2.new(0, 2, 0.5, 10) or UDim2.new(0, 2, 1, 14)
+                            vertical.Position = UDim2.new(0, 2, 0, -subBranchTopOverlap)
+                            vertical.Size = childRow == lastRow
+                                and UDim2.new(0, 2, 0.5, subBranchTopOverlap + subBranchTail)
+                                or UDim2.new(0, 2, 1, subBranchTopOverlap + subControlSpacing)
                         end
                     end
                 end
@@ -3814,12 +3819,12 @@ function Library:CreateWindow(opts)
 
                     local subLayout = Instance.new("UIListLayout", subContainer)
                     subLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                    subLayout.Padding = UDim.new(0, 4)
+                    subLayout.Padding = UDim.new(0, subControlSpacing)
 
                     local subPad = Instance.new("UIPadding", subContainer)
                     subPad.PaddingLeft = UDim.new(0, 12)
-                    subPad.PaddingTop = UDim.new(0, 2)
-                    subPad.PaddingBottom = UDim.new(0, 2)
+                    subPad.PaddingTop = UDim.new(0, 0)
+                    subPad.PaddingBottom = UDim.new(0, 0)
 
                     if toggle.TrackInstance then
                         toggle:TrackInstance(subContainer, "SubContainer")
@@ -3848,8 +3853,8 @@ function Library:CreateWindow(opts)
                     sBranchVertical.Name = "Vertical"
                     sBranchVertical.BackgroundColor3 = colors.Main
                     sBranchVertical.BorderSizePixel = 0
-                    sBranchVertical.Position = UDim2.new(0, 2, 0, -8)
-                    sBranchVertical.Size = UDim2.new(0, 2, 1, 14)
+                    sBranchVertical.Position = UDim2.new(0, 2, 0, -subBranchTopOverlap)
+                    sBranchVertical.Size = UDim2.new(0, 2, 1, subBranchTopOverlap + subControlSpacing)
                     sBranchVertical.ZIndex = 5
                     bindTheme(sBranchVertical, "BackgroundColor3", "Main")
                     Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)
@@ -4276,8 +4281,8 @@ function Library:CreateWindow(opts)
                     sBranchVertical.Name = "Vertical"
                     sBranchVertical.BackgroundColor3 = colors.Main
                     sBranchVertical.BorderSizePixel = 0
-                    sBranchVertical.Position = UDim2.new(0, 2, 0, -8)
-                    sBranchVertical.Size = UDim2.new(0, 2, 1, 14)
+                    sBranchVertical.Position = UDim2.new(0, 2, 0, -subBranchTopOverlap)
+                    sBranchVertical.Size = UDim2.new(0, 2, 1, subBranchTopOverlap + subControlSpacing)
                     sBranchVertical.ZIndex = 5
                     bindTheme(sBranchVertical, "BackgroundColor3", "Main")
                     Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)
@@ -4772,8 +4777,8 @@ function Library:CreateWindow(opts)
                     sBranchVertical.Name = "Vertical"
                     sBranchVertical.BackgroundColor3 = colors.Main
                     sBranchVertical.BorderSizePixel = 0
-                    sBranchVertical.Position = UDim2.new(0, 2, 0, -8)
-                    sBranchVertical.Size = UDim2.new(0, 2, 1, 14)
+                    sBranchVertical.Position = UDim2.new(0, 2, 0, -subBranchTopOverlap)
+                    sBranchVertical.Size = UDim2.new(0, 2, 1, subBranchTopOverlap + subControlSpacing)
                     sBranchVertical.ZIndex = 5
                     bindTheme(sBranchVertical, "BackgroundColor3", "Main")
                     Instance.new("UICorner", sBranchVertical).CornerRadius = UDim.new(1, 0)

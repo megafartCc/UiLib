@@ -3,6 +3,8 @@ return function(Library, context)
     local DROPDOWN_ARROW_CLOSED = utf8.char(9660)
     local DROPDOWN_ARROW_OPEN = utf8.char(9650)
     local DROPDOWN_MAX_VISIBLE_OPTIONS = 8
+    local SUB_CONTROL_SPACING = 5
+    local SUB_BRANCH_TOP_OVERLAP = SUB_CONTROL_SPACING
 
     local function callbacksSuppressed()
         return type(Library._callbacksSuppressed) == "function" and Library:_callbacksSuppressed()
@@ -449,8 +451,8 @@ return function(Library, context)
         vertical.Name = "Vertical"
         vertical.BackgroundColor3 = branchColor
         vertical.BorderSizePixel = 0
-        vertical.Position = UDim2.new(0, 2, 0, -8)
-        vertical.Size = UDim2.new(0, 2, 1, 14)
+        vertical.Position = UDim2.new(0, 2, 0, -SUB_BRANCH_TOP_OVERLAP)
+        vertical.Size = UDim2.new(0, 2, 1, SUB_BRANCH_TOP_OVERLAP + SUB_CONTROL_SPACING)
         vertical.ZIndex = branch.ZIndex
         Instance.new("UICorner", vertical).CornerRadius = UDim.new(1, 0)
 
