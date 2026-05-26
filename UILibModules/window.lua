@@ -405,12 +405,13 @@ return function(Library, context, moduleRequire)
         return ""
     end
 
-    local function checkUnknownHubKey(verifyUrl, scriptId, submittedKey)
+    local function checkUnknownHubKey(verifyUrl, scriptId, projectId, submittedKey)
         scriptId = trimText(scriptId)
-        if scriptId == "" then
+        projectId = trimText(projectId)
+        if scriptId == "" and projectId == "" then
             return false, {
-                code = "UNKNOWNHUB_SCRIPT_ID_MISSING",
-                message = "ScriptId is missing.",
+                code = "UNKNOWNHUB_TARGET_ID_MISSING",
+                message = "ScriptId or ProjectId is missing.",
             }
         end
 
@@ -434,6 +435,7 @@ return function(Library, context, moduleRequire)
         local body = HttpService:JSONEncode({
             key = keyValue,
             script_id = scriptId,
+            project_id = projectId,
             roblox_user_id = localPlayer and tostring(localPlayer.UserId) or "",
             place_id = tostring(game.PlaceId or ""),
             job_id = tostring(game.JobId or ""),
@@ -493,10 +495,11 @@ function Library:CreateWindow(opts)
     local keySystemEnabled = opts.KeySystem == true
     local requiredKey = trimText(opts.Key)
     local unknownHubScriptId = trimText(opts.UnknownHubScriptId or opts.UnknownHubScriptID or opts.ScriptId or opts.ScriptID)
+    local unknownHubProjectId = trimText(opts.UnknownHubProjectId or opts.UnknownHubProjectID or opts.ProjectId or opts.ProjectID)
     local unknownHubVerifyUrl = trimText(opts.UnknownHubVerifyUrl or opts.KeyVerifyUrl or "https://unknownhub.win/api/lua/key/verify")
     local unknownHubKeySystemEnabled = opts.UnknownHubKey == true
         or opts.UnknownHubKeySystem == true
-        or (keySystemEnabled and requiredKey == "" and unknownHubScriptId ~= "")
+        or (keySystemEnabled and requiredKey == "" and (unknownHubScriptId ~= "" or unknownHubProjectId ~= ""))
     local developerKey = trimText(opts.DeveloperKey or opts.DevKey or self.Config.DeveloperKey or "")
     local keyStorageTag = opts.KeyStorageTag
     local keyLink = opts.GetKeyLink or opts.KeyLink
@@ -546,8 +549,8 @@ function Library:CreateWindow(opts)
     local keyValidationBusy = false
     local initialKeyInputText = ""
 
-    if waitForKeyVerification and keyValidationMode == "unknownhub" and unknownHubScriptId == "" then
-        error("UnknownHub key system is enabled but ScriptId is missing.")
+    if waitForKeyVerification and keyValidationMode == "unknownhub" and unknownHubScriptId == "" and unknownHubProjectId == "" then
+        error("UnknownHub key system is enabled but ScriptId or ProjectId is missing.")
     end
 
     if type(keyStorageTag) ~= "string" or keyStorageTag == "" then
@@ -659,7 +662,7 @@ function Library:CreateWindow(opts)
         end
 
         if keyValidationMode == "unknownhub" then
-            return checkUnknownHubKey(unknownHubVerifyUrl, unknownHubScriptId, submitted)
+            return checkUnknownHubKey(unknownHubVerifyUrl, unknownHubScriptId, unknownHubProjectId, submitted)
         end
 
         return true, {
@@ -680,7 +683,7 @@ function Library:CreateWindow(opts)
         if savedKey ~= "" then
             if keyValidationMode == "hardcoded" then
                 savedKeyAccepted = isAcceptedKey(savedKey)
-            elseif keyValidationMode == "unknownhub" and unknownHubScriptId ~= "" then
+            elseif keyValidationMode == "unknownhub" and (unknownHubScriptId ~= "" or unknownHubProjectId ~= "") then
                 local okSaved = nil
                 okSaved = select(1, validateSubmittedKey(savedKey))
                 savedKeyAccepted = okSaved == true
@@ -3160,8 +3163,8 @@ function Library:CreateWindow(opts)
         if code == "KEY_EMPTY" then
             return "Enter a key first.", Color3.fromRGB(255, 160, 160)
         end
-        if lowerCode == "unknownhub_script_id_missing" or lowerCode == "missing_script_id" then
-            return "ScriptId is missing.", Color3.fromRGB(255, 160, 160)
+        if lowerCode == "unknownhub_target_id_missing" or lowerCode == "unknownhub_script_id_missing" or lowerCode == "missing_script_id" then
+            return "ScriptId or ProjectId is missing.", Color3.fromRGB(255, 160, 160)
         end
         if lowerCode == "unknownhub_request_unavailable" or lowerCode == "unknownhub_request_failed" or lowerCode == "unknownhub_bad_response" then
             return tostring(message or "Key verification failed."), Color3.fromRGB(255, 188, 120)
@@ -3232,6 +3235,7 @@ function Library:CreateWindow(opts)
                 verified = true,
                 mode = keyValidationMode,
                 script_id = unknownHubScriptId,
+                project_id = unknownHubProjectId,
             })
             if not saved then
                 warn("[UILib] Key accepted, but saving it failed: " .. tostring(saveErr))
@@ -3243,8 +3247,8 @@ function Library:CreateWindow(opts)
         return true
     end
 
-    if keyValidationMode == "unknownhub" and unknownHubScriptId == "" then
-        setKeyStatus("ScriptId is missing.", Color3.fromRGB(255, 160, 160))
+    if keyValidationMode == "unknownhub" and unknownHubScriptId == "" and unknownHubProjectId == "" then
+        setKeyStatus("ScriptId or ProjectId is missing.", Color3.fromRGB(255, 160, 160))
     end
 
     keyUi.GetButton.MouseEnter:Connect(function()
