@@ -393,14 +393,23 @@ return function(Library, context, moduleRequire)
                 print(get_hwid())
                 return get_hwid()
             end
-            warn("UnknownHub HWID check: get_hwid is unavailable.")
-            return ""
+            return nil
         end)
 
-        if ok and value then
+        if ok and value and tostring(value) ~= "" then
             return tostring(value)
         end
 
+        local clientOk, clientId = pcall(function()
+            print(game:GetService("RbxAnalyticsService"):GetClientId())
+            return game:GetService("RbxAnalyticsService"):GetClientId()
+        end)
+
+        if clientOk and clientId and tostring(clientId) ~= "" then
+            return tostring(clientId)
+        end
+
+        warn("UnknownHub HWID check: get_hwid and RbxAnalyticsService:GetClientId failed.")
         return ""
     end
 
