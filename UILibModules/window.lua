@@ -390,8 +390,10 @@ return function(Library, context, moduleRequire)
     local function readHwid()
         local ok, value = pcall(function()
             if type(get_hwid) == "function" then
+                print(get_hwid())
                 return get_hwid()
             end
+            warn("UnknownHub HWID check: get_hwid is unavailable.")
             return ""
         end)
 
