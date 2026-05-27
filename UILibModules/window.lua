@@ -389,13 +389,10 @@ return function(Library, context, moduleRequire)
 
     local function readHwid()
         local ok, value = pcall(function()
-            if type(gethwid) == "function" then
-                return gethwid()
-            end
             if type(get_hwid) == "function" then
                 return get_hwid()
             end
-            return game:GetService("RbxAnalyticsService"):GetClientId()
+            return ""
         end)
 
         if ok and value then
