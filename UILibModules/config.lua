@@ -19,11 +19,8 @@ return function(Library, context)
     Library._configName = nil
     Library._windowStorageName = nil
     Library._autoSave = false
-    Library._autoSaveDelay = 8
+    Library._autoSaveDelay = 2
     Library._dirty = false
-    Library._lastDirtyAt = 0
-    Library._lastSavedConfigBlob = nil
-    Library._configSaving = false
     Library._controlSyncDepth = 0
     Library._configReplayDepth = 0
     Library._configItemOrder = {}
@@ -296,11 +293,6 @@ return function(Library, context)
             return false, "json encode failed"
         end
 
-        if encoded == self._lastSavedConfigBlob then
-            self._dirty = false
-            return true, path
-        end
-
         local paths = {}
         if self:_ensureFolder() then
             table.insert(paths, path)
@@ -315,7 +307,6 @@ return function(Library, context)
         for _, candidatePath in ipairs(paths) do
             local okWrite, writeErr = pcall(writefile, candidatePath, encoded)
             if okWrite then
-                self._lastSavedConfigBlob = encoded
                 self._dirty = false
                 return true, candidatePath
             end
@@ -363,7 +354,6 @@ return function(Library, context)
         self._configMutationSerial = (self._configMutationSerial or 0) + 1
         if not self._autoSave then return end
         self._dirty = true
-        self._lastDirtyAt = os.clock()
     end
 
     SharedState.ActiveLibrary = Library
@@ -375,24 +365,11 @@ return function(Library, context)
                 task.wait(2)
 
                 local activeLibrary = SharedState.ActiveLibrary
-                if activeLibrary and activeLibrary._autoSave and activeLibrary._dirty and not activeLibrary._configSaving then
-                    local delaySeconds = tonumber(activeLibrary._autoSaveDelay) or 8
-                    local lastDirtyAt = tonumber(activeLibrary._lastDirtyAt) or 0
-
-                    if os.clock() - lastDirtyAt >= delaySeconds then
-                        activeLibrary._dirty = false
-                        activeLibrary._configSaving = true
-
-                        local ok = pcall(function()
-                            activeLibrary:SaveConfig()
-                        end)
-
-                        activeLibrary._configSaving = false
-                        if not ok then
-                            activeLibrary._dirty = true
-                            activeLibrary._lastDirtyAt = os.clock()
-                        end
-                    end
+                if activeLibrary and activeLibrary._autoSave and activeLibrary._dirty then
+                    activeLibrary._dirty = false
+                    pcall(function()
+                        activeLibrary:SaveConfig()
+                    end)
                 end
             end
         end)
