@@ -536,13 +536,12 @@ function Library:CreateWindow(opts)
     self._loadedConfigData = nil
     self._configReplayToken = 0
 
-    if unknownHubKeySystemEnabled and trimText(keyLink) == "" then
-        keyLink = "https://unknownhub.win/#get-key"
-    end
-
     local hardcodedKeySystemActive = (not unknownHubKeySystemEnabled) and keySystemEnabled and requiredKey ~= ""
     local keyValidationMode = unknownHubKeySystemEnabled and "unknownhub" or (hardcodedKeySystemActive and "hardcoded" or "none")
     local keySystemActive = unknownHubKeySystemEnabled or hardcodedKeySystemActive
+    if keySystemActive and trimText(keyLink) == "" then
+        keyLink = "https://discord.gg/unknownhub"
+    end
     local waitForKeyVerification = keySystemActive and opts.WaitForKey ~= false and opts.BlockUntilKeyVerified ~= false
     local keyGateUnlocked = not keySystemActive
     local keyContentBootstrapped = false
