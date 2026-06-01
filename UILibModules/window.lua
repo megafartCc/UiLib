@@ -388,28 +388,32 @@ return function(Library, context, moduleRequire)
     end
 
     local function readHwid()
-        local ok, value = pcall(function()
-            if type(get_hwid) == "function" then
-                print(get_hwid())
-                return get_hwid()
+        local sources = {
+            function()
+                if type(get_hwid) == "function" then
+                    return get_hwid()
+                end
+                return nil
+            end,
+            function()
+                if type(gethwid) == "function" then
+                    return gethwid()
+                end
+                return nil
+            end,
+            function()
+                return game:GetService("RbxAnalyticsService"):GetClientId()
+            end,
+        }
+
+        for _, sourceFn in ipairs(sources) do
+            local ok, value = pcall(sourceFn)
+            if ok and value and tostring(value) ~= "" then
+                return tostring(value)
             end
-            return nil
-        end)
-
-        if ok and value and tostring(value) ~= "" then
-            return tostring(value)
         end
 
-        local clientOk, clientId = pcall(function()
-            print(game:GetService("RbxAnalyticsService"):GetClientId())
-            return game:GetService("RbxAnalyticsService"):GetClientId()
-        end)
-
-        if clientOk and clientId and tostring(clientId) ~= "" then
-            return tostring(clientId)
-        end
-
-        warn("UnknownHub HWID check: get_hwid and RbxAnalyticsService:GetClientId failed.")
+        warn("UnknownHub HWID check: no supported HWID source available.")
         return ""
     end
 
