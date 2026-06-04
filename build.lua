@@ -8,7 +8,11 @@
 ]]
 
 local moduleCache = {}
-local remoteModuleBase = "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules/"
+local remoteModuleBases = {
+    "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules/",
+    "https://raw.githubusercontent.com/megafartCc/UiLib/refs/heads/main/UILibModules/",
+    "https://cdn.jsdelivr.net/gh/megafartCc/UiLib@main/UILibModules/",
+}
 local remoteCacheTag = tostring(os.time())
 
 local function normalizePath(path)
@@ -75,10 +79,65 @@ local function withCacheTag(url)
     return url .. separator .. "v=" .. remoteCacheTag
 end
 
+local function previewText(value)
+    local preview = tostring(value or "")
+    preview = string.gsub(preview, "%s+", " ")
+    if #preview > 140 then
+        preview = string.sub(preview, 1, 140) .. "..."
+    end
+    return preview
+end
+
+local function validateModuleSource(source, path, url)
+    if type(source) ~= "string" or source == "" then
+        return nil, "empty response from " .. tostring(url)
+    end
+
+    local first = string.match(source, "^%s*(.)")
+    local prefix = string.lower(string.sub(source, 1, 240))
+    if first == "<" or string.find(prefix, "<!doctype", 1, true) or string.find(prefix, "<html", 1, true) then
+        return nil, "HTML response for " .. tostring(path) .. " from " .. tostring(url) .. ": " .. previewText(source)
+    end
+
+    if string.match(source, "^%s*%d+%s*:") then
+        return nil, "HTTP error body for " .. tostring(path) .. " from " .. tostring(url) .. ": " .. previewText(source)
+    end
+
+    return source
+end
+
+local function fetchModuleSource(baseUrl, modulePath, normalized)
+    local url = withCacheTag(baseUrl .. modulePath)
+    local ok, source = pcall(function()
+        return game:HttpGet(url)
+    end)
+
+    if not ok then
+        return nil, "request failed for " .. tostring(normalized) .. " from " .. tostring(url) .. ": " .. tostring(source)
+    end
+
+    return validateModuleSource(source, normalized, url)
+end
+
 local function readModuleSource(path)
     local normalized = normalizePath(path)
     if canHttpGet() then
-        return game:HttpGet(withCacheTag(remoteModuleBase .. remoteModulePath(normalized)))
+        local modulePath = remoteModulePath(normalized)
+        local errors = {}
+
+        for _, baseUrl in ipairs(remoteModuleBases) do
+            local source, err = fetchModuleSource(baseUrl, modulePath, normalized)
+            if source then
+                return source
+            end
+
+            table.insert(errors, err)
+            if type(task) == "table" and type(task.wait) == "function" then
+                task.wait(0.15)
+            end
+        end
+
+        error("UILib module source download failed for " .. tostring(normalized) .. ": " .. table.concat(errors, " | "))
     end
     error("UILib module source not found: " .. tostring(normalized))
 end
