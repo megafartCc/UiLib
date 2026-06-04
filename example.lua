@@ -19,7 +19,7 @@ local Window = Library:CreateWindow({
 
 Library:Notify({
     Title = "UILib",
-    Text = "Mobile preview loaded",
+    Text = "Mddd",
     Duration = 2.5,
 })
 
