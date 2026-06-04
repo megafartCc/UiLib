@@ -15,13 +15,11 @@ return function(moduleRequire)
     local Animator = createAnimator(RunService)
 
     local function getHiddenParent()
-        if Client then
-            local playerGui = Client:FindFirstChildOfClass("PlayerGui") or Client:WaitForChild("PlayerGui")
-            if playerGui then
-                return playerGui
-            end
+        if typeof(gethui) == "function" then
+            return gethui()
         end
-        error("UILib requires PlayerGui for UI parenting")
+
+        error("UILib requires gethui() for UI parenting")
     end
 
     local function protectGui(gui)
