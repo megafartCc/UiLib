@@ -69,11 +69,22 @@ return function(Library, context)
         local textMeasureCache = {}
         local renderConnection = nil
         local playerEspGui = nil
+        local playerEspGuiReset = false
 
         local function getEspGui()
             local ok, parent = pcall(context.getHiddenParent)
             if not ok or not parent then
                 return nil
+            end
+
+            if not playerEspGuiReset then
+                playerEspGuiReset = true
+                local staleGui = parent:FindFirstChild("UnknownHubPlayerEsp")
+                if staleGui then
+                    pcall(function()
+                        staleGui:Destroy()
+                    end)
+                end
             end
 
             if playerEspGui and playerEspGui.Parent == parent then
