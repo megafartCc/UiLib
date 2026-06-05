@@ -157,11 +157,25 @@ return function(Library, context)
             end
         end
 
+        local function snap(value)
+            return math.floor((tonumber(value) or 0) + 0.5)
+        end
+
+        local function snapPoint(point)
+            if not point then
+                return nil
+            end
+            return V2(snap(point.X), snap(point.Y))
+        end
+
         local function updateLine(line, fromPoint, toPoint, color, thickness)
             if not line or not fromPoint or not toPoint then
                 setVisible(line, false)
                 return
             end
+
+            fromPoint = snapPoint(fromPoint)
+            toPoint = snapPoint(toPoint)
 
             local delta = toPoint - fromPoint
             local length = delta.Magnitude
@@ -171,7 +185,7 @@ return function(Library, context)
             end
 
             line.BackgroundColor3 = color
-            line.Size = UDim2.fromOffset(length, thickness or 1)
+            line.Size = UDim2.fromOffset(snap(length), thickness or 1)
             line.Position = UDim2.fromOffset((fromPoint.X + toPoint.X) * 0.5, (fromPoint.Y + toPoint.Y) * 0.5)
             line.Rotation = math.deg((math.atan2 or math.atan)(delta.Y, delta.X))
             line.Visible = true
@@ -189,6 +203,62 @@ return function(Library, context)
             local fromPoint = fromPosition and project(camera, fromPosition)
             local toPoint = toPosition and project(camera, toPosition)
             updateLine(line, fromPoint, toPoint, color, thickness)
+        end
+
+        local function getCharacterScreenBounds(camera, character)
+            local ok, cframe, size = pcall(function()
+                return character:GetBoundingBox()
+            end)
+            if not ok or not cframe or not size then
+                return nil
+            end
+
+            local half = size * 0.5
+            local corners = {
+                cframe * Vector3.new(-half.X, -half.Y, -half.Z),
+                cframe * Vector3.new(half.X, -half.Y, -half.Z),
+                cframe * Vector3.new(-half.X, half.Y, -half.Z),
+                cframe * Vector3.new(half.X, half.Y, -half.Z),
+                cframe * Vector3.new(-half.X, -half.Y, half.Z),
+                cframe * Vector3.new(half.X, -half.Y, half.Z),
+                cframe * Vector3.new(-half.X, half.Y, half.Z),
+                cframe * Vector3.new(half.X, half.Y, half.Z),
+            }
+
+            local minX, minY = math.huge, math.huge
+            local maxX, maxY = -math.huge, -math.huge
+            local visibleCount = 0
+
+            for _, worldPosition in ipairs(corners) do
+                local point, onScreen = camera:WorldToViewportPoint(worldPosition)
+                if point.Z > 0 then
+                    minX = math.min(minX, point.X)
+                    minY = math.min(minY, point.Y)
+                    maxX = math.max(maxX, point.X)
+                    maxY = math.max(maxY, point.Y)
+                    if onScreen then
+                        visibleCount = visibleCount + 1
+                    end
+                end
+            end
+
+            if visibleCount < 2 or minX == math.huge then
+                return nil
+            end
+
+            local width = math.max(14, maxX - minX)
+            local height = math.max(28, maxY - minY)
+            local centerX = (minX + maxX) * 0.5
+            local centerY = (minY + maxY) * 0.5
+
+            return {
+                Left = snap(centerX - width * 0.5),
+                Right = snap(centerX + width * 0.5),
+                Top = snap(centerY - height * 0.5),
+                Bottom = snap(centerY + height * 0.5),
+                CenterX = snap(centerX),
+                CenterY = snap(centerY),
+            }
         end
 
         local function makePlayerData(player)
@@ -366,18 +436,14 @@ return function(Library, context)
                         if distance > settings.MaxDistance then
                             hideData(data)
                         else
-                            local centerPoint = project(camera, root.Position)
-                            local topPoint = project(camera, root.Position + Vector3.new(0, 3, 0))
-                            local bottomPoint = project(camera, root.Position - Vector3.new(0, 3, 0))
-                            if not centerPoint or not topPoint or not bottomPoint then
+                            local bounds = getCharacterScreenBounds(camera, character)
+                            if not bounds then
                                 hideData(data)
                             else
-                                local height = math.max(28, math.abs(bottomPoint.Y - topPoint.Y))
-                                local width = math.max(14, height * 0.5)
-                                local left = centerPoint.X - width * 0.5
-                                local right = centerPoint.X + width * 0.5
-                                local top = centerPoint.Y - height * 0.5
-                                local bottom = centerPoint.Y + height * 0.5
+                                local left = bounds.Left
+                                local right = bounds.Right
+                                local top = bounds.Top
+                                local bottom = bounds.Bottom
                                 local color = getPlayerColor(player)
 
                                 if settings.Box then
@@ -392,7 +458,7 @@ return function(Library, context)
                                 if data.name then
                                     data.name.Text = player.DisplayName or player.Name
                                     data.name.TextColor3 = color
-                                    data.name.Position = UDim2.fromOffset(centerPoint.X, top - 18)
+                                    data.name.Position = UDim2.fromOffset(bounds.CenterX, top - 8)
                                     data.name.Visible = settings.Name
                                 end
 
@@ -414,7 +480,7 @@ return function(Library, context)
                                 end
 
                                 if settings.Tracers then
-                                    updateLine(data.tracer, V2(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y - 8), V2(centerPoint.X, bottom), color, 1)
+                                    updateLine(data.tracer, V2(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y - 8), V2(bounds.CenterX, bottom), color, 1)
                                 else
                                     setVisible(data.tracer, false)
                                 end
@@ -428,7 +494,7 @@ return function(Library, context)
                                 if data.heldItem then
                                     local tool = character:FindFirstChildWhichIsA("Tool")
                                     data.heldItem.Text = tool and tool.Name or ""
-                                    data.heldItem.Position = UDim2.fromOffset(centerPoint.X, bottom + 10)
+                                    data.heldItem.Position = UDim2.fromOffset(bounds.CenterX, bottom + 10)
                                     data.heldItem.Visible = settings.HeldItem and tool ~= nil
                                 end
                             end
