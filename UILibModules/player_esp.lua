@@ -70,6 +70,12 @@ return function(Library, context)
         local renderConnection = nil
         local playerEspGui = nil
         local playerEspGuiReset = false
+        local linePoints = {}
+        local noSmoothLines = {}
+        local LINE_SMOOTH_ALPHA = 0.58
+        local LINE_RESET_DISTANCE = 90
+        local BOUNDS_SMOOTH_ALPHA = 0.62
+        local BOUNDS_RESET_DISTANCE = 90
 
         local function getEspGui()
             local ok, parent = pcall(context.getHiddenParent)
@@ -111,6 +117,8 @@ return function(Library, context)
         local function destroyObject(object)
             if object then
                 pcall(function()
+                    linePoints[object] = nil
+                    noSmoothLines[object] = nil
                     object:Destroy()
                 end)
             end
@@ -162,6 +170,9 @@ return function(Library, context)
 
         local function setVisible(object, visible)
             if object then
+                if visible ~= true then
+                    linePoints[object] = nil
+                end
                 object.Visible = visible == true
             end
         end
@@ -180,27 +191,50 @@ return function(Library, context)
             if not point then
                 return nil
             end
-            return V2(snap(point.X), snap(point.Y))
+            return V2(point.X, point.Y)
+        end
+
+        local function smoothPoint(previous, current)
+            if not previous then
+                return current
+            end
+            if (current - previous).Magnitude > LINE_RESET_DISTANCE then
+                return current
+            end
+            return previous + ((current - previous) * LINE_SMOOTH_ALPHA)
         end
 
         local function updateLine(line, fromPoint, toPoint, color, thickness)
             if not line or not fromPoint or not toPoint then
+                if line then
+                    linePoints[line] = nil
+                end
                 setVisible(line, false)
                 return
             end
 
             fromPoint = snapPoint(fromPoint)
             toPoint = snapPoint(toPoint)
+            if not noSmoothLines[line] then
+                local state = linePoints[line] or {}
+                fromPoint = smoothPoint(state.From, fromPoint)
+                toPoint = smoothPoint(state.To, toPoint)
+                linePoints[line] = {
+                    From = fromPoint,
+                    To = toPoint,
+                }
+            end
 
             local delta = toPoint - fromPoint
             local length = delta.Magnitude
             if length < 1 then
+                linePoints[line] = nil
                 setVisible(line, false)
                 return
             end
 
             line.BackgroundColor3 = color
-            line.Size = UDim2.fromOffset(snap(length), thickness or 1)
+            line.Size = UDim2.fromOffset(length, thickness or 1)
             line.Position = UDim2.fromOffset((fromPoint.X + toPoint.X) * 0.5, (fromPoint.Y + toPoint.Y) * 0.5)
             line.Rotation = math.deg((math.atan2 or math.atan)(delta.Y, delta.X))
             line.Visible = true
@@ -235,7 +269,7 @@ return function(Library, context)
             end
 
             local resolvedBoxWidth = tonumber(boxWidth) or 0
-            local maxWidth = math.max(64, math.min(320, snap(resolvedBoxWidth + 16)))
+            local maxWidth = math.max(96, math.min(440, snap(resolvedBoxWidth + 56)))
             local textSize = 12
             if resolvedBoxWidth >= 90 then
                 textSize = 13
@@ -282,6 +316,7 @@ return function(Library, context)
             local data = {
                 box = {},
                 skeleton = {},
+                bounds = nil,
             }
 
             for index = 1, 4 do
@@ -333,6 +368,7 @@ return function(Library, context)
 
             hideList(data.box)
             hideList(data.skeleton)
+            data.bounds = nil
             setVisible(data.tracer, false)
             setVisible(data.healthBack, false)
             setVisible(data.healthFill, false)
@@ -340,19 +376,6 @@ return function(Library, context)
             setVisible(data.team, false)
             setVisible(data.heldItem, false)
         end
-
-        local r15SkeletonPairs = {
-            { "Head", "UpperTorso" },
-            { "UpperTorso", "LowerTorso" },
-            { "UpperTorso", "LeftUpperArm" },
-            { "LeftUpperArm", "LeftLowerArm" },
-            { "UpperTorso", "RightUpperArm" },
-            { "RightUpperArm", "RightLowerArm" },
-            { "LowerTorso", "LeftUpperLeg" },
-            { "LeftUpperLeg", "LeftLowerLeg" },
-            { "LowerTorso", "RightUpperLeg" },
-            { "RightUpperLeg", "RightLowerLeg" },
-        }
 
         local r6LowerBodyParts = {
             "Left Leg",
@@ -366,6 +389,29 @@ return function(Library, context)
             "RightLowerLeg",
             "LeftUpperLeg",
             "RightUpperLeg",
+        }
+
+        local bodyBoundsPartNames = {
+            Head = true,
+            Torso = true,
+            ["Left Arm"] = true,
+            ["Right Arm"] = true,
+            ["Left Leg"] = true,
+            ["Right Leg"] = true,
+            UpperTorso = true,
+            LowerTorso = true,
+            LeftUpperArm = true,
+            LeftLowerArm = true,
+            LeftHand = true,
+            RightUpperArm = true,
+            RightLowerArm = true,
+            RightHand = true,
+            LeftUpperLeg = true,
+            LeftLowerLeg = true,
+            LeftFoot = true,
+            RightUpperLeg = true,
+            RightLowerLeg = true,
+            RightFoot = true,
         }
 
         local function getPart(character, name)
@@ -383,6 +429,40 @@ return function(Library, context)
             return part.CFrame:PointToWorldSpace(offset)
         end
 
+        local function partEnd(part, yScale)
+            if not part or not part.Parent then
+                return nil
+            end
+            return pointFromPart(part, Vector3.new(0, part.Size.Y * yScale, 0))
+        end
+
+        local function midpoint(a, b, fallback)
+            if a and b then
+                return (a + b) * 0.5
+            end
+            return fallback
+        end
+
+        local function collectJointPositions(character, jointNames)
+            local wanted = {}
+            local found = {}
+            for _, jointName in ipairs(jointNames) do
+                wanted[jointName] = true
+            end
+
+            for _, inst in ipairs(character:GetDescendants()) do
+                if wanted[inst.Name] and inst:IsA("Motor6D") then
+                    if inst.Part0 and inst.Part0.Parent then
+                        found[inst.Name] = inst.Part0.CFrame:PointToWorldSpace(inst.C0.Position)
+                    elseif inst.Part1 and inst.Part1.Parent then
+                        found[inst.Name] = inst.Part1.CFrame:PointToWorldSpace(inst.C1.Position)
+                    end
+                end
+            end
+
+            return found
+        end
+
         local function getR6SkeletonSegments(character)
             local head = getPart(character, "Head")
             local torso = getPart(character, "Torso")
@@ -391,49 +471,160 @@ return function(Library, context)
             local leftLeg = getPart(character, "Left Leg")
             local rightLeg = getPart(character, "Right Leg")
 
-            if not torso then
+            if not head or not torso then
                 return {}
             end
 
             local torsoSize = torso.Size
-            local armLength = math.max(leftArm and leftArm.Size.Y or 0, rightArm and rightArm.Size.Y or 0, torsoSize.Y * 0.9)
-            local legLength = math.max(leftLeg and leftLeg.Size.Y or 0, rightLeg and rightLeg.Size.Y or 0, torsoSize.Y)
+            local joints = collectJointPositions(character, {
+                "Neck",
+                "Left Shoulder",
+                "Right Shoulder",
+                "Left Hip",
+                "Right Hip",
+            })
 
-            local neck = pointFromPart(torso, Vector3.new(0, torsoSize.Y * 0.50, 0))
-            local headBase = head and pointFromPart(head, Vector3.new(0, -head.Size.Y * 0.42, 0)) or neck
-            local pelvis = pointFromPart(torso, Vector3.new(0, -torsoSize.Y * 0.48, 0))
-            local leftShoulder = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.54, torsoSize.Y * 0.28, 0))
-            local rightShoulder = pointFromPart(torso, Vector3.new(torsoSize.X * 0.54, torsoSize.Y * 0.28, 0))
-            local leftHip = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.24, -torsoSize.Y * 0.50, 0))
-            local rightHip = pointFromPart(torso, Vector3.new(torsoSize.X * 0.24, -torsoSize.Y * 0.50, 0))
-            local leftHand = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.74, torsoSize.Y * 0.25 - armLength * 0.72, 0))
-            local rightHand = pointFromPart(torso, Vector3.new(torsoSize.X * 0.74, torsoSize.Y * 0.25 - armLength * 0.72, 0))
-            local leftFoot = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.30, -torsoSize.Y * 0.50 - legLength * 0.82, 0))
-            local rightFoot = pointFromPart(torso, Vector3.new(torsoSize.X * 0.30, -torsoSize.Y * 0.50 - legLength * 0.82, 0))
+            local neck = joints.Neck or partEnd(torso, 0.5)
+            local leftShoulder = joints["Left Shoulder"] or pointFromPart(torso, Vector3.new(-torsoSize.X * 0.5, torsoSize.Y * 0.35, 0))
+            local rightShoulder = joints["Right Shoulder"] or pointFromPart(torso, Vector3.new(torsoSize.X * 0.5, torsoSize.Y * 0.35, 0))
+            local leftHip = joints["Left Hip"] or pointFromPart(torso, Vector3.new(-torsoSize.X * 0.25, -torsoSize.Y * 0.5, 0))
+            local rightHip = joints["Right Hip"] or pointFromPart(torso, Vector3.new(torsoSize.X * 0.25, -torsoSize.Y * 0.5, 0))
+            local pelvis = midpoint(leftHip, rightHip, partEnd(torso, -0.5))
+            local shoulderCenter = midpoint(leftShoulder, rightShoulder, neck)
+            local leftArmTop = partEnd(leftArm, 0.5) or leftShoulder
+            local leftArmBottom = partEnd(leftArm, -0.5) or leftShoulder
+            local rightArmTop = partEnd(rightArm, 0.5) or rightShoulder
+            local rightArmBottom = partEnd(rightArm, -0.5) or rightShoulder
+            local leftLegTop = partEnd(leftLeg, 0.5) or leftHip
+            local leftLegBottom = partEnd(leftLeg, -0.5) or leftHip
+            local rightLegTop = partEnd(rightLeg, 0.5) or rightHip
+            local rightLegBottom = partEnd(rightLeg, -0.5) or rightHip
 
             return {
-                { headBase, neck },
-                { neck, pelvis },
+                { head.Position, neck },
+                { neck, shoulderCenter },
+                { shoulderCenter, pelvis },
                 { leftShoulder, rightShoulder },
-                { leftShoulder, leftHand },
-                { rightShoulder, rightHand },
-                { leftHip, rightHip },
-                { leftHip, leftFoot },
-                { rightHip, rightFoot },
+                { leftShoulder, leftArmTop },
+                { leftArmTop, leftArmBottom },
+                { rightShoulder, rightArmTop },
+                { rightArmTop, rightArmBottom },
+                { leftLegTop, rightLegTop },
+                { pelvis, leftLegTop },
+                { leftLegTop, leftLegBottom },
+                { pelvis, rightLegTop },
+                { rightLegTop, rightLegBottom },
             }
         end
 
         local function getR15SkeletonSegments(character)
-            local segments = {}
-            for _, pair in ipairs(r15SkeletonPairs) do
-                local fromPart = getPart(character, pair[1])
-                local toPart = getPart(character, pair[2])
-                table.insert(segments, {
-                    fromPart and fromPart.Position,
-                    toPart and toPart.Position,
-                })
+            local head = getPart(character, "Head")
+            local upperTorso = getPart(character, "UpperTorso")
+            local lowerTorso = getPart(character, "LowerTorso")
+            local leftUpperArm = getPart(character, "LeftUpperArm")
+            local leftLowerArm = getPart(character, "LeftLowerArm")
+            local leftHand = getPart(character, "LeftHand")
+            local rightUpperArm = getPart(character, "RightUpperArm")
+            local rightLowerArm = getPart(character, "RightLowerArm")
+            local rightHand = getPart(character, "RightHand")
+            local leftUpperLeg = getPart(character, "LeftUpperLeg")
+            local leftLowerLeg = getPart(character, "LeftLowerLeg")
+            local leftFoot = getPart(character, "LeftFoot")
+            local rightUpperLeg = getPart(character, "RightUpperLeg")
+            local rightLowerLeg = getPart(character, "RightLowerLeg")
+            local rightFoot = getPart(character, "RightFoot")
+
+            if not head or not upperTorso or not lowerTorso then
+                return {}
             end
-            return segments
+
+            local joints = collectJointPositions(character, {
+                "Neck",
+                "Waist",
+                "LeftShoulder",
+                "LeftElbow",
+                "LeftWrist",
+                "RightShoulder",
+                "RightElbow",
+                "RightWrist",
+                "LeftHip",
+                "LeftKnee",
+                "LeftAnkle",
+                "RightHip",
+                "RightKnee",
+                "RightAnkle",
+            })
+
+            local neck = joints.Neck or partEnd(upperTorso, 0.5)
+            local waist = joints.Waist or midpoint(upperTorso.Position, lowerTorso.Position, partEnd(lowerTorso, 0.5))
+            local leftShoulder = joints.LeftShoulder or (leftUpperArm and midpoint(upperTorso.Position, leftUpperArm.Position, leftUpperArm.Position))
+            local rightShoulder = joints.RightShoulder or (rightUpperArm and midpoint(upperTorso.Position, rightUpperArm.Position, rightUpperArm.Position))
+            local leftElbow = joints.LeftElbow or (leftUpperArm and leftLowerArm and midpoint(leftUpperArm.Position, leftLowerArm.Position, leftLowerArm.Position))
+            local rightElbow = joints.RightElbow or (rightUpperArm and rightLowerArm and midpoint(rightUpperArm.Position, rightLowerArm.Position, rightLowerArm.Position))
+            local leftWrist = joints.LeftWrist or (leftLowerArm and leftHand and midpoint(leftLowerArm.Position, leftHand.Position, leftHand.Position))
+            local rightWrist = joints.RightWrist or (rightLowerArm and rightHand and midpoint(rightLowerArm.Position, rightHand.Position, rightHand.Position))
+            local leftHip = joints.LeftHip or (leftUpperLeg and midpoint(lowerTorso.Position, leftUpperLeg.Position, leftUpperLeg.Position))
+            local rightHip = joints.RightHip or (rightUpperLeg and midpoint(lowerTorso.Position, rightUpperLeg.Position, rightUpperLeg.Position))
+            local leftKnee = joints.LeftKnee or (leftUpperLeg and leftLowerLeg and midpoint(leftUpperLeg.Position, leftLowerLeg.Position, leftLowerLeg.Position))
+            local rightKnee = joints.RightKnee or (rightUpperLeg and rightLowerLeg and midpoint(rightUpperLeg.Position, rightLowerLeg.Position, rightLowerLeg.Position))
+            local leftAnkle = joints.LeftAnkle or (leftLowerLeg and leftFoot and midpoint(leftLowerLeg.Position, leftFoot.Position, leftFoot.Position))
+            local rightAnkle = joints.RightAnkle or (rightLowerLeg and rightFoot and midpoint(rightLowerLeg.Position, rightFoot.Position, rightFoot.Position))
+            local shoulderCenter = midpoint(leftShoulder, rightShoulder, neck)
+            local hipCenter = midpoint(leftHip, rightHip, lowerTorso.Position)
+            local upperTorsoTop = partEnd(upperTorso, 0.5) or neck
+            local upperTorsoBottom = partEnd(upperTorso, -0.5) or waist
+            local lowerTorsoTop = partEnd(lowerTorso, 0.5) or waist
+            local lowerTorsoBottom = partEnd(lowerTorso, -0.5) or hipCenter
+            local leftUpperArmTop = partEnd(leftUpperArm, 0.5) or leftShoulder
+            local leftUpperArmBottom = partEnd(leftUpperArm, -0.5) or leftElbow
+            local leftLowerArmTop = partEnd(leftLowerArm, 0.5) or leftElbow
+            local leftLowerArmBottom = partEnd(leftLowerArm, -0.5) or leftWrist
+            local rightUpperArmTop = partEnd(rightUpperArm, 0.5) or rightShoulder
+            local rightUpperArmBottom = partEnd(rightUpperArm, -0.5) or rightElbow
+            local rightLowerArmTop = partEnd(rightLowerArm, 0.5) or rightElbow
+            local rightLowerArmBottom = partEnd(rightLowerArm, -0.5) or rightWrist
+            local leftUpperLegTop = partEnd(leftUpperLeg, 0.5) or leftHip
+            local leftUpperLegBottom = partEnd(leftUpperLeg, -0.5) or leftKnee
+            local leftLowerLegTop = partEnd(leftLowerLeg, 0.5) or leftKnee
+            local leftLowerLegBottom = partEnd(leftLowerLeg, -0.5) or leftAnkle
+            local rightUpperLegTop = partEnd(rightUpperLeg, 0.5) or rightHip
+            local rightUpperLegBottom = partEnd(rightUpperLeg, -0.5) or rightKnee
+            local rightLowerLegTop = partEnd(rightLowerLeg, 0.5) or rightKnee
+            local rightLowerLegBottom = partEnd(rightLowerLeg, -0.5) or rightAnkle
+
+            return {
+                { head.Position, neck },
+                { neck, upperTorsoTop },
+                { upperTorsoTop, upperTorsoBottom },
+                { upperTorsoBottom, lowerTorsoTop },
+                { lowerTorsoTop, lowerTorsoBottom },
+                { leftShoulder, rightShoulder },
+                { shoulderCenter, leftShoulder },
+                { leftShoulder, leftUpperArmTop },
+                { leftUpperArmTop, leftUpperArmBottom },
+                { leftUpperArmBottom, leftLowerArmTop },
+                { leftLowerArmTop, leftLowerArmBottom },
+                { leftLowerArmBottom, leftHand and leftHand.Position },
+                { shoulderCenter, rightShoulder },
+                { rightShoulder, rightUpperArmTop },
+                { rightUpperArmTop, rightUpperArmBottom },
+                { rightUpperArmBottom, rightLowerArmTop },
+                { rightLowerArmTop, rightLowerArmBottom },
+                { rightLowerArmBottom, rightHand and rightHand.Position },
+                { leftHip, rightHip },
+                { hipCenter, leftHip },
+                { leftHip, leftUpperLegTop },
+                { leftUpperLegTop, leftUpperLegBottom },
+                { leftUpperLegBottom, leftLowerLegTop },
+                { leftLowerLegTop, leftLowerLegBottom },
+                { leftLowerLegBottom, leftFoot and leftFoot.Position },
+                { hipCenter, rightHip },
+                { rightHip, rightUpperLegTop },
+                { rightUpperLegTop, rightUpperLegBottom },
+                { rightUpperLegBottom, rightLowerLegTop },
+                { rightLowerLegTop, rightLowerLegBottom },
+                { rightLowerLegBottom, rightFoot and rightFoot.Position },
+            }
         end
 
         local function getSkeletonSegments(character, humanoid)
@@ -443,17 +634,197 @@ return function(Library, context)
             return getR6SkeletonSegments(character)
         end
 
-        local function updateSkeleton(camera, data, character, humanoid)
-            local segments = getSkeletonSegments(character, humanoid)
+        local function addScreenSegment(segments, fromPoint, toPoint)
+            if fromPoint and toPoint then
+                table.insert(segments, { fromPoint, toPoint })
+            end
+        end
+
+        local function bezierPoint(a, b, c, t)
+            local inv = 1 - t
+            return (a * inv * inv) + (b * 2 * inv * t) + (c * t * t)
+        end
+
+        local function addCurveSegments(segments, fromPoint, controlPoint, toPoint, steps)
+            steps = steps or 5
+            local previous = fromPoint
+            for index = 1, steps do
+                local current = bezierPoint(fromPoint, controlPoint, toPoint, index / steps)
+                addScreenSegment(segments, previous, current)
+                previous = current
+            end
+        end
+
+        local function getStyledSkeletonSegments(camera, character, humanoid, bounds)
+            if not camera or not character or not bounds then
+                return {}
+            end
+
+            local left = bounds.Left
+            local right = bounds.Right
+            local top = bounds.Top
+            local bottom = bounds.Bottom
+            local width = right - left
+            local height = bottom - top
+            if width <= 0 or height <= 0 then
+                return {}
+            end
+
+            local cx = bounds.CenterX
+            local fallback = {
+                Head = V2(cx, top + (height * 0.18)),
+                Neck = V2(cx, top + (height * 0.29)),
+                Waist = V2(cx, top + (height * 0.55)),
+                HipCenter = V2(cx, top + (height * 0.66)),
+                LeftShoulder = V2(cx - (width * 0.22), top + (height * 0.31)),
+                RightShoulder = V2(cx + (width * 0.22), top + (height * 0.31)),
+                LeftHip = V2(cx - (width * 0.12), top + (height * 0.66)),
+                RightHip = V2(cx + (width * 0.12), top + (height * 0.66)),
+                LeftElbow = V2(cx - (width * 0.34), top + (height * 0.47)),
+                RightElbow = V2(cx + (width * 0.34), top + (height * 0.47)),
+                LeftHand = V2(cx - (width * 0.31), top + (height * 0.66)),
+                RightHand = V2(cx + (width * 0.31), top + (height * 0.66)),
+                LeftKnee = V2(cx - (width * 0.10), top + (height * 0.82)),
+                RightKnee = V2(cx + (width * 0.10), top + (height * 0.82)),
+                LeftFoot = V2(cx - (width * 0.13), bottom - (height * 0.05)),
+                RightFoot = V2(cx + (width * 0.13), bottom - (height * 0.05)),
+            }
+
+            local function screen(position, fallbackPoint)
+                return project(camera, position) or fallbackPoint
+            end
+
+            local isR15 = humanoid and humanoid.RigType == Enum.HumanoidRigType.R15
+            local head = getPart(character, "Head")
+            local torso = getPart(character, "Torso")
+            local upperTorso = getPart(character, "UpperTorso")
+            local lowerTorso = getPart(character, "LowerTorso")
+            local headPoint = screen(head and head.Position, fallback.Head)
+            local neck
+            local waist
+            local hipCenter
+            local leftShoulder
+            local rightShoulder
+            local leftHip
+            local rightHip
+            local leftElbow
+            local rightElbow
+            local leftHand
+            local rightHand
+            local leftKnee
+            local rightKnee
+            local leftFoot
+            local rightFoot
+
+            if isR15 then
+                local joints = collectJointPositions(character, {
+                    "Neck",
+                    "Waist",
+                    "LeftShoulder",
+                    "RightShoulder",
+                    "LeftElbow",
+                    "RightElbow",
+                    "LeftWrist",
+                    "RightWrist",
+                    "LeftHip",
+                    "RightHip",
+                    "LeftKnee",
+                    "RightKnee",
+                    "LeftAnkle",
+                    "RightAnkle",
+                })
+                local leftUpperArm = getPart(character, "LeftUpperArm")
+                local rightUpperArm = getPart(character, "RightUpperArm")
+                local leftLowerArm = getPart(character, "LeftLowerArm")
+                local rightLowerArm = getPart(character, "RightLowerArm")
+                local leftHandPart = getPart(character, "LeftHand")
+                local rightHandPart = getPart(character, "RightHand")
+                local leftUpperLeg = getPart(character, "LeftUpperLeg")
+                local rightUpperLeg = getPart(character, "RightUpperLeg")
+                local leftLowerLeg = getPart(character, "LeftLowerLeg")
+                local rightLowerLeg = getPart(character, "RightLowerLeg")
+                local leftFootPart = getPart(character, "LeftFoot")
+                local rightFootPart = getPart(character, "RightFoot")
+
+                neck = screen(joints.Neck or partEnd(upperTorso, 0.5), fallback.Neck)
+                waist = screen(joints.Waist or (upperTorso and lowerTorso and midpoint(upperTorso.Position, lowerTorso.Position, lowerTorso.Position)), fallback.Waist)
+                leftShoulder = screen(joints.LeftShoulder or (upperTorso and leftUpperArm and midpoint(upperTorso.Position, leftUpperArm.Position, leftUpperArm.Position)), fallback.LeftShoulder)
+                rightShoulder = screen(joints.RightShoulder or (upperTorso and rightUpperArm and midpoint(upperTorso.Position, rightUpperArm.Position, rightUpperArm.Position)), fallback.RightShoulder)
+                leftHip = screen(joints.LeftHip or (lowerTorso and leftUpperLeg and midpoint(lowerTorso.Position, leftUpperLeg.Position, leftUpperLeg.Position)), fallback.LeftHip)
+                rightHip = screen(joints.RightHip or (lowerTorso and rightUpperLeg and midpoint(lowerTorso.Position, rightUpperLeg.Position, rightUpperLeg.Position)), fallback.RightHip)
+                hipCenter = midpoint(leftHip, rightHip, fallback.HipCenter)
+                leftElbow = screen(joints.LeftElbow or (leftUpperArm and leftLowerArm and midpoint(leftUpperArm.Position, leftLowerArm.Position, leftLowerArm.Position)), fallback.LeftElbow)
+                rightElbow = screen(joints.RightElbow or (rightUpperArm and rightLowerArm and midpoint(rightUpperArm.Position, rightLowerArm.Position, rightLowerArm.Position)), fallback.RightElbow)
+                leftHand = screen((leftHandPart and leftHandPart.Position) or joints.LeftWrist, fallback.LeftHand)
+                rightHand = screen((rightHandPart and rightHandPart.Position) or joints.RightWrist, fallback.RightHand)
+                leftKnee = screen(joints.LeftKnee or (leftUpperLeg and leftLowerLeg and midpoint(leftUpperLeg.Position, leftLowerLeg.Position, leftLowerLeg.Position)), fallback.LeftKnee)
+                rightKnee = screen(joints.RightKnee or (rightUpperLeg and rightLowerLeg and midpoint(rightUpperLeg.Position, rightLowerLeg.Position, rightLowerLeg.Position)), fallback.RightKnee)
+                leftFoot = screen((leftFootPart and leftFootPart.Position) or joints.LeftAnkle, fallback.LeftFoot)
+                rightFoot = screen((rightFootPart and rightFootPart.Position) or joints.RightAnkle, fallback.RightFoot)
+            else
+                local joints = collectJointPositions(character, {
+                    "Neck",
+                    "Left Shoulder",
+                    "Right Shoulder",
+                    "Left Hip",
+                    "Right Hip",
+                })
+                local leftArm = getPart(character, "Left Arm")
+                local rightArm = getPart(character, "Right Arm")
+                local leftLeg = getPart(character, "Left Leg")
+                local rightLeg = getPart(character, "Right Leg")
+
+                neck = screen(joints.Neck or partEnd(torso, 0.5), fallback.Neck)
+                waist = screen(torso and torso.Position, fallback.Waist)
+                leftShoulder = screen(joints["Left Shoulder"] or (torso and pointFromPart(torso, Vector3.new(-torso.Size.X * 0.5, torso.Size.Y * 0.35, 0))), fallback.LeftShoulder)
+                rightShoulder = screen(joints["Right Shoulder"] or (torso and pointFromPart(torso, Vector3.new(torso.Size.X * 0.5, torso.Size.Y * 0.35, 0))), fallback.RightShoulder)
+                leftHip = screen(joints["Left Hip"] or (torso and pointFromPart(torso, Vector3.new(-torso.Size.X * 0.25, -torso.Size.Y * 0.5, 0))), fallback.LeftHip)
+                rightHip = screen(joints["Right Hip"] or (torso and pointFromPart(torso, Vector3.new(torso.Size.X * 0.25, -torso.Size.Y * 0.5, 0))), fallback.RightHip)
+                hipCenter = midpoint(leftHip, rightHip, fallback.HipCenter)
+                leftElbow = screen(leftArm and leftArm.Position, fallback.LeftElbow)
+                rightElbow = screen(rightArm and rightArm.Position, fallback.RightElbow)
+                leftHand = screen(partEnd(leftArm, -0.5), fallback.LeftHand)
+                rightHand = screen(partEnd(rightArm, -0.5), fallback.RightHand)
+                leftKnee = screen(leftLeg and leftLeg.Position, fallback.LeftKnee)
+                rightKnee = screen(rightLeg and rightLeg.Position, fallback.RightKnee)
+                leftFoot = screen(partEnd(leftLeg, -0.5), fallback.LeftFoot)
+                rightFoot = screen(partEnd(rightLeg, -0.5), fallback.RightFoot)
+            end
+
+            local shoulderControl = V2((leftShoulder.X + rightShoulder.X) * 0.5, math.min(leftShoulder.Y, rightShoulder.Y, neck.Y) - (height * 0.018))
+            local hipControl = V2((leftHip.X + rightHip.X) * 0.5, math.min(leftHip.Y, rightHip.Y, hipCenter.Y) - (height * 0.01))
+            local shoulderJoin = bezierPoint(leftShoulder, shoulderControl, rightShoulder, 0.5)
+            local hipJoin = bezierPoint(leftHip, hipControl, rightHip, 0.5)
+
+            local segments = {}
+            addScreenSegment(segments, headPoint, neck)
+            addCurveSegments(segments, leftShoulder, shoulderControl, rightShoulder, 7)
+            addScreenSegment(segments, neck, shoulderJoin)
+            addScreenSegment(segments, shoulderJoin, waist)
+            addScreenSegment(segments, waist, hipJoin)
+            addCurveSegments(segments, leftHip, hipControl, rightHip, 5)
+            addCurveSegments(segments, leftShoulder, leftElbow, leftHand, 6)
+            addCurveSegments(segments, rightShoulder, rightElbow, rightHand, 6)
+            addCurveSegments(segments, leftHip, leftKnee, leftFoot, 5)
+            addCurveSegments(segments, rightHip, rightKnee, rightFoot, 5)
+            return segments
+        end
+
+        local function updateSkeleton(camera, data, character, humanoid, bounds)
+            local segments = getStyledSkeletonSegments(camera, character, humanoid, bounds)
 
             while #data.skeleton < #segments do
-                table.insert(data.skeleton, makeLine("PlayerSkeletonEspLine", WHITE, 1, 118))
+                local line = makeLine("PlayerSkeletonEspLine", WHITE, 1, 118)
+                if line then
+                    noSmoothLines[line] = true
+                end
+                table.insert(data.skeleton, line)
             end
 
             for index, segment in ipairs(segments) do
                 local line = data.skeleton[index]
                 if segment and segment[1] and segment[2] then
-                    updateWorldLine(camera, line, segment[1], segment[2], WHITE, 1)
+                    updateLine(line, segment[1], segment[2], WHITE, 1)
                 else
                     setVisible(line, false)
                 end
@@ -498,54 +869,120 @@ return function(Library, context)
             return lowestPoint
         end
 
+        local function includeBoundsPoint(bounds, point)
+            if not point then
+                return
+            end
+
+            if not bounds.Left or point.X < bounds.Left then
+                bounds.Left = point.X
+            end
+            if not bounds.Right or point.X > bounds.Right then
+                bounds.Right = point.X
+            end
+            if not bounds.Top or point.Y < bounds.Top then
+                bounds.Top = point.Y
+            end
+            if not bounds.Bottom or point.Y > bounds.Bottom then
+                bounds.Bottom = point.Y
+            end
+            bounds.Count += 1
+        end
+
+        local function includePartBounds(camera, bounds, part)
+            if not part or not part.Parent then
+                return
+            end
+
+            local half = part.Size * 0.5
+            for x = -1, 1, 2 do
+                for y = -1, 1, 2 do
+                    for z = -1, 1, 2 do
+                        local world = part.CFrame:PointToWorldSpace(Vector3.new(half.X * x, half.Y * y, half.Z * z))
+                        local viewportPoint = camera:WorldToViewportPoint(world)
+                        if viewportPoint.Z > 0 then
+                            includeBoundsPoint(bounds, V2(viewportPoint.X, viewportPoint.Y))
+                        end
+                    end
+                end
+            end
+        end
+
+        local function smoothNumber(previous, current, alpha)
+            if previous == nil then
+                return current
+            end
+            return previous + ((current - previous) * alpha)
+        end
+
+        local function smoothBounds(data, bounds)
+            if not data or not bounds then
+                return bounds
+            end
+
+            local previous = data.bounds
+            if not previous then
+                data.bounds = bounds
+                return bounds
+            end
+
+            local dx = math.abs((bounds.CenterX or 0) - (previous.CenterX or 0))
+            local dy = math.abs((bounds.CenterY or 0) - (previous.CenterY or 0))
+            if dx > BOUNDS_RESET_DISTANCE or dy > BOUNDS_RESET_DISTANCE then
+                data.bounds = bounds
+                return bounds
+            end
+
+            local nextBounds = {
+                Left = smoothNumber(previous.Left, bounds.Left, BOUNDS_SMOOTH_ALPHA),
+                Right = smoothNumber(previous.Right, bounds.Right, BOUNDS_SMOOTH_ALPHA),
+                Top = smoothNumber(previous.Top, bounds.Top, BOUNDS_SMOOTH_ALPHA),
+                Bottom = smoothNumber(previous.Bottom, bounds.Bottom, BOUNDS_SMOOTH_ALPHA),
+                CenterX = smoothNumber(previous.CenterX, bounds.CenterX, BOUNDS_SMOOTH_ALPHA),
+                CenterY = smoothNumber(previous.CenterY, bounds.CenterY, BOUNDS_SMOOTH_ALPHA),
+            }
+            data.bounds = nextBounds
+            return nextBounds
+        end
+
         local function getCharacterScreenBounds(camera, character, humanoid)
             local root = getRoot(character)
             if not camera or not root then
                 return nil
             end
 
-            local head = getPart(character, "Head")
-            local torso = getPart(character, "Torso")
-                or getPart(character, "UpperTorso")
-                or getPart(character, "LowerTorso")
-                or root
-
-            local topWorld = head and pointFromPart(head, Vector3.new(0, head.Size.Y * 0.28, 0))
-                or pointFromPart(torso, Vector3.new(0, torso.Size.Y * 0.58, 0))
-                or (root.Position + Vector3.new(0, 3, 0))
-
-            local lowerParts = r6LowerBodyParts
-            local widthRatio = 0.48
-            if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 then
-                lowerParts = r15LowerBodyParts
-                widthRatio = 0.46
+            local bounds = {
+                Count = 0,
+            }
+            for _, inst in ipairs(character:GetChildren()) do
+                if bodyBoundsPartNames[inst.Name] and inst:IsA("BasePart") then
+                    includePartBounds(camera, bounds, inst)
+                end
             end
 
-            local bottomWorld = getLowestBodyPoint(character, lowerParts)
-                or pointFromPart(torso, Vector3.new(0, -torso.Size.Y * 1.2, 0))
-                or (root.Position - Vector3.new(0, 3, 0))
-
-            local topPoint = getViewportBodyPoint(camera, topWorld)
-            local bottomPoint = getViewportBodyPoint(camera, bottomWorld)
-            local centerPoint = getViewportBodyPoint(camera, root.Position)
-            if not topPoint or not bottomPoint or not centerPoint then
+            if bounds.Count <= 0 then
                 return nil
             end
 
             local viewportSize = camera.ViewportSize
-            local rawHeight = math.abs(bottomPoint.Y - topPoint.Y)
-            local height = math.clamp(rawHeight, 26, viewportSize.Y * 0.9)
-            local width = math.clamp(height * widthRatio, 14, viewportSize.X * 0.42)
-            local centerY = (topPoint.Y + bottomPoint.Y) * 0.5
-            local centerX = centerPoint.X
+            local paddingX = math.clamp((bounds.Right - bounds.Left) * 0.04, 2, 8)
+            local paddingY = math.clamp((bounds.Bottom - bounds.Top) * 0.025, 2, 8)
+            local left = math.clamp(bounds.Left - paddingX, -viewportSize.X * 0.25, viewportSize.X * 1.25)
+            local right = math.clamp(bounds.Right + paddingX, -viewportSize.X * 0.25, viewportSize.X * 1.25)
+            local top = math.clamp(bounds.Top - paddingY, -viewportSize.Y * 0.25, viewportSize.Y * 1.25)
+            local bottom = math.clamp(bounds.Bottom + paddingY, -viewportSize.Y * 0.25, viewportSize.Y * 1.25)
+
+            if right - left < 8 or bottom - top < 12 then
+                return nil
+            end
 
             return {
-                Left = snap(centerX - width * 0.5),
-                Right = snap(centerX + width * 0.5),
-                Top = snap(centerY - height * 0.5),
-                Bottom = snap(centerY + height * 0.5),
-                CenterX = snap(centerX),
-                CenterY = snap(centerY),
+                Left = left,
+                Right = right,
+                Top = top,
+                Bottom = bottom,
+                CenterX = (left + right) * 0.5,
+                CenterY = (top + bottom) * 0.5,
             }
         end
 
@@ -600,6 +1037,7 @@ return function(Library, context)
                             if not bounds then
                                 hideData(data)
                             else
+                                bounds = smoothBounds(data, bounds)
                                 local left = bounds.Left
                                 local right = bounds.Right
                                 local top = bounds.Top
@@ -642,7 +1080,7 @@ return function(Library, context)
                                 end
 
                                 if settings.Skeleton then
-                                    updateSkeleton(camera, data, character, humanoid, color)
+                                    updateSkeleton(camera, data, character, humanoid, bounds)
                                 else
                                     hideList(data.skeleton)
                                 end
