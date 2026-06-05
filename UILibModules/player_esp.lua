@@ -48,9 +48,11 @@ return function(Library, context)
 
         local Players = context.Players or game:GetService("Players")
         local RunService = context.RunService or game:GetService("RunService")
+        local TextService = context.TextService or game:GetService("TextService")
         local LocalPlayer = context.Client or Players.LocalPlayer
         local C3 = Color3.fromRGB
         local V2 = Vector2.new
+        local WHITE = C3(255, 255, 255)
 
         local settings = {
             Box = false,
@@ -64,6 +66,7 @@ return function(Library, context)
         }
 
         local tracked = {}
+        local textMeasureCache = {}
         local renderConnection = nil
         local playerEspGui = nil
 
@@ -117,8 +120,9 @@ return function(Library, context)
             label.TextColor3 = color
             label.TextSize = textSize
             label.TextStrokeColor3 = C3(0, 0, 0)
-            label.TextStrokeTransparency = 0
+            label.TextStrokeTransparency = 0.35
             label.TextWrapped = false
+            label.TextTruncate = Enum.TextTruncate.AtEnd
             label.Visible = false
             label.ZIndex = zIndex or 120
             label.Size = UDim2.fromOffset(230, textSize + 8)
@@ -191,6 +195,60 @@ return function(Library, context)
             line.Visible = true
         end
 
+        local function measureTextWidth(text, textSize, font)
+            local key = tostring(font) .. "\0" .. tostring(textSize) .. "\0" .. tostring(text or "")
+            local cached = textMeasureCache[key]
+            if cached then
+                return cached
+            end
+
+            local ok, size = pcall(function()
+                return TextService:GetTextSize(text, textSize, font, Vector2.new(1000, textSize + 8))
+            end)
+            if ok and size then
+                textMeasureCache[key] = size.X
+                return size.X
+            end
+            local fallback = #tostring(text or "") * textSize * 0.55
+            textMeasureCache[key] = fallback
+            return fallback
+        end
+
+        local function updateNameLabel(label, text, centerX, top, boxWidth)
+            if not label then
+                return
+            end
+            if not settings.Name then
+                label.Visible = false
+                return
+            end
+
+            local resolvedBoxWidth = tonumber(boxWidth) or 0
+            local maxWidth = math.max(64, math.min(320, snap(resolvedBoxWidth + 16)))
+            local textSize = 12
+            if resolvedBoxWidth >= 90 then
+                textSize = 13
+            end
+            if resolvedBoxWidth >= 150 then
+                textSize = 14
+            end
+            if resolvedBoxWidth >= 240 then
+                textSize = 15
+            end
+
+            while textSize > 10 and measureTextWidth(text, textSize, label.Font) > maxWidth do
+                textSize -= 1
+            end
+
+            local labelHeight = textSize + 6
+            label.Text = text
+            label.TextSize = textSize
+            label.TextColor3 = WHITE
+            label.Size = UDim2.fromOffset(maxWidth, labelHeight)
+            label.Position = UDim2.fromOffset(centerX, top - (labelHeight * 0.5) - 4)
+            label.Visible = true
+        end
+
         local function project(camera, position)
             local point, onScreen = camera:WorldToViewportPoint(position)
             if not onScreen or point.Z <= 0 then
@@ -205,62 +263,6 @@ return function(Library, context)
             updateLine(line, fromPoint, toPoint, color, thickness)
         end
 
-        local function getCharacterScreenBounds(camera, character)
-            local ok, cframe, size = pcall(function()
-                return character:GetBoundingBox()
-            end)
-            if not ok or not cframe or not size then
-                return nil
-            end
-
-            local half = size * 0.5
-            local corners = {
-                cframe * Vector3.new(-half.X, -half.Y, -half.Z),
-                cframe * Vector3.new(half.X, -half.Y, -half.Z),
-                cframe * Vector3.new(-half.X, half.Y, -half.Z),
-                cframe * Vector3.new(half.X, half.Y, -half.Z),
-                cframe * Vector3.new(-half.X, -half.Y, half.Z),
-                cframe * Vector3.new(half.X, -half.Y, half.Z),
-                cframe * Vector3.new(-half.X, half.Y, half.Z),
-                cframe * Vector3.new(half.X, half.Y, half.Z),
-            }
-
-            local minX, minY = math.huge, math.huge
-            local maxX, maxY = -math.huge, -math.huge
-            local visibleCount = 0
-
-            for _, worldPosition in ipairs(corners) do
-                local point, onScreen = camera:WorldToViewportPoint(worldPosition)
-                if point.Z > 0 then
-                    minX = math.min(minX, point.X)
-                    minY = math.min(minY, point.Y)
-                    maxX = math.max(maxX, point.X)
-                    maxY = math.max(maxY, point.Y)
-                    if onScreen then
-                        visibleCount = visibleCount + 1
-                    end
-                end
-            end
-
-            if visibleCount < 2 or minX == math.huge then
-                return nil
-            end
-
-            local width = math.max(14, maxX - minX)
-            local height = math.max(28, maxY - minY)
-            local centerX = (minX + maxX) * 0.5
-            local centerY = (minY + maxY) * 0.5
-
-            return {
-                Left = snap(centerX - width * 0.5),
-                Right = snap(centerX + width * 0.5),
-                Top = snap(centerY - height * 0.5),
-                Bottom = snap(centerY + height * 0.5),
-                CenterX = snap(centerX),
-                CenterY = snap(centerY),
-            }
-        end
-
         local function makePlayerData(player)
             if tracked[player] then
                 return tracked[player]
@@ -272,14 +274,14 @@ return function(Library, context)
             }
 
             for index = 1, 4 do
-                data.box[index] = makeLine("PlayerBoxEspLine", C3(255, 255, 255), 1, 120)
+                data.box[index] = makeLine("PlayerBoxEspLine", WHITE, 1, 120)
             end
 
-            data.tracer = makeLine("PlayerTracerEspLine", C3(255, 255, 255), 1, 110)
+            data.tracer = makeLine("PlayerTracerEspLine", WHITE, 1, 110)
             data.healthBack = makeLine("PlayerHealthEspBack", C3(0, 0, 0), 3, 115)
             data.healthFill = makeLine("PlayerHealthEspFill", C3(0, 255, 0), 2, 125)
-            data.name = makeLabel("PlayerNameEsp", C3(255, 255, 255), 14, 130)
-            data.team = makeLabel("PlayerTeamEsp", C3(255, 255, 255), 13, 130)
+            data.name = makeLabel("PlayerNameEsp", WHITE, 11, 130)
+            data.team = makeLabel("PlayerTeamEsp", WHITE, 12, 130)
             data.heldItem = makeLabel("PlayerHeldItemEsp", C3(255, 200, 0), 13, 130)
 
             if data.team then
@@ -329,64 +331,203 @@ return function(Library, context)
         end
 
         local r15SkeletonPairs = {
-            { { "Head" }, { "UpperTorso" } },
-            { { "UpperTorso" }, { "LowerTorso" } },
-            { { "UpperTorso" }, { "LeftHand", "LeftLowerArm", "LeftUpperArm" } },
-            { { "UpperTorso" }, { "RightHand", "RightLowerArm", "RightUpperArm" } },
-            { { "LowerTorso" }, { "LeftFoot", "LeftLowerLeg", "LeftUpperLeg" } },
-            { { "LowerTorso" }, { "RightFoot", "RightLowerLeg", "RightUpperLeg" } },
+            { "Head", "UpperTorso" },
+            { "UpperTorso", "LowerTorso" },
+            { "UpperTorso", "LeftUpperArm" },
+            { "LeftUpperArm", "LeftLowerArm" },
+            { "UpperTorso", "RightUpperArm" },
+            { "RightUpperArm", "RightLowerArm" },
+            { "LowerTorso", "LeftUpperLeg" },
+            { "LeftUpperLeg", "LeftLowerLeg" },
+            { "LowerTorso", "RightUpperLeg" },
+            { "RightUpperLeg", "RightLowerLeg" },
         }
 
-        local r6SkeletonPairs = {
-            { { "Head" }, { "Torso" } },
-            { { "Torso" }, { "Left Arm" } },
-            { { "Torso" }, { "Right Arm" } },
-            { { "Torso" }, { "Left Leg" } },
-            { { "Torso" }, { "Right Leg" } },
+        local r6LowerBodyParts = {
+            "Left Leg",
+            "Right Leg",
         }
 
-        local function getSkeletonPairs(humanoid)
-            if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 then
-                return r15SkeletonPairs
-            end
-            return r6SkeletonPairs
-        end
+        local r15LowerBodyParts = {
+            "LeftFoot",
+            "RightFoot",
+            "LeftLowerLeg",
+            "RightLowerLeg",
+            "LeftUpperLeg",
+            "RightUpperLeg",
+        }
 
-        local function findSkeletonPart(character, names)
-            for _, name in ipairs(names or {}) do
-                local part = character:FindFirstChild(name)
-                if part and part:IsA("BasePart") then
-                    return part
-                end
+        local function getPart(character, name)
+            local part = character and character:FindFirstChild(name)
+            if part and part:IsA("BasePart") then
+                return part
             end
             return nil
         end
 
-        local function updateSkeleton(camera, data, character, humanoid, color)
-            local pairsList = getSkeletonPairs(humanoid)
+        local function pointFromPart(part, offset)
+            if not part then
+                return nil
+            end
+            return part.CFrame:PointToWorldSpace(offset)
+        end
 
-            while #data.skeleton < #pairsList do
-                table.insert(data.skeleton, makeLine("PlayerSkeletonEspLine", color, 2, 118))
+        local function getR6SkeletonSegments(character)
+            local head = getPart(character, "Head")
+            local torso = getPart(character, "Torso")
+            local leftArm = getPart(character, "Left Arm")
+            local rightArm = getPart(character, "Right Arm")
+            local leftLeg = getPart(character, "Left Leg")
+            local rightLeg = getPart(character, "Right Leg")
+
+            if not torso then
+                return {}
             end
 
-            for index, pair in ipairs(pairsList) do
+            local torsoSize = torso.Size
+            local neck = pointFromPart(torso, Vector3.new(0, torsoSize.Y * 0.52, 0))
+            local pelvis = pointFromPart(torso, Vector3.new(0, -torsoSize.Y * 0.48, 0))
+            local leftShoulder = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.52, torsoSize.Y * 0.34, 0))
+            local rightShoulder = pointFromPart(torso, Vector3.new(torsoSize.X * 0.52, torsoSize.Y * 0.34, 0))
+            local leftHip = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.26, -torsoSize.Y * 0.50, 0))
+            local rightHip = pointFromPart(torso, Vector3.new(torsoSize.X * 0.26, -torsoSize.Y * 0.50, 0))
+
+            return {
+                { head and pointFromPart(head, Vector3.new(0, -head.Size.Y * 0.50, 0)), neck },
+                { neck, pelvis },
+                { leftShoulder, rightShoulder },
+                { leftShoulder, leftArm and pointFromPart(leftArm, Vector3.new(0, -leftArm.Size.Y * 0.50, 0)) },
+                { rightShoulder, rightArm and pointFromPart(rightArm, Vector3.new(0, -rightArm.Size.Y * 0.50, 0)) },
+                { leftHip, rightHip },
+                { leftHip, leftLeg and pointFromPart(leftLeg, Vector3.new(0, -leftLeg.Size.Y * 0.50, 0)) },
+                { rightHip, rightLeg and pointFromPart(rightLeg, Vector3.new(0, -rightLeg.Size.Y * 0.50, 0)) },
+            }
+        end
+
+        local function getR15SkeletonSegments(character)
+            local segments = {}
+            for _, pair in ipairs(r15SkeletonPairs) do
+                local fromPart = getPart(character, pair[1])
+                local toPart = getPart(character, pair[2])
+                table.insert(segments, {
+                    fromPart and fromPart.Position,
+                    toPart and toPart.Position,
+                })
+            end
+            return segments
+        end
+
+        local function getSkeletonSegments(character, humanoid)
+            if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 then
+                return getR15SkeletonSegments(character)
+            end
+            return getR6SkeletonSegments(character)
+        end
+
+        local function updateSkeleton(camera, data, character, humanoid)
+            local segments = getSkeletonSegments(character, humanoid)
+
+            while #data.skeleton < #segments do
+                table.insert(data.skeleton, makeLine("PlayerSkeletonEspLine", WHITE, 1, 118))
+            end
+
+            for index, segment in ipairs(segments) do
                 local line = data.skeleton[index]
-                local fromPart = findSkeletonPart(character, pair[1])
-                local toPart = findSkeletonPart(character, pair[2])
-                if fromPart and toPart then
-                    updateWorldLine(camera, line, fromPart.Position, toPart.Position, color, 2)
+                if segment and segment[1] and segment[2] then
+                    updateWorldLine(camera, line, segment[1], segment[2], WHITE, 1)
                 else
                     setVisible(line, false)
                 end
             end
 
-            for index = #pairsList + 1, #data.skeleton do
+            for index = #segments + 1, #data.skeleton do
                 setVisible(data.skeleton[index], false)
             end
         end
 
         local function getRoot(character)
             return character and character:FindFirstChild("HumanoidRootPart")
+        end
+
+        local function getViewportBodyPoint(camera, worldPosition)
+            if not worldPosition then
+                return nil
+            end
+
+            local point = camera:WorldToViewportPoint(worldPosition)
+            if point.Z <= 0 then
+                return nil
+            end
+            return V2(point.X, point.Y)
+        end
+
+        local function getLowestBodyPoint(character, names)
+            local lowestPoint = nil
+            local lowestY = nil
+
+            for _, name in ipairs(names) do
+                local part = getPart(character, name)
+                if part then
+                    local point = pointFromPart(part, Vector3.new(0, -part.Size.Y * 0.55, 0))
+                    if not lowestY or point.Y < lowestY then
+                        lowestPoint = point
+                        lowestY = point.Y
+                    end
+                end
+            end
+
+            return lowestPoint
+        end
+
+        local function getCharacterScreenBounds(camera, character, humanoid)
+            local root = getRoot(character)
+            if not camera or not root then
+                return nil
+            end
+
+            local head = getPart(character, "Head")
+            local torso = getPart(character, "Torso")
+                or getPart(character, "UpperTorso")
+                or getPart(character, "LowerTorso")
+                or root
+
+            local topWorld = head and pointFromPart(head, Vector3.new(0, head.Size.Y * 0.28, 0))
+                or pointFromPart(torso, Vector3.new(0, torso.Size.Y * 0.58, 0))
+                or (root.Position + Vector3.new(0, 3, 0))
+
+            local lowerParts = r6LowerBodyParts
+            local widthRatio = 0.48
+            if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 then
+                lowerParts = r15LowerBodyParts
+                widthRatio = 0.46
+            end
+
+            local bottomWorld = getLowestBodyPoint(character, lowerParts)
+                or pointFromPart(torso, Vector3.new(0, -torso.Size.Y * 1.2, 0))
+                or (root.Position - Vector3.new(0, 3, 0))
+
+            local topPoint = getViewportBodyPoint(camera, topWorld)
+            local bottomPoint = getViewportBodyPoint(camera, bottomWorld)
+            local centerPoint = getViewportBodyPoint(camera, root.Position)
+            if not topPoint or not bottomPoint or not centerPoint then
+                return nil
+            end
+
+            local viewportSize = camera.ViewportSize
+            local rawHeight = math.abs(bottomPoint.Y - topPoint.Y)
+            local height = math.clamp(rawHeight, 26, viewportSize.Y * 0.9)
+            local width = math.clamp(height * widthRatio, 14, viewportSize.X * 0.42)
+            local centerY = (topPoint.Y + bottomPoint.Y) * 0.5
+            local centerX = centerPoint.X
+
+            return {
+                Left = snap(centerX - width * 0.5),
+                Right = snap(centerX + width * 0.5),
+                Top = snap(centerY - height * 0.5),
+                Bottom = snap(centerY + height * 0.5),
+                CenterX = snap(centerX),
+                CenterY = snap(centerY),
+            }
         end
 
         local function isAlive(character)
@@ -436,7 +577,7 @@ return function(Library, context)
                         if distance > settings.MaxDistance then
                             hideData(data)
                         else
-                            local bounds = getCharacterScreenBounds(camera, character)
+                            local bounds = getCharacterScreenBounds(camera, character, humanoid)
                             if not bounds then
                                 hideData(data)
                             else
@@ -444,27 +585,23 @@ return function(Library, context)
                                 local right = bounds.Right
                                 local top = bounds.Top
                                 local bottom = bounds.Bottom
-                                local color = getPlayerColor(player)
+                                local color = WHITE
+                                local boxWidth = right - left
 
                                 if settings.Box then
-                                    updateLine(data.box[1], V2(left, top), V2(right, top), color, 1)
-                                    updateLine(data.box[2], V2(left, bottom), V2(right, bottom), color, 1)
-                                    updateLine(data.box[3], V2(left, top), V2(left, bottom), color, 1)
-                                    updateLine(data.box[4], V2(right, top), V2(right, bottom), color, 1)
+                                    updateLine(data.box[1], V2(left, top), V2(right, top), WHITE, 1)
+                                    updateLine(data.box[2], V2(left, bottom), V2(right, bottom), WHITE, 1)
+                                    updateLine(data.box[3], V2(left, top), V2(left, bottom), WHITE, 1)
+                                    updateLine(data.box[4], V2(right, top), V2(right, bottom), WHITE, 1)
                                 else
                                     hideList(data.box)
                                 end
 
-                                if data.name then
-                                    data.name.Text = player.DisplayName or player.Name
-                                    data.name.TextColor3 = color
-                                    data.name.Position = UDim2.fromOffset(bounds.CenterX, top - 8)
-                                    data.name.Visible = settings.Name
-                                end
+                                updateNameLabel(data.name, player.DisplayName or player.Name, bounds.CenterX, top, boxWidth)
 
                                 if data.team then
                                     data.team.Text = player.Team and player.Team.Name or "No Team"
-                                    data.team.TextColor3 = color
+                                    data.team.TextColor3 = WHITE
                                     data.team.Position = UDim2.fromOffset(right + 8, top + 8)
                                     data.team.Visible = settings.Team
                                 end
@@ -755,10 +892,7 @@ return function(Library, context)
             local dx = x2 - x1
             local dy = y2 - y1
             local length = math.sqrt((dx * dx) + (dy * dy))
-            local resolvedThickness = thickness
-            if not resolvedThickness then
-                resolvedThickness = (math.abs(dx) < 0.01 or math.abs(dy) < 0.01) and 2 or 1
-            end
+            local resolvedThickness = thickness or 1
 
             line.Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2)
             line.Size = UDim2.fromOffset(math.max(1, length + 1), resolvedThickness)
