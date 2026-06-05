@@ -8,6 +8,8 @@
 ]]
 
 local moduleCache = {}
+local RobloxInstance = Instance
+local safeModuleEnvironment = nil
 local remoteModuleBases = {
     "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules/",
     "https://raw.githubusercontent.com/megafartCc/UiLib/refs/heads/main/UILibModules/",
@@ -77,6 +79,30 @@ end
 local function withCacheTag(url)
     local separator = string.find(url, "?", 1, true) and "&" or "?"
     return url .. separator .. "v=" .. remoteCacheTag
+end
+
+local function safeInstanceNew(className, parent)
+    local object = RobloxInstance.new(className)
+    if parent ~= nil then
+        object.Parent = parent
+    end
+    return object
+end
+
+local function getSafeModuleEnvironment()
+    if safeModuleEnvironment then
+        return safeModuleEnvironment
+    end
+
+    safeModuleEnvironment = setmetatable({
+        Instance = {
+            new = safeInstanceNew,
+        },
+    }, {
+        __index = type(getfenv) == "function" and getfenv(0) or _G,
+    })
+
+    return safeModuleEnvironment
 end
 
 local function previewText(value)
@@ -153,6 +179,10 @@ local function loadModule(path)
     local chunk, err = loadstring(source, "@" .. normalized)
     if not chunk then
         error(string.format("UILib module load failed for %s: %s", normalized, tostring(err)))
+    end
+
+    if type(setfenv) == "function" then
+        setfenv(chunk, getSafeModuleEnvironment())
     end
 
     local exported = chunk()

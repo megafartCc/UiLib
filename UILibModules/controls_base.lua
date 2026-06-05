@@ -1,6 +1,15 @@
 return function(Library, context)
     local Cleaner = context.Cleaner
     local TextService = context.TextService
+    local RobloxInstance = Instance
+
+    local function createInstance(className, parent)
+        local object = RobloxInstance.new(className)
+        if parent ~= nil then
+            object.Parent = parent
+        end
+        return object
+    end
 
     local function removeArrayValue(array, value)
         if type(array) ~= "table" then
@@ -18,7 +27,7 @@ return function(Library, context)
     local function createRow(parent, name, opts)
         opts = opts or {}
 
-        local row = Instance.new("Frame", parent)
+        local row = createInstance("Frame", parent)
         row.Name = name or "Row"
         row.BackgroundTransparency = 1
         row.BorderSizePixel = 0
@@ -31,7 +40,7 @@ return function(Library, context)
     local function createLabel(parent, text, opts)
         opts = opts or {}
 
-        local label = Instance.new("TextLabel", parent)
+        local label = createInstance("TextLabel", parent)
         label.Name = opts.Name or "Label"
         label.BackgroundTransparency = 1
         label.Position = opts.Position or UDim2.new(0, 0, 0, 0)
@@ -128,7 +137,7 @@ return function(Library, context)
         opts = opts or {}
 
         local className = opts.ClassName or "Frame"
-        local box = Instance.new(className, parent)
+        local box = createInstance(className, parent)
         box.Name = opts.Name or className
         box.AnchorPoint = Vector2.new(1, 0.5)
         box.Position = opts.Position or UDim2.new(1, opts.RightOffset or 0, 0.5, 0)
@@ -151,11 +160,11 @@ return function(Library, context)
             Library:RegisterThemeBinding(box, "BackgroundTransparency", opts.ThemeTransparencyKey)
         end
 
-        Instance.new("UICorner", box).CornerRadius = UDim.new(0, opts.CornerRadius or 3)
+        createInstance("UICorner", box).CornerRadius = UDim.new(0, opts.CornerRadius or 3)
 
         local stroke
         if opts.WithStroke ~= false then
-            stroke = Instance.new("UIStroke", box)
+            stroke = createInstance("UIStroke", box)
             stroke.Color = opts.StrokeColor
             stroke.Transparency = opts.StrokeTransparency
             if opts.ThemeStrokeKey then
@@ -169,7 +178,7 @@ return function(Library, context)
     local function createOverlayButton(parent, opts)
         opts = opts or {}
 
-        local button = Instance.new("TextButton", parent)
+        local button = createInstance("TextButton", parent)
         button.Name = opts.Name or "Button"
         button.BackgroundTransparency = 1
         button.Size = opts.Size or UDim2.new(1, 0, 1, 0)
@@ -199,7 +208,7 @@ return function(Library, context)
             ThemeStrokeKey = opts.ThemeStrokeKey,
         })
 
-        local icon = Instance.new("ImageLabel", frame)
+        local icon = createInstance("ImageLabel", frame)
         icon.Name = "Icon"
         icon.BackgroundTransparency = 1
         icon.AnchorPoint = Vector2.new(0.5, 0.5)
