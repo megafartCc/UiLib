@@ -3,11 +3,30 @@ return function(Library, context)
     local TextService = context.TextService
     local RobloxInstance = Instance
 
+    local function setParentSafe(object, parent)
+        if parent == nil then
+            return
+        end
+
+        local ok = pcall(function()
+            object.Parent = parent
+        end)
+        if ok then
+            return
+        end
+
+        task.defer(function()
+            pcall(function()
+                if object and parent then
+                    object.Parent = parent
+                end
+            end)
+        end)
+    end
+
     local function createInstance(className, parent)
         local object = RobloxInstance.new(className)
-        if parent ~= nil then
-            object.Parent = parent
-        end
+        setParentSafe(object, parent)
         return object
     end
 
