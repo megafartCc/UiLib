@@ -43,6 +43,485 @@ return function(Library, context)
         end
     end
 
+    local function createGuiEspModule(opts)
+        opts = opts or {}
+
+        local Players = context.Players or game:GetService("Players")
+        local RunService = context.RunService or game:GetService("RunService")
+        local LocalPlayer = context.Client or Players.LocalPlayer
+        local C3 = Color3.fromRGB
+        local V2 = Vector2.new
+
+        local settings = {
+            Box = false,
+            Name = false,
+            Health = false,
+            Team = false,
+            Tracers = false,
+            Skeleton = false,
+            HeldItem = false,
+            MaxDistance = opts.MaxDistance or 1000,
+        }
+
+        local tracked = {}
+        local renderConnection = nil
+        local playerEspGui = nil
+
+        local function getEspGui()
+            local ok, parent = pcall(context.getHiddenParent)
+            if not ok or not parent then
+                return nil
+            end
+
+            if playerEspGui and playerEspGui.Parent == parent then
+                return playerEspGui
+            end
+
+            local existing = parent:FindFirstChild("UnknownHubPlayerEsp")
+            if existing and existing:IsA("ScreenGui") then
+                playerEspGui = existing
+                return playerEspGui
+            end
+
+            local gui = Instance.new("ScreenGui")
+            gui.Name = "UnknownHubPlayerEsp"
+            gui.IgnoreGuiInset = true
+            gui.ResetOnSpawn = false
+            gui.DisplayOrder = 100000
+            gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+            gui.Parent = parent
+            playerEspGui = gui
+            return gui
+        end
+
+        local function destroyObject(object)
+            if object then
+                pcall(function()
+                    object:Destroy()
+                end)
+            end
+        end
+
+        local function makeLabel(name, color, textSize, zIndex)
+            local gui = getEspGui()
+            if not gui then
+                return nil
+            end
+
+            local label = Instance.new("TextLabel")
+            label.Name = name
+            label.AnchorPoint = Vector2.new(0.5, 0.5)
+            label.BackgroundTransparency = 1
+            label.BorderSizePixel = 0
+            label.Font = Enum.Font.GothamBold
+            label.TextColor3 = color
+            label.TextSize = textSize
+            label.TextStrokeColor3 = C3(0, 0, 0)
+            label.TextStrokeTransparency = 0
+            label.TextWrapped = false
+            label.Visible = false
+            label.ZIndex = zIndex or 120
+            label.Size = UDim2.fromOffset(230, textSize + 8)
+            label.Parent = gui
+            return label
+        end
+
+        local function makeLine(name, color, thickness, zIndex)
+            local gui = getEspGui()
+            if not gui then
+                return nil
+            end
+
+            local line = Instance.new("Frame")
+            line.Name = name
+            line.AnchorPoint = Vector2.new(0.5, 0.5)
+            line.BackgroundColor3 = color
+            line.BackgroundTransparency = 0.05
+            line.BorderSizePixel = 0
+            line.Size = UDim2.fromOffset(0, thickness or 1)
+            line.Visible = false
+            line.ZIndex = zIndex or 110
+            line.Parent = gui
+            return line
+        end
+
+        local function setVisible(object, visible)
+            if object then
+                object.Visible = visible == true
+            end
+        end
+
+        local function hideList(list)
+            for _, object in ipairs(list or {}) do
+                setVisible(object, false)
+            end
+        end
+
+        local function updateLine(line, fromPoint, toPoint, color, thickness)
+            if not line or not fromPoint or not toPoint then
+                setVisible(line, false)
+                return
+            end
+
+            local delta = toPoint - fromPoint
+            local length = delta.Magnitude
+            if length < 1 then
+                setVisible(line, false)
+                return
+            end
+
+            line.BackgroundColor3 = color
+            line.Size = UDim2.fromOffset(length, thickness or 1)
+            line.Position = UDim2.fromOffset((fromPoint.X + toPoint.X) * 0.5, (fromPoint.Y + toPoint.Y) * 0.5)
+            line.Rotation = math.deg((math.atan2 or math.atan)(delta.Y, delta.X))
+            line.Visible = true
+        end
+
+        local function project(camera, position)
+            local point, onScreen = camera:WorldToViewportPoint(position)
+            if not onScreen or point.Z <= 0 then
+                return nil
+            end
+            return V2(point.X, point.Y)
+        end
+
+        local function updateWorldLine(camera, line, fromPosition, toPosition, color, thickness)
+            local fromPoint = fromPosition and project(camera, fromPosition)
+            local toPoint = toPosition and project(camera, toPosition)
+            updateLine(line, fromPoint, toPoint, color, thickness)
+        end
+
+        local function makePlayerData(player)
+            if tracked[player] then
+                return tracked[player]
+            end
+
+            local data = {
+                box = {},
+                skeleton = {},
+            }
+
+            for index = 1, 4 do
+                data.box[index] = makeLine("PlayerBoxEspLine", C3(255, 255, 255), 1, 120)
+            end
+
+            data.tracer = makeLine("PlayerTracerEspLine", C3(255, 255, 255), 1, 110)
+            data.healthBack = makeLine("PlayerHealthEspBack", C3(0, 0, 0), 3, 115)
+            data.healthFill = makeLine("PlayerHealthEspFill", C3(0, 255, 0), 2, 125)
+            data.name = makeLabel("PlayerNameEsp", C3(255, 255, 255), 14, 130)
+            data.team = makeLabel("PlayerTeamEsp", C3(255, 255, 255), 13, 130)
+            data.heldItem = makeLabel("PlayerHeldItemEsp", C3(255, 200, 0), 13, 130)
+
+            if data.team then
+                data.team.AnchorPoint = Vector2.new(0, 0.5)
+                data.team.TextXAlignment = Enum.TextXAlignment.Left
+                data.team.Size = UDim2.fromOffset(170, 20)
+            end
+
+            tracked[player] = data
+            return data
+        end
+
+        local function removePlayerData(player)
+            local data = tracked[player]
+            if not data then
+                return
+            end
+
+            for _, line in ipairs(data.box or {}) do
+                destroyObject(line)
+            end
+            for _, line in ipairs(data.skeleton or {}) do
+                destroyObject(line)
+            end
+            destroyObject(data.tracer)
+            destroyObject(data.healthBack)
+            destroyObject(data.healthFill)
+            destroyObject(data.name)
+            destroyObject(data.team)
+            destroyObject(data.heldItem)
+            tracked[player] = nil
+        end
+
+        local function hideData(data)
+            if not data then
+                return
+            end
+
+            hideList(data.box)
+            hideList(data.skeleton)
+            setVisible(data.tracer, false)
+            setVisible(data.healthBack, false)
+            setVisible(data.healthFill, false)
+            setVisible(data.name, false)
+            setVisible(data.team, false)
+            setVisible(data.heldItem, false)
+        end
+
+        local r15SkeletonPairs = {
+            { { "Head" }, { "UpperTorso" } },
+            { { "UpperTorso" }, { "LowerTorso" } },
+            { { "UpperTorso" }, { "LeftHand", "LeftLowerArm", "LeftUpperArm" } },
+            { { "UpperTorso" }, { "RightHand", "RightLowerArm", "RightUpperArm" } },
+            { { "LowerTorso" }, { "LeftFoot", "LeftLowerLeg", "LeftUpperLeg" } },
+            { { "LowerTorso" }, { "RightFoot", "RightLowerLeg", "RightUpperLeg" } },
+        }
+
+        local r6SkeletonPairs = {
+            { { "Head" }, { "Torso" } },
+            { { "Torso" }, { "Left Arm" } },
+            { { "Torso" }, { "Right Arm" } },
+            { { "Torso" }, { "Left Leg" } },
+            { { "Torso" }, { "Right Leg" } },
+        }
+
+        local function getSkeletonPairs(humanoid)
+            if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 then
+                return r15SkeletonPairs
+            end
+            return r6SkeletonPairs
+        end
+
+        local function findSkeletonPart(character, names)
+            for _, name in ipairs(names or {}) do
+                local part = character:FindFirstChild(name)
+                if part and part:IsA("BasePart") then
+                    return part
+                end
+            end
+            return nil
+        end
+
+        local function updateSkeleton(camera, data, character, humanoid, color)
+            local pairsList = getSkeletonPairs(humanoid)
+
+            while #data.skeleton < #pairsList do
+                table.insert(data.skeleton, makeLine("PlayerSkeletonEspLine", color, 2, 118))
+            end
+
+            for index, pair in ipairs(pairsList) do
+                local line = data.skeleton[index]
+                local fromPart = findSkeletonPart(character, pair[1])
+                local toPart = findSkeletonPart(character, pair[2])
+                if fromPart and toPart then
+                    updateWorldLine(camera, line, fromPart.Position, toPart.Position, color, 2)
+                else
+                    setVisible(line, false)
+                end
+            end
+
+            for index = #pairsList + 1, #data.skeleton do
+                setVisible(data.skeleton[index], false)
+            end
+        end
+
+        local function getRoot(character)
+            return character and character:FindFirstChild("HumanoidRootPart")
+        end
+
+        local function isAlive(character)
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            return humanoid and humanoid.Health > 0, humanoid
+        end
+
+        local function getPlayerColor(player)
+            if player.TeamColor then
+                return player.TeamColor.Color
+            end
+            return C3(255, 255, 255)
+        end
+
+        local function anyEnabled()
+            return settings.Box
+                or settings.Name
+                or settings.Health
+                or settings.Team
+                or settings.Tracers
+                or settings.Skeleton
+                or settings.HeldItem
+        end
+
+        local function render()
+            local camera = workspace.CurrentCamera
+            local localRoot = getRoot(LocalPlayer and LocalPlayer.Character)
+            if not camera or not localRoot then
+                for _, data in pairs(tracked) do
+                    hideData(data)
+                end
+                return
+            end
+
+            local seen = {}
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    seen[player] = true
+                    local data = makePlayerData(player)
+                    local character = player.Character
+                    local alive, humanoid = isAlive(character)
+                    local root = getRoot(character)
+                    if not alive or not root then
+                        hideData(data)
+                    else
+                        local distance = (root.Position - localRoot.Position).Magnitude
+                        if distance > settings.MaxDistance then
+                            hideData(data)
+                        else
+                            local centerPoint = project(camera, root.Position)
+                            local topPoint = project(camera, root.Position + Vector3.new(0, 3, 0))
+                            local bottomPoint = project(camera, root.Position - Vector3.new(0, 3, 0))
+                            if not centerPoint or not topPoint or not bottomPoint then
+                                hideData(data)
+                            else
+                                local height = math.max(28, math.abs(bottomPoint.Y - topPoint.Y))
+                                local width = math.max(14, height * 0.5)
+                                local left = centerPoint.X - width * 0.5
+                                local right = centerPoint.X + width * 0.5
+                                local top = centerPoint.Y - height * 0.5
+                                local bottom = centerPoint.Y + height * 0.5
+                                local color = getPlayerColor(player)
+
+                                if settings.Box then
+                                    updateLine(data.box[1], V2(left, top), V2(right, top), color, 1)
+                                    updateLine(data.box[2], V2(left, bottom), V2(right, bottom), color, 1)
+                                    updateLine(data.box[3], V2(left, top), V2(left, bottom), color, 1)
+                                    updateLine(data.box[4], V2(right, top), V2(right, bottom), color, 1)
+                                else
+                                    hideList(data.box)
+                                end
+
+                                if data.name then
+                                    data.name.Text = player.DisplayName or player.Name
+                                    data.name.TextColor3 = color
+                                    data.name.Position = UDim2.fromOffset(centerPoint.X, top - 18)
+                                    data.name.Visible = settings.Name
+                                end
+
+                                if data.team then
+                                    data.team.Text = player.Team and player.Team.Name or "No Team"
+                                    data.team.TextColor3 = color
+                                    data.team.Position = UDim2.fromOffset(right + 8, top + 8)
+                                    data.team.Visible = settings.Team
+                                end
+
+                                if settings.Health then
+                                    local ratio = math.clamp(humanoid.Health / math.max(humanoid.MaxHealth, 1), 0, 1)
+                                    local x = left - 6
+                                    updateLine(data.healthBack, V2(x, bottom), V2(x, top), C3(0, 0, 0), 3)
+                                    updateLine(data.healthFill, V2(x, bottom), V2(x, bottom - ((bottom - top) * ratio)), C3(255, 0, 0):Lerp(C3(0, 255, 0), ratio), 2)
+                                else
+                                    setVisible(data.healthBack, false)
+                                    setVisible(data.healthFill, false)
+                                end
+
+                                if settings.Tracers then
+                                    updateLine(data.tracer, V2(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y - 8), V2(centerPoint.X, bottom), color, 1)
+                                else
+                                    setVisible(data.tracer, false)
+                                end
+
+                                if settings.Skeleton then
+                                    updateSkeleton(camera, data, character, humanoid, color)
+                                else
+                                    hideList(data.skeleton)
+                                end
+
+                                if data.heldItem then
+                                    local tool = character:FindFirstChildWhichIsA("Tool")
+                                    data.heldItem.Text = tool and tool.Name or ""
+                                    data.heldItem.Position = UDim2.fromOffset(centerPoint.X, bottom + 10)
+                                    data.heldItem.Visible = settings.HeldItem and tool ~= nil
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            for player in pairs(tracked) do
+                if not seen[player] or not player.Parent then
+                    removePlayerData(player)
+                end
+            end
+        end
+
+        local function updateLoop()
+            if anyEnabled() then
+                if not renderConnection then
+                    renderConnection = RunService.RenderStepped:Connect(function()
+                        pcall(render)
+                    end)
+                end
+                pcall(render)
+            else
+                if renderConnection then
+                    renderConnection:Disconnect()
+                    renderConnection = nil
+                end
+                for _, data in pairs(tracked) do
+                    hideData(data)
+                end
+            end
+        end
+
+        local api = {}
+
+        function api:Init()
+            updateLoop()
+        end
+
+        function api:SetBoxEsp(value)
+            settings.Box = value == true
+            updateLoop()
+        end
+
+        function api:SetNameEsp(value)
+            settings.Name = value == true
+            updateLoop()
+        end
+
+        function api:SetHealthEsp(value)
+            settings.Health = value == true
+            updateLoop()
+        end
+
+        function api:SetTeamEsp(value)
+            settings.Team = value == true
+            updateLoop()
+        end
+
+        function api:SetTracers(value)
+            settings.Tracers = value == true
+            updateLoop()
+        end
+
+        function api:SetSkeletonEsp(value)
+            settings.Skeleton = value == true
+            updateLoop()
+        end
+
+        function api:SetHeldItemEsp(value)
+            settings.HeldItem = value == true
+            updateLoop()
+        end
+
+        function api:SetMaxDist(value)
+            settings.MaxDistance = tonumber(value) or settings.MaxDistance
+            updateLoop()
+        end
+
+        function api:Destroy()
+            if renderConnection then
+                renderConnection:Disconnect()
+                renderConnection = nil
+            end
+            for player in pairs(tracked) do
+                removePlayerData(player)
+            end
+        end
+
+        return api
+    end
+
     local function makePreview(menu, controlsSection, state, opts)
         opts = opts or {}
 
@@ -342,7 +821,19 @@ return function(Library, context)
             error("AddPlayerESPSection requires a UiLib menu", 2)
         end
 
-        local esp = opts.ESP or opts.Esp or opts.Module
+        local providedEsp = opts.ESP or opts.Esp or opts.Module
+        local esp = nil
+        if opts.UseProvidedEsp == true then
+            esp = providedEsp
+        elseif opts.LoadEsp == "external" or opts.UseExternalEsp == true then
+            esp = providedEsp
+            if not esp then
+                esp = loadEspModule(opts.SourceUrl or opts.Url)
+            end
+        else
+            esp = createGuiEspModule(opts)
+        end
+
         if not esp and opts.LoadEsp ~= false then
             esp = loadEspModule(opts.SourceUrl or opts.Url)
         end
@@ -453,6 +944,13 @@ return function(Library, context)
             api.Preview = preview
         end
 
+        safeEspCall(esp, "SetBoxEsp", state.Box)
+        safeEspCall(esp, "SetNameEsp", state.Name)
+        safeEspCall(esp, "SetHealthEsp", state.Health)
+        safeEspCall(esp, "SetTeamEsp", state.Team)
+        safeEspCall(esp, "SetTracers", state.Tracers)
+        safeEspCall(esp, "SetSkeletonEsp", state.Skeleton)
+        safeEspCall(esp, "SetHeldItemEsp", state.HeldItem)
         safeEspCall(esp, "SetMaxDist", state.MaxDistance)
         refreshPreview()
 
