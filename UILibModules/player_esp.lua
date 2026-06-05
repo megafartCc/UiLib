@@ -385,22 +385,30 @@ return function(Library, context)
             end
 
             local torsoSize = torso.Size
-            local neck = pointFromPart(torso, Vector3.new(0, torsoSize.Y * 0.52, 0))
+            local armLength = math.max(leftArm and leftArm.Size.Y or 0, rightArm and rightArm.Size.Y or 0, torsoSize.Y * 0.9)
+            local legLength = math.max(leftLeg and leftLeg.Size.Y or 0, rightLeg and rightLeg.Size.Y or 0, torsoSize.Y)
+
+            local neck = pointFromPart(torso, Vector3.new(0, torsoSize.Y * 0.50, 0))
+            local headBase = head and pointFromPart(head, Vector3.new(0, -head.Size.Y * 0.42, 0)) or neck
             local pelvis = pointFromPart(torso, Vector3.new(0, -torsoSize.Y * 0.48, 0))
-            local leftShoulder = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.52, torsoSize.Y * 0.34, 0))
-            local rightShoulder = pointFromPart(torso, Vector3.new(torsoSize.X * 0.52, torsoSize.Y * 0.34, 0))
-            local leftHip = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.26, -torsoSize.Y * 0.50, 0))
-            local rightHip = pointFromPart(torso, Vector3.new(torsoSize.X * 0.26, -torsoSize.Y * 0.50, 0))
+            local leftShoulder = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.54, torsoSize.Y * 0.28, 0))
+            local rightShoulder = pointFromPart(torso, Vector3.new(torsoSize.X * 0.54, torsoSize.Y * 0.28, 0))
+            local leftHip = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.24, -torsoSize.Y * 0.50, 0))
+            local rightHip = pointFromPart(torso, Vector3.new(torsoSize.X * 0.24, -torsoSize.Y * 0.50, 0))
+            local leftHand = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.74, torsoSize.Y * 0.25 - armLength * 0.72, 0))
+            local rightHand = pointFromPart(torso, Vector3.new(torsoSize.X * 0.74, torsoSize.Y * 0.25 - armLength * 0.72, 0))
+            local leftFoot = pointFromPart(torso, Vector3.new(-torsoSize.X * 0.30, -torsoSize.Y * 0.50 - legLength * 0.82, 0))
+            local rightFoot = pointFromPart(torso, Vector3.new(torsoSize.X * 0.30, -torsoSize.Y * 0.50 - legLength * 0.82, 0))
 
             return {
-                { head and pointFromPart(head, Vector3.new(0, -head.Size.Y * 0.50, 0)), neck },
+                { headBase, neck },
                 { neck, pelvis },
                 { leftShoulder, rightShoulder },
-                { leftShoulder, leftArm and pointFromPart(leftArm, Vector3.new(0, -leftArm.Size.Y * 0.50, 0)) },
-                { rightShoulder, rightArm and pointFromPart(rightArm, Vector3.new(0, -rightArm.Size.Y * 0.50, 0)) },
+                { leftShoulder, leftHand },
+                { rightShoulder, rightHand },
                 { leftHip, rightHip },
-                { leftHip, leftLeg and pointFromPart(leftLeg, Vector3.new(0, -leftLeg.Size.Y * 0.50, 0)) },
-                { rightHip, rightLeg and pointFromPart(rightLeg, Vector3.new(0, -rightLeg.Size.Y * 0.50, 0)) },
+                { leftHip, leftFoot },
+                { rightHip, rightFoot },
             }
         end
 
