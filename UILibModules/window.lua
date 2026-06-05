@@ -417,6 +417,22 @@ return function(Library, context, moduleRequire)
         return ""
     end
 
+    local function keyTicketFromPayload(payload)
+        if type(payload) ~= "table" then
+            return "", "", nil
+        end
+
+        local ticket = trimText(payload.ticket or payload.unlockTicket or payload.keyTicket)
+        local expiresAt = trimText(payload.ticketExpiresAt or payload.ticket_expires_at or payload.unlockTicketExpiresAt)
+        local secondsRemaining = tonumber(payload.ticketSecondsRemaining or payload.ticket_seconds_remaining or payload.ticketTtlSeconds or payload.ticket_ttl_seconds)
+
+        return ticket, expiresAt, secondsRemaining
+    end
+
+    local function signedTicketLooksValid(ticket)
+        return type(ticket) == "string" and #ticket >= 80 and ticket:match("^[%w_%-]+%.[%w_%-]+$") ~= nil
+    end
+
     local function checkUnknownHubKey(verifyUrl, scriptId, projectId, submittedKey)
         scriptId = trimText(scriptId)
         projectId = trimText(projectId)
@@ -485,6 +501,26 @@ return function(Library, context, moduleRequire)
         end
 
         if payload.valid == true then
+            local ticket, ticketExpiresAt, ticketSecondsRemaining = keyTicketFromPayload(payload)
+
+            if not signedTicketLooksValid(ticket) then
+                return false, {
+                    code = "KEY_TICKET_MISSING",
+                    message = "Key server did not return a signed unlock ticket.",
+                }
+            end
+
+            if ticketSecondsRemaining ~= nil and ticketSecondsRemaining <= 0 then
+                return false, {
+                    code = "KEY_TICKET_EXPIRED",
+                    message = "Key unlock ticket expired. Try again.",
+                }
+            end
+
+            payload.ticket = ticket
+            payload.unlockTicket = ticket
+            payload.ticketExpiresAt = ticketExpiresAt
+            payload.ticketSecondsRemaining = ticketSecondsRemaining
             return true, payload
         end
 
@@ -576,10 +612,17 @@ function Library:CreateWindow(opts)
         return trimText(value)
     end
 
-    local function publishVerifiedKey(value)
+    local function publishVerifiedKey(value, meta)
         local keyValue = normalizeKeyInput(value)
         if keyValue == "" then
             return false
+        end
+
+        local ticketValue = ""
+        local ticketExpiresAt = ""
+        local ticketSecondsRemaining = nil
+        if type(meta) == "table" then
+            ticketValue, ticketExpiresAt, ticketSecondsRemaining = keyTicketFromPayload(meta)
         end
 
         local function updateStore(store)
@@ -590,6 +633,17 @@ function Library:CreateWindow(opts)
             store.UnknownHubKey = keyValue
             store.unknownHubKey = keyValue
             store.unknownhub_key = keyValue
+            if ticketValue ~= "" then
+                store.UnknownHubTicket = ticketValue
+                store.unknownHubTicket = ticketValue
+                store.unknownhub_ticket = ticketValue
+            end
+            if ticketExpiresAt ~= "" then
+                store.UnknownHubTicketExpiresAt = ticketExpiresAt
+            end
+            if ticketSecondsRemaining ~= nil then
+                store.UnknownHubTicketSecondsRemaining = ticketSecondsRemaining
+            end
 
             local hub = store.UnknownHub
             if type(hub) ~= "table" then
@@ -604,6 +658,19 @@ function Library:CreateWindow(opts)
             hub.license_key = keyValue
             hub.licenseKey = keyValue
             hub.value = keyValue
+            if ticketValue ~= "" then
+                hub.ticket = ticketValue
+                hub.Ticket = ticketValue
+                hub.unlock_ticket = ticketValue
+                hub.unlockTicket = ticketValue
+            end
+            if ticketExpiresAt ~= "" then
+                hub.ticketExpiresAt = ticketExpiresAt
+                hub.unlockTicketExpiresAt = ticketExpiresAt
+            end
+            if ticketSecondsRemaining ~= nil then
+                hub.ticketSecondsRemaining = ticketSecondsRemaining
+            end
             hub.getKey = function()
                 return keyValue
             end
@@ -624,6 +691,16 @@ function Library:CreateWindow(opts)
         end
 
         Library.UnknownHubKey = keyValue
+        if ticketValue ~= "" then
+            Library.UnknownHubTicket = ticketValue
+            Library.unknownHubTicket = ticketValue
+        end
+        if ticketExpiresAt ~= "" then
+            Library.UnknownHubTicketExpiresAt = ticketExpiresAt
+        end
+        if ticketSecondsRemaining ~= nil then
+            Library.UnknownHubTicketSecondsRemaining = ticketSecondsRemaining
+        end
         Library.key = keyValue
         Library.Key = keyValue
         Library.getKey = function()
@@ -691,18 +768,19 @@ function Library:CreateWindow(opts)
         savedKey = normalizeKeyInput(savedKey)
         initialKeyInputText = savedKey
         local savedKeyAccepted = false
+        local savedKeyMeta = nil
         if savedKey ~= "" then
             if keyValidationMode == "hardcoded" then
                 savedKeyAccepted = isAcceptedKey(savedKey)
             elseif keyValidationMode == "unknownhub" and (unknownHubScriptId ~= "" or unknownHubProjectId ~= "") then
                 local okSaved = nil
-                okSaved = select(1, validateSubmittedKey(savedKey))
+                okSaved, savedKeyMeta = validateSubmittedKey(savedKey)
                 savedKeyAccepted = okSaved == true
             end
         end
         if savedKeyAccepted then
             keyGateUnlocked = true
-            publishVerifiedKey(savedKey)
+            publishVerifiedKey(savedKey, savedKeyMeta)
         end
     end
 
@@ -3240,9 +3318,13 @@ function Library:CreateWindow(opts)
         end
 
         if type(Library.WriteData) == "function" then
+            local ticketValue, ticketExpiresAt, ticketSecondsRemaining = keyTicketFromPayload(status)
             local saved, saveErr = Library:WriteData(keyStorageTag, {
                 key = submitted,
                 value = submitted,
+                ticket = ticketValue ~= "" and ticketValue or nil,
+                ticketExpiresAt = ticketExpiresAt ~= "" and ticketExpiresAt or nil,
+                ticketSecondsRemaining = ticketSecondsRemaining,
                 verified = true,
                 mode = keyValidationMode,
                 script_id = unknownHubScriptId,
@@ -3253,7 +3335,7 @@ function Library:CreateWindow(opts)
             end
         end
 
-        publishVerifiedKey(submitted)
+        publishVerifiedKey(submitted, status)
         win._setKeyVerified(true)
         return true
     end
