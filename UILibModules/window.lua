@@ -3499,7 +3499,7 @@ function Library:CreateWindow(opts)
     function win:AddMenu(menuOpts)
         menuOpts = menuOpts or {}
         local menuName = menuOpts.Name or menuOpts.Title or "TAB"
-        local menuIcon = menuOpts.Icon or "eye"
+        local menuIcon = menuOpts.Icon
         local numColumns = menuOpts.Columns or 3
         local menuIsSettings = string.upper(tostring(menuName)) == "SETTINGS"
 
@@ -3522,14 +3522,29 @@ function Library:CreateWindow(opts)
         btnStroke.Transparency = 1
         bindTheme(btnStroke, "Color", "Line")
 
-        -- Tab label text (centered, no icon)
+        local menuIconImage = controlBase.createIcon(menuBtn, menuIcon, {
+            Name = "MenuIcon",
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 8, 0.5, 0),
+            Size = UDim2.new(0, 14, 0, 14),
+            ImageColor3 = colors.TextDim,
+            ThemeImageKey = "TextDim",
+            ZIndex = 5,
+        })
+        if not menuIconImage.Visible then
+            menuIconImage:Destroy()
+            menuIconImage = nil
+        end
+        local hasMenuIcon = menuIconImage ~= nil
+
+        -- Tab label text
         local menuLabel = Instance.new("TextLabel", menuBtn)
         menuLabel.Name = randomStr()
-        menuLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+        menuLabel.AnchorPoint = hasMenuIcon and Vector2.new(0, 0.5) or Vector2.new(0.5, 0.5)
         menuLabel.BackgroundTransparency = 1
         menuLabel.BorderSizePixel = 0
-        menuLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
-        menuLabel.Size = UDim2.new(1, 0, 1, 0)
+        menuLabel.Position = hasMenuIcon and UDim2.new(0, 28, 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
+        menuLabel.Size = hasMenuIcon and UDim2.new(1, -34, 1, 0) or UDim2.new(1, 0, 1, 0)
         menuLabel.ZIndex = 5
         menuLabel.Font = config.Font
         menuLabel.Text = menuName
@@ -3537,7 +3552,7 @@ function Library:CreateWindow(opts)
         menuLabel.TextSize = 13
         menuLabel.TextStrokeTransparency = 1
         menuLabel.TextTransparency = 0
-        menuLabel.TextXAlignment = Enum.TextXAlignment.Center
+        menuLabel.TextXAlignment = hasMenuIcon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
         bindTheme(menuLabel, "TextColor3", "TextDim")
 
         -- Click area (overlaid TextButton)
@@ -3692,6 +3707,7 @@ function Library:CreateWindow(opts)
 
         menu._btn = menuBtn
         menu._label = menuLabel
+        menu._icon = menuIconImage
         menu._page = pageFrame
         menu._stroke = btnStroke
         menu._widePanels = {}
@@ -3702,12 +3718,18 @@ function Library:CreateWindow(opts)
                 Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 0 })
                 Library:Spring(btnStroke, "Smooth", { Transparency = 0.85 })
                 Library:Spring(menuLabel, "Smooth", { TextColor3 = colors.TextStrong })
+                if menu._icon then
+                    Library:Spring(menu._icon, "Smooth", { ImageColor3 = colors.TextStrong })
+                end
                 pageFrame.Visible = true
                 menu:_refreshScroll()
             else
                 Library:Spring(menuBtn, "Smooth", { BackgroundTransparency = 1 })
                 Library:Spring(btnStroke, "Smooth", { Transparency = 1 })
                 Library:Spring(menuLabel, "Smooth", { TextColor3 = colors.TextDim })
+                if menu._icon then
+                    Library:Spring(menu._icon, "Smooth", { ImageColor3 = colors.TextDim })
+                end
                 pageFrame.Visible = false
             end
         end
@@ -3903,12 +3925,27 @@ function Library:CreateWindow(opts)
 
             Instance.new("UICorner", secFrame).CornerRadius = UDim.new(0, 4)
 
+            local sectionIcon = controlBase.createIcon(secFrame, sectionOpts.Icon, {
+                Name = "SectionIcon",
+                AnchorPoint = Vector2.new(0, 0),
+                Position = UDim2.new(0, 8, 0, -4),
+                Size = UDim2.new(0, 12, 0, 12),
+                ImageColor3 = colors.Text,
+                ThemeImageKey = "Text",
+                ZIndex = 5,
+            })
+            if not sectionIcon.Visible then
+                sectionIcon:Destroy()
+                sectionIcon = nil
+            end
+            local hasSectionIcon = sectionIcon ~= nil
+
             -- Section title (physically sits overlapping the top edge)
             local secTitle = Instance.new("TextLabel", secFrame)
             secTitle.Name = "SectionTitle"
             secTitle.BackgroundTransparency = 1
-            secTitle.Position = UDim2.new(0, 8, 0, -6) -- Overlaps top edge (70% inside, 30% outside)
-            secTitle.Size = UDim2.new(1, -16, 0, 14)
+            secTitle.Position = hasSectionIcon and UDim2.new(0, 24, 0, -6) or UDim2.new(0, 8, 0, -6) -- Overlaps top edge (70% inside, 30% outside)
+            secTitle.Size = hasSectionIcon and UDim2.new(1, -32, 0, 14) or UDim2.new(1, -16, 0, 14)
             secTitle.Font = config.Font
             secTitle.Text = secName
             secTitle.TextColor3 = colors.Text
@@ -3941,6 +3978,7 @@ function Library:CreateWindow(opts)
 
             section.Frame = secFrame
             section.Container = contentContainer
+            section._icon = sectionIcon
             section._layout = secLayout
             section._title = secTitle
             section._controls = {}
@@ -4904,10 +4942,12 @@ function Library:CreateWindow(opts)
                     icon.AnchorPoint = Vector2.new(0.5, 0.5)
                     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
                     icon.Size = UDim2.new(0, 12, 0, 12)
-                    icon.Image = "rbxassetid://124717201027551"
                     icon.ImageColor3 = colors.TextDim
                     icon.ZIndex = 9
-                    bindTheme(icon, "ImageColor3", "TextDim")
+                    controlBase.applyIcon(icon, btnOpts.Icon or "rbxassetid://124717201027551", {
+                        ImageColor3 = colors.TextDim,
+                        ThemeImageKey = "TextDim",
+                    })
 
                     local rowBtn = controlBase.createOverlayButton(sRow, {
                         Name = "ButtonRow",
@@ -6031,10 +6071,12 @@ function Library:CreateWindow(opts)
                 icon.AnchorPoint = Vector2.new(0.5, 0.5)
                 icon.Position = UDim2.new(0.5, 0, 0.5, 0)
                 icon.Size = UDim2.new(0, 12, 0, 12)
-                icon.Image = "rbxassetid://124717201027551"
                 icon.ImageColor3 = colors.TextDim
                 icon.ZIndex = 6
-                bindTheme(icon, "ImageColor3", "TextDim")
+                controlBase.applyIcon(icon, btnOpts.Icon or "rbxassetid://124717201027551", {
+                    ImageColor3 = colors.TextDim,
+                    ThemeImageKey = "TextDim",
+                })
 
                 local rowBtn = controlBase.createOverlayButton(row, {
                     Name = "ButtonRow",

@@ -2,6 +2,7 @@ return function(Library, context)
     local Cleaner = context.Cleaner
     local TextService = context.TextService
     local RobloxInstance = Instance
+    local Icons = context.Icons
 
     local function setParentSafe(object, parent)
         if parent == nil then
@@ -210,8 +211,114 @@ return function(Library, context)
         return button
     end
 
+    local function resolveIcon(icon)
+        if Icons and type(Icons.Resolve) == "function" then
+            local ok, resolved = pcall(function()
+                return Icons:Resolve(icon)
+            end)
+            if ok and resolved then
+                return resolved
+            end
+        end
+
+        if type(icon) == "number" then
+            return "rbxassetid://" .. tostring(icon)
+        end
+
+        if type(icon) ~= "string" or icon == "" then
+            return nil
+        end
+
+        if string.match(icon, "^%d+$") then
+            return "rbxassetid://" .. icon
+        end
+
+        if string.match(icon, "^rbxassetid://")
+            or string.match(icon, "^rbxthumb://")
+            or string.match(icon, "^rbxasset://")
+            or string.match(icon, "^http://")
+            or string.match(icon, "^https://")
+            or string.match(icon, "^data:image/") then
+            return icon
+        end
+
+        return nil
+    end
+
+    local function applyIcon(imageLabel, icon, opts)
+        opts = opts or {}
+        if not imageLabel then
+            return false
+        end
+
+        if Icons and type(Icons.Apply) == "function" then
+            local ok, applied = pcall(function()
+                return Icons:Apply(imageLabel, icon, opts)
+            end)
+            if ok and applied then
+                return true
+            end
+        end
+
+        local image = resolveIcon(icon)
+        if not image then
+            imageLabel.Visible = opts.VisibleWhenMissing == true
+            return false
+        end
+
+        imageLabel.Image = image
+        imageLabel.Visible = opts.Visible ~= false
+
+        if opts.ImageColor3 then
+            imageLabel.ImageColor3 = opts.ImageColor3
+        end
+        if opts.ImageTransparency ~= nil then
+            imageLabel.ImageTransparency = opts.ImageTransparency
+        end
+        if opts.ScaleType then
+            imageLabel.ScaleType = opts.ScaleType
+        end
+
+        if opts.ThemeImageKey and Library.RegisterThemeBinding then
+            Library:RegisterThemeBinding(imageLabel, "ImageColor3", opts.ThemeImageKey)
+        end
+
+        return true
+    end
+
+    local function createIcon(parent, icon, opts)
+        opts = opts or {}
+
+        local imageLabel = createInstance("ImageLabel", parent)
+        imageLabel.Name = opts.Name or "Icon"
+        imageLabel.BackgroundTransparency = 1
+        imageLabel.BorderSizePixel = 0
+        imageLabel.AnchorPoint = opts.AnchorPoint or Vector2.new(0, 0.5)
+        imageLabel.Position = opts.Position or UDim2.new(0, 0, 0.5, 0)
+        imageLabel.Size = opts.Size or UDim2.new(0, opts.Width or 14, 0, opts.Height or 14)
+        imageLabel.ZIndex = opts.ZIndex or 5
+        imageLabel.Visible = false
+
+        if opts.ImageColor3 then
+            imageLabel.ImageColor3 = opts.ImageColor3
+        end
+        if opts.ImageTransparency ~= nil then
+            imageLabel.ImageTransparency = opts.ImageTransparency
+        end
+        if opts.ScaleType then
+            imageLabel.ScaleType = opts.ScaleType
+        end
+
+        applyIcon(imageLabel, icon, opts)
+        return imageLabel
+    end
+
     local function createCheckbox(parent, colors, opts)
         opts = opts or {}
+        local imageTransparency = opts.ImageTransparency
+        if imageTransparency == nil then
+            imageTransparency = 1
+        end
 
         local frame, stroke = createRightBox(parent, {
             Name = opts.Name or "Check",
@@ -233,14 +340,14 @@ return function(Library, context)
         icon.AnchorPoint = Vector2.new(0.5, 0.5)
         icon.Position = UDim2.new(0.5, 0, 0.5, 0)
         icon.Size = UDim2.new(0, opts.IconWidth or 12, 0, opts.IconHeight or 12)
-        icon.Image = opts.Image or "rbxassetid://122354904349171"
         icon.ImageColor3 = opts.ImageColor3 or colors.Main
-        icon.ImageTransparency = opts.ImageTransparency or 1
+        icon.ImageTransparency = imageTransparency
         icon.ZIndex = (opts.ZIndex or 5) + 1
-
-        if opts.ThemeImageKey then
-            Library:RegisterThemeBinding(icon, "ImageColor3", opts.ThemeImageKey)
-        end
+        applyIcon(icon, opts.Image or opts.Icon or "rbxassetid://122354904349171", {
+            ImageColor3 = opts.ImageColor3 or colors.Main,
+            ImageTransparency = imageTransparency,
+            ThemeImageKey = opts.ThemeImageKey,
+        })
 
         return frame, stroke, icon
     end
@@ -411,11 +518,14 @@ return function(Library, context)
 
     return {
         attachControlLifecycle = attachControlLifecycle,
+        applyIcon = applyIcon,
         bindAdaptiveLabel = bindAdaptiveLabel,
         createCheckbox = createCheckbox,
+        createIcon = createIcon,
         createLabel = createLabel,
         createOverlayButton = createOverlayButton,
         createRightBox = createRightBox,
         createRow = createRow,
+        resolveIcon = resolveIcon,
     }
 end
