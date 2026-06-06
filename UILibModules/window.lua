@@ -429,6 +429,14 @@ return function(Library, context, moduleRequire)
         return ticket, expiresAt, secondsRemaining
     end
 
+    local function keyExpirySecondsFromPayload(payload)
+        if type(payload) ~= "table" then
+            return nil
+        end
+
+        return tonumber(payload.keySecondsRemaining or payload.key_seconds_remaining or payload.secondsRemaining or payload.seconds_remaining)
+    end
+
     local function signedTicketLooksValid(ticket)
         return type(ticket) == "string" and #ticket >= 80 and ticket:match("^[%w_%-]+%.[%w_%-]+$") ~= nil
     end
@@ -503,7 +511,7 @@ return function(Library, context, moduleRequire)
     end
 
     local function setKeyExpiryFromMeta(win, expire, meta)
-        local _, _, secondsRemaining = keyTicketFromPayload(meta)
+        local secondsRemaining = keyExpirySecondsFromPayload(meta)
         if not win then
             return
         end
