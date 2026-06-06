@@ -1472,6 +1472,9 @@ function Library:CreateWindow(opts)
         end
         win._keyExpiryLastRemaining = remaining
         updateKeyExpiryDisplay(win, expire)
+        if remaining <= 0 and type(win._expireKeyGate) == "function" then
+            win._expireKeyGate()
+        end
     end), "KeyExpiryCountdown")
 
     local mobileUi = {}
@@ -3343,6 +3346,17 @@ function Library:CreateWindow(opts)
     local function setKeyStatus(text, color)
         keyUi.StatusLabel.Text = tostring(text or "")
         keyUi.StatusLabel.TextColor3 = typeof(color) == "Color3" and color or colors.TextDim
+    end
+
+    win._expireKeyGate = function()
+        if not keySystemActive or not keyGateUnlocked or win._destroyed then
+            return
+        end
+
+        keyExpiryMeta = nil
+        keyUi.Input.Text = ""
+        setKeyStatus("Key expired. Get a new one and retry.", Color3.fromRGB(255, 188, 120))
+        win._setKeyVerified(false)
     end
 
     local function pulseKeyInputStroke(color)
