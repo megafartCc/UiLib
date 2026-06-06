@@ -608,6 +608,89 @@ function Library:CreateWindow(opts)
         end
     end
 
+    local expireDays = nil
+    local keyExpiryDeadline = nil
+    local keyExpiryLastRemaining = nil
+
+    local function getCountdownClock()
+        if type(time) == "function" then
+            local ok, value = pcall(time)
+            if ok and type(value) == "number" then
+                return value
+            end
+        end
+        if type(tick) == "function" then
+            local ok, value = pcall(tick)
+            if ok and type(value) == "number" then
+                return value
+            end
+        end
+        return os.clock()
+    end
+
+    local function formatDuration(seconds)
+        seconds = math.max(0, math.floor(tonumber(seconds) or 0))
+
+        local days = math.floor(seconds / 86400)
+        seconds -= days * 86400
+        local hours = math.floor(seconds / 3600)
+        seconds -= hours * 3600
+        local minutes = math.floor(seconds / 60)
+        seconds -= minutes * 60
+
+        if days > 0 then
+            return string.format("%dd %02dh %02dm", days, hours, minutes)
+        end
+        if hours > 0 then
+            return string.format("%02dh %02dm %02ds", hours, minutes, seconds)
+        end
+        return string.format("%02dm %02ds", minutes, seconds)
+    end
+
+    local function getKeyExpiryRemaining()
+        if keyExpiryDeadline == nil then
+            return nil
+        end
+
+        return math.max(0, math.ceil(keyExpiryDeadline - getCountdownClock()))
+    end
+
+    local function updateExpireDisplay()
+        if not expireDays then
+            return
+        end
+
+        local remaining = getKeyExpiryRemaining()
+        local valueText = trimText(expire)
+        local valueColor = "#f53174"
+        if remaining ~= nil then
+            if remaining <= 0 then
+                valueText = "expired"
+                valueColor = "#ffbc78"
+            else
+                valueText = formatDuration(remaining)
+            end
+        elseif valueText == "" then
+            valueText = "never"
+        end
+
+        local text = string.format('<font transparency="0.5">expires:</font> <font color="%s">%s</font>', valueColor, valueText)
+        if expireDays.Text ~= text then
+            expireDays.Text = text
+        end
+    end
+
+    local function setKeyExpiryFromMeta(meta)
+        local _, _, secondsRemaining = keyTicketFromPayload(meta)
+        keyExpiryLastRemaining = nil
+        if secondsRemaining == nil then
+            keyExpiryDeadline = nil
+        else
+            keyExpiryDeadline = getCountdownClock() + math.max(0, tonumber(secondsRemaining) or 0)
+        end
+        updateExpireDisplay()
+    end
+
     local function normalizeKeyInput(value)
         return trimText(value)
     end
@@ -624,6 +707,8 @@ function Library:CreateWindow(opts)
         if type(meta) == "table" then
             ticketValue, ticketExpiresAt, ticketSecondsRemaining = keyTicketFromPayload(meta)
         end
+
+        setKeyExpiryFromMeta(meta)
 
         local function updateStore(store)
             if type(store) ~= "table" then
@@ -1346,7 +1431,7 @@ function Library:CreateWindow(opts)
     bindTheme(userName, "TextColor3", "TextStrong")
 
     -- Expire / Premium text
-    local expireDays = Instance.new("TextLabel", userProfile)
+    expireDays = Instance.new("TextLabel", userProfile)
     expireDays.Name = randomStr()
     expireDays.AnchorPoint = Vector2.new(1, 0)
     expireDays.BackgroundTransparency = 1
@@ -1356,13 +1441,25 @@ function Library:CreateWindow(opts)
     expireDays.ZIndex = 4
     expireDays.Font = config.FontMedium
     expireDays.RichText = true
-    expireDays.Text = string.format('<font transparency="0.5">expires:</font> <font color="#f53174">%s</font>', expire)
+    expireDays.Text = ""
     expireDays.TextColor3 = Color3.fromRGB(255, 255, 255)
     expireDays.TextSize = 12
     expireDays.TextStrokeTransparency = 0.7
     expireDays.TextXAlignment = Enum.TextXAlignment.Right
     expireDays.TextTruncate = Enum.TextTruncate.AtEnd
     bindTheme(expireDays, "TextColor3", "TextStrong")
+    updateExpireDisplay()
+    trackGlobal(RunService.Heartbeat:Connect(function()
+        if keyExpiryDeadline == nil then
+            return
+        end
+        local remaining = getKeyExpiryRemaining()
+        if remaining == keyExpiryLastRemaining then
+            return
+        end
+        keyExpiryLastRemaining = remaining
+        updateExpireDisplay()
+    end), "KeyExpiryCountdown")
 
     local mobileUi = {}
     if isMobileClient then
