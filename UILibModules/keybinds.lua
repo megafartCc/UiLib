@@ -116,6 +116,7 @@ return function(Library, context)
         local captureRecord = nil
         local editorOpen = false
         local captureKeyFromNextInput = false
+        local keybindListDisabled = false
 
         local manager = {}
 
@@ -480,7 +481,19 @@ return function(Library, context)
             record.KeyCode = keyCode
         end
 
-        local function refreshListPanel()
+        local function disableKeybindList()
+            keybindListDisabled = true
+            showList = false
+            pcall(function()
+                local panelState = win._floatingPanels[listPanel]
+                if panelState then
+                    panelState.Active = false
+                end
+                listPanel.Visible = false
+            end)
+        end
+
+        local function refreshListPanelUnsafe()
             for _, child in ipairs(listBody:GetChildren()) do
                 if child:IsA("GuiObject") then
                     child:Destroy()
@@ -526,6 +539,17 @@ return function(Library, context)
             end
         end
 
+        local function refreshListPanel()
+            if keybindListDisabled then
+                return
+            end
+
+            local ok = pcall(refreshListPanelUnsafe)
+            if not ok then
+                disableKeybindList()
+            end
+        end
+
         local function removeRecordFromOrdered(record)
             for i = #orderedRecords, 1, -1 do
                 if orderedRecords[i] == record then
@@ -567,7 +591,9 @@ return function(Library, context)
                 Library:_markDirty()
             end
             setModeButtonsVisual(record.Mode)
-            refreshListPanel()
+            if record.KeyCode then
+                refreshListPanel()
+            end
         end
 
         local function applyEditorRecord()
@@ -768,7 +794,9 @@ return function(Library, context)
                 )
             end
 
-            refreshListPanel()
+            if record.KeyCode then
+                refreshListPanel()
+            end
         end
 
         keyCaptureBtn.Activated:Connect(function()
