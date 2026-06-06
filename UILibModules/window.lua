@@ -433,6 +433,90 @@ return function(Library, context, moduleRequire)
         return type(ticket) == "string" and #ticket >= 80 and ticket:match("^[%w_%-]+%.[%w_%-]+$") ~= nil
     end
 
+    local function getCountdownClock()
+        if type(time) == "function" then
+            local ok, value = pcall(time)
+            if ok and type(value) == "number" then
+                return value
+            end
+        end
+        if type(tick) == "function" then
+            local ok, value = pcall(tick)
+            if ok and type(value) == "number" then
+                return value
+            end
+        end
+        return os.clock()
+    end
+
+    local function formatDuration(seconds)
+        seconds = math.max(0, math.floor(tonumber(seconds) or 0))
+
+        local days = math.floor(seconds / 86400)
+        seconds -= days * 86400
+        local hours = math.floor(seconds / 3600)
+        seconds -= hours * 3600
+        local minutes = math.floor(seconds / 60)
+        seconds -= minutes * 60
+
+        if days > 0 then
+            return string.format("%dd %02dh %02dm", days, hours, minutes)
+        end
+        if hours > 0 then
+            return string.format("%02dh %02dm %02ds", hours, minutes, seconds)
+        end
+        return string.format("%02dm %02ds", minutes, seconds)
+    end
+
+    local function getKeyExpiryRemaining(win)
+        if not win or win._keyExpiryDeadline == nil then
+            return nil
+        end
+
+        return math.max(0, math.ceil(win._keyExpiryDeadline - getCountdownClock()))
+    end
+
+    local function updateKeyExpiryDisplay(win, expire)
+        local label = win and win._keyExpiryLabel
+        if not label then
+            return
+        end
+
+        local remaining = getKeyExpiryRemaining(win)
+        local valueText = trimText(expire)
+        local valueColor = "#f53174"
+        if remaining ~= nil then
+            if remaining <= 0 then
+                valueText = "expired"
+                valueColor = "#ffbc78"
+            else
+                valueText = formatDuration(remaining)
+            end
+        elseif valueText == "" then
+            valueText = "never"
+        end
+
+        local text = string.format('<font transparency="0.5">expires:</font> <font color="%s">%s</font>', valueColor, valueText)
+        if label.Text ~= text then
+            label.Text = text
+        end
+    end
+
+    local function setKeyExpiryFromMeta(win, expire, meta)
+        local _, _, secondsRemaining = keyTicketFromPayload(meta)
+        if not win then
+            return
+        end
+
+        win._keyExpiryLastRemaining = nil
+        if secondsRemaining == nil then
+            win._keyExpiryDeadline = nil
+        else
+            win._keyExpiryDeadline = getCountdownClock() + math.max(0, tonumber(secondsRemaining) or 0)
+        end
+        updateKeyExpiryDisplay(win, expire)
+    end
+
     local function checkUnknownHubKey(verifyUrl, scriptId, projectId, submittedKey)
         scriptId = trimText(scriptId)
         projectId = trimText(projectId)
@@ -595,6 +679,8 @@ function Library:CreateWindow(opts)
     local keyContentBootstrapped = false
     local keyValidationBusy = false
     local initialKeyInputText = ""
+    local keyExpiryMeta = nil
+    local win = nil
 
     if waitForKeyVerification and keyValidationMode == "unknownhub" and unknownHubScriptId == "" and unknownHubProjectId == "" then
         error("UnknownHub key system is enabled but ScriptId or ProjectId is missing.")
@@ -606,89 +692,6 @@ function Library:CreateWindow(opts)
         else
             keyStorageTag = "__key_system"
         end
-    end
-
-    local expireDays = nil
-    local keyExpiryDeadline = nil
-    local keyExpiryLastRemaining = nil
-
-    local function getCountdownClock()
-        if type(time) == "function" then
-            local ok, value = pcall(time)
-            if ok and type(value) == "number" then
-                return value
-            end
-        end
-        if type(tick) == "function" then
-            local ok, value = pcall(tick)
-            if ok and type(value) == "number" then
-                return value
-            end
-        end
-        return os.clock()
-    end
-
-    local function formatDuration(seconds)
-        seconds = math.max(0, math.floor(tonumber(seconds) or 0))
-
-        local days = math.floor(seconds / 86400)
-        seconds -= days * 86400
-        local hours = math.floor(seconds / 3600)
-        seconds -= hours * 3600
-        local minutes = math.floor(seconds / 60)
-        seconds -= minutes * 60
-
-        if days > 0 then
-            return string.format("%dd %02dh %02dm", days, hours, minutes)
-        end
-        if hours > 0 then
-            return string.format("%02dh %02dm %02ds", hours, minutes, seconds)
-        end
-        return string.format("%02dm %02ds", minutes, seconds)
-    end
-
-    local function getKeyExpiryRemaining()
-        if keyExpiryDeadline == nil then
-            return nil
-        end
-
-        return math.max(0, math.ceil(keyExpiryDeadline - getCountdownClock()))
-    end
-
-    local function updateExpireDisplay()
-        if not expireDays then
-            return
-        end
-
-        local remaining = getKeyExpiryRemaining()
-        local valueText = trimText(expire)
-        local valueColor = "#f53174"
-        if remaining ~= nil then
-            if remaining <= 0 then
-                valueText = "expired"
-                valueColor = "#ffbc78"
-            else
-                valueText = formatDuration(remaining)
-            end
-        elseif valueText == "" then
-            valueText = "never"
-        end
-
-        local text = string.format('<font transparency="0.5">expires:</font> <font color="%s">%s</font>', valueColor, valueText)
-        if expireDays.Text ~= text then
-            expireDays.Text = text
-        end
-    end
-
-    local function setKeyExpiryFromMeta(meta)
-        local _, _, secondsRemaining = keyTicketFromPayload(meta)
-        keyExpiryLastRemaining = nil
-        if secondsRemaining == nil then
-            keyExpiryDeadline = nil
-        else
-            keyExpiryDeadline = getCountdownClock() + math.max(0, tonumber(secondsRemaining) or 0)
-        end
-        updateExpireDisplay()
     end
 
     local function normalizeKeyInput(value)
@@ -708,7 +711,8 @@ function Library:CreateWindow(opts)
             ticketValue, ticketExpiresAt, ticketSecondsRemaining = keyTicketFromPayload(meta)
         end
 
-        setKeyExpiryFromMeta(meta)
+        keyExpiryMeta = meta
+        setKeyExpiryFromMeta(win, expire, meta)
 
         local function updateStore(store)
             if type(store) ~= "table" then
@@ -869,7 +873,7 @@ function Library:CreateWindow(opts)
         end
     end
 
-    local win = {
+    win = {
         Menus = {},
         ActiveMenu = nil,
         Visible = true,
@@ -1431,7 +1435,7 @@ function Library:CreateWindow(opts)
     bindTheme(userName, "TextColor3", "TextStrong")
 
     -- Expire / Premium text
-    expireDays = Instance.new("TextLabel", userProfile)
+    local expireDays = Instance.new("TextLabel", userProfile)
     expireDays.Name = randomStr()
     expireDays.AnchorPoint = Vector2.new(1, 0)
     expireDays.BackgroundTransparency = 1
@@ -1448,17 +1452,18 @@ function Library:CreateWindow(opts)
     expireDays.TextXAlignment = Enum.TextXAlignment.Right
     expireDays.TextTruncate = Enum.TextTruncate.AtEnd
     bindTheme(expireDays, "TextColor3", "TextStrong")
-    updateExpireDisplay()
+    win._keyExpiryLabel = expireDays
+    setKeyExpiryFromMeta(win, expire, keyExpiryMeta)
     trackGlobal(RunService.Heartbeat:Connect(function()
-        if keyExpiryDeadline == nil then
+        if win._keyExpiryDeadline == nil then
             return
         end
-        local remaining = getKeyExpiryRemaining()
-        if remaining == keyExpiryLastRemaining then
+        local remaining = getKeyExpiryRemaining(win)
+        if remaining == win._keyExpiryLastRemaining then
             return
         end
-        keyExpiryLastRemaining = remaining
-        updateExpireDisplay()
+        win._keyExpiryLastRemaining = remaining
+        updateKeyExpiryDisplay(win, expire)
     end), "KeyExpiryCountdown")
 
     local mobileUi = {}
