@@ -1398,8 +1398,8 @@ function Library:CreateWindow(opts)
 
     local function getMenuTabWidth(menuName, hasIcon)
         local textWidth = measureHeaderTextWidth(menuName, 13, config.Font)
-        local width = textWidth + (hasIcon and 46 or 24)
-        return math.clamp(width, hasIcon and 76 or 58, 154)
+        local width = textWidth + (hasIcon and 36 or 18)
+        return math.clamp(width, hasIcon and 62 or 44, 140)
     end
 
     local function refreshHeaderLayout()
@@ -3541,7 +3541,7 @@ function Library:CreateWindow(opts)
         local menuIconImage = controlBase.createIcon(menuBtn, menuIcon, {
             Name = "MenuIcon",
             AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 8, 0.5, 0),
+            Position = UDim2.new(0, 7, 0.5, 0),
             Size = UDim2.new(0, 14, 0, 14),
             ImageColor3 = colors.TextDim,
             ThemeImageKey = "TextDim",
@@ -3560,8 +3560,8 @@ function Library:CreateWindow(opts)
         menuLabel.AnchorPoint = hasMenuIcon and Vector2.new(0, 0.5) or Vector2.new(0.5, 0.5)
         menuLabel.BackgroundTransparency = 1
         menuLabel.BorderSizePixel = 0
-        menuLabel.Position = hasMenuIcon and UDim2.new(0, 30, 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
-        menuLabel.Size = hasMenuIcon and UDim2.new(1, -42, 1, 0) or UDim2.new(1, -16, 1, 0)
+        menuLabel.Position = hasMenuIcon and UDim2.new(0, 25, 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
+        menuLabel.Size = hasMenuIcon and UDim2.new(1, -31, 1, 0) or UDim2.new(1, -12, 1, 0)
         menuLabel.ZIndex = 5
         menuLabel.Font = config.Font
         menuLabel.Text = menuName
