@@ -1388,6 +1388,20 @@ function Library:CreateWindow(opts)
         return 160
     end
 
+    local function measureHeaderTextWidth(text, textSize, font)
+        local ok, bounds = pcall(TextService.GetTextSize, TextService, tostring(text or ""), textSize, font, Vector2.new(1000, config.HeaderHeight))
+        if ok and bounds then
+            return math.ceil(bounds.X)
+        end
+        return #(tostring(text or "")) * math.max(6, math.floor((textSize or 12) * 0.55))
+    end
+
+    local function getMenuTabWidth(menuName, hasIcon)
+        local textWidth = measureHeaderTextWidth(menuName, 13, config.Font)
+        local width = textWidth + (hasIcon and 46 or 24)
+        return math.clamp(width, hasIcon and 76 or 58, 154)
+    end
+
     local function refreshHeaderLayout()
         local headerWidth = header.AbsoluteSize.X > 0 and header.AbsoluteSize.X or initialWindowWidth
         local rightReserved = USER_PROFILE_WIDTH + HEADER_RIGHT_PADDING + 12
@@ -1404,6 +1418,9 @@ function Library:CreateWindow(opts)
     end
 
     trackGlobal(header:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshHeaderLayout), "HeaderLayoutChanged")
+    trackGlobal(tabListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabScrollState:Refresh(true)
+    end), "HeaderTabContentChanged")
     task.defer(refreshHeaderLayout)
 
     -- Avatar
@@ -3511,7 +3528,6 @@ function Library:CreateWindow(opts)
         menuBtn.BackgroundColor3 = colors.TabBg
         menuBtn.BackgroundTransparency = 1
         menuBtn.BorderSizePixel = 0
-        menuBtn.Size = UDim2.new(0, 80, 0.85, 0)
         menuBtn.ZIndex = 5
         menuBtn.LayoutOrder = menuIsSettings and 1000000 or (#win.Menus + 1)
         bindTheme(menuBtn, "BackgroundColor3", "TabBg")
@@ -3536,6 +3552,7 @@ function Library:CreateWindow(opts)
             menuIconImage = nil
         end
         local hasMenuIcon = menuIconImage ~= nil
+        menuBtn.Size = UDim2.new(0, getMenuTabWidth(menuName, hasMenuIcon), 0.85, 0)
 
         -- Tab label text
         local menuLabel = Instance.new("TextLabel", menuBtn)
@@ -3543,17 +3560,25 @@ function Library:CreateWindow(opts)
         menuLabel.AnchorPoint = hasMenuIcon and Vector2.new(0, 0.5) or Vector2.new(0.5, 0.5)
         menuLabel.BackgroundTransparency = 1
         menuLabel.BorderSizePixel = 0
-        menuLabel.Position = hasMenuIcon and UDim2.new(0, 28, 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
-        menuLabel.Size = hasMenuIcon and UDim2.new(1, -34, 1, 0) or UDim2.new(1, 0, 1, 0)
+        menuLabel.Position = hasMenuIcon and UDim2.new(0, 30, 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
+        menuLabel.Size = hasMenuIcon and UDim2.new(1, -42, 1, 0) or UDim2.new(1, -16, 1, 0)
         menuLabel.ZIndex = 5
         menuLabel.Font = config.Font
         menuLabel.Text = menuName
         menuLabel.TextColor3 = colors.TextDim
         menuLabel.TextSize = 13
+        menuLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        menuLabel.TextWrapped = false
         menuLabel.TextStrokeTransparency = 1
         menuLabel.TextTransparency = 0
         menuLabel.TextXAlignment = hasMenuIcon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
         bindTheme(menuLabel, "TextColor3", "TextDim")
+        task.defer(function()
+            if menuBtn.Parent then
+                menuBtn.Size = UDim2.new(0, getMenuTabWidth(menuName, menuIconImage ~= nil), 0.85, 0)
+                tabScrollState:Refresh(true)
+            end
+        end)
 
         -- Click area (overlaid TextButton)
         local clickBtn = Instance.new("TextButton", menuBtn)
