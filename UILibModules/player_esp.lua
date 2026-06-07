@@ -1500,6 +1500,7 @@ return function(Library, context)
 
         local section = opts.Section or menu:AddSection({
             Name = opts.Name or "PLAYER ESP",
+            Icon = opts.Icon,
             Column = opts.Column or 1,
         })
 
