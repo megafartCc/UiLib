@@ -680,7 +680,7 @@ function Library:CreateWindow(opts)
     local keyValidationMode = unknownHubKeySystemEnabled and "unknownhub" or (hardcodedKeySystemActive and "hardcoded" or "none")
     local keySystemActive = unknownHubKeySystemEnabled or hardcodedKeySystemActive
     if keySystemActive and trimText(keyLink) == "" then
-        keyLink = "https://discord.gg/unknownhub"
+        keyLink = "https://unknownhub.win/#get-key"
     end
     local waitForKeyVerification = keySystemActive and opts.WaitForKey ~= false and opts.BlockUntilKeyVerified ~= false
     local keyGateUnlocked = not keySystemActive
