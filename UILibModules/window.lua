@@ -5508,6 +5508,11 @@ function Library:CreateWindow(opts)
 
             function section:AddMultiDropdownToggle(opts)
                 opts = opts or {}
+                if (opts.Inline == true or opts.Compact == true or opts.OneLine == true)
+                    and dropdownControls.addMultiDropdownToggle then
+                    return dropdownControls.addMultiDropdownToggle(sectionDropdownBase, opts)
+                end
+
                 local mtName = opts.Name or opts.Title or "Multi Select Toggle"
                 local mtOptions = opts.Options or opts.Items or { "Option 1", "Option 2" }
                 local mtDefault = opts.Default or {}

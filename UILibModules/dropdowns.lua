@@ -1354,6 +1354,451 @@ return function(Library, context)
         return multi
     end
 
+    local function addMultiDropdownToggle(base, opts)
+        opts = opts or {}
+        local mtName = opts.Name or opts.Title or "Multi Select Toggle"
+        local mtOptions = normalizeDropdownOptions(opts.Options or opts.Items, { "Option 1", "Option 2" })
+        local mtDefault = opts.Default or opts.Selected or {}
+        local mtEnabled = opts.Enabled
+        if mtEnabled == nil then
+            if opts.DefaultToggle ~= nil then
+                mtEnabled = opts.DefaultToggle
+            else
+                mtEnabled = false
+            end
+        end
+        mtEnabled = mtEnabled and true or false
+
+        local mtCallback = opts.Callback or function() end
+        local mtToggleCallback = opts.OnToggle or opts.OnToggleChange or function() end
+        local mtConfigScope = base.configScope or base.secName
+        local mtSaveKey, mtSaveAliases = getDropdownConfigKey(opts.SaveKey, mtConfigScope, mtName, base.menuName)
+        local labelWidth = math.clamp(tonumber(opts.LabelWidth) or 0.35, 0.22, 0.48)
+
+        local selectedSet = buildSelectedSet(mtOptions, mtDefault)
+        local mt = {
+            Enabled = mtEnabled,
+            Values = selectedSet,
+        }
+
+        local function getDisplayText()
+            local selected = {}
+            for _, opt in ipairs(mtOptions) do
+                if selectedSet[opt] then
+                    table.insert(selected, tostring(opt))
+                end
+            end
+
+            local selectedCount = #selected
+            if selectedCount == 0 then
+                return "None"
+            end
+            if selectedCount == #mtOptions then
+                return "All"
+            end
+            if selectedCount == 1 then
+                return selected[1]
+            end
+            if selectedCount == 2 then
+                return table.concat(selected, ", ")
+            end
+            return string.format("%s, %s +%d", selected[1], selected[2], selectedCount - 2)
+        end
+
+        local function getState()
+            return {
+                selections = getSelectedValues(mtOptions, selectedSet),
+                toggled = mt.Enabled and true or false,
+                enabled = mt.Enabled and true or false,
+            }
+        end
+
+        local function fireMultiToggleCallback()
+            if callbacksSuppressed() then
+                return
+            end
+            pcall(mtCallback, mt.Enabled and true or false, getSelectedValues(mtOptions, selectedSet), selectedSet)
+        end
+
+        local row = Instance.new("Frame", base.contentContainer)
+        row.Name = "MultiDropToggle_" .. mtName
+        row.BackgroundTransparency = 1
+        row.BorderSizePixel = 0
+        row.Size = UDim2.new(1, 0, 0, 22)
+        row.ZIndex = 5
+        row.ClipsDescendants = false
+
+        local label = Instance.new("TextLabel", row)
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.new(labelWidth, -2, 1, 0)
+        label.Font = base.config.FontMedium
+        label.Text = mtName
+        label.TextColor3 = base.colors.Text
+        label.TextSize = 12
+        label.TextTruncate = Enum.TextTruncate.AtEnd
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.ZIndex = 5
+
+        local chkFrame = Instance.new("Frame", row)
+        chkFrame.AnchorPoint = Vector2.new(1, 0.5)
+        chkFrame.Position = UDim2.new(1, 0, 0.5, 0)
+        chkFrame.Size = UDim2.new(0, 18, 0, 18)
+        chkFrame.BackgroundColor3 = mt.Enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+        chkFrame.BorderSizePixel = 0
+        chkFrame.ZIndex = 5
+        Instance.new("UICorner", chkFrame).CornerRadius = UDim.new(0, 3)
+
+        local chkStroke = Instance.new("UIStroke", chkFrame)
+        chkStroke.Color = mt.Enabled and base.colors.Main or base.colors.Line
+        chkStroke.Transparency = mt.Enabled and 0.3 or 0.5
+
+        local checkIcon = Instance.new("ImageLabel", chkFrame)
+        checkIcon.BackgroundTransparency = 1
+        checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        checkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+        checkIcon.Size = UDim2.new(0, 12, 0, 12)
+        checkIcon.Image = "rbxassetid://122354904349171"
+        checkIcon.ImageColor3 = base.colors.Main
+        checkIcon.ImageTransparency = mt.Enabled and 0 or 1
+        checkIcon.ZIndex = 6
+
+        local chkBtn = Instance.new("TextButton", chkFrame)
+        chkBtn.BackgroundTransparency = 1
+        chkBtn.Size = UDim2.new(1, 0, 1, 0)
+        chkBtn.ZIndex = 7
+        chkBtn.Text = ""
+        chkBtn.AutoButtonColor = false
+        chkBtn.Selectable = false
+        chkBtn.BorderSizePixel = 0
+
+        local selectBtn = Instance.new("TextButton", row)
+        selectBtn.AnchorPoint = Vector2.new(0, 0.5)
+        selectBtn.Position = UDim2.new(labelWidth, 6, 0.5, 0)
+        selectBtn.Size = UDim2.new(1 - labelWidth, -34, 0, 18)
+        selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        selectBtn.BorderSizePixel = 0
+        selectBtn.Text = ""
+        selectBtn.ZIndex = 5
+        selectBtn.AutoButtonColor = false
+        selectBtn.Selectable = false
+        selectBtn.ClipsDescendants = false
+        Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0, 3)
+
+        local selStroke = Instance.new("UIStroke", selectBtn)
+        selStroke.Color = base.colors.Line
+        selStroke.Transparency = 0.5
+
+        local valText = Instance.new("TextLabel", selectBtn)
+        valText.BackgroundTransparency = 1
+        valText.Position = UDim2.new(0, 8, 0, 0)
+        valText.Size = UDim2.new(1, -26, 1, 0)
+        valText.Font = base.config.FontMedium
+        valText.Text = getDisplayText()
+        valText.TextColor3 = base.colors.Text
+        valText.TextSize = 11
+        valText.TextTruncate = Enum.TextTruncate.AtEnd
+        valText.TextXAlignment = Enum.TextXAlignment.Left
+        valText.ZIndex = 6
+
+        local arrow = Instance.new("TextLabel", selectBtn)
+        arrow.BackgroundTransparency = 1
+        arrow.AnchorPoint = Vector2.new(1, 0.5)
+        arrow.Position = UDim2.new(1, -6, 0.5, 0)
+        arrow.Size = UDim2.new(0, 14, 0, 14)
+        arrow.Font = base.config.Font
+        arrow.Text = DROPDOWN_ARROW_CLOSED
+        arrow.TextColor3 = base.colors.TextDim
+        arrow.TextSize = 8
+        arrow.ZIndex = 6
+
+        local dropPanel = Instance.new("Frame", selectBtn)
+        dropPanel.Position = UDim2.new(0, 0, 1, 2)
+        dropPanel.Size = UDim2.new(1, 0, 0, 0)
+        dropPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+        dropPanel.BorderSizePixel = 0
+        dropPanel.Visible = false
+        dropPanel.ZIndex = 50
+        dropPanel.ClipsDescendants = true
+        Instance.new("UICorner", dropPanel).CornerRadius = UDim.new(0, 3)
+
+        local pStroke = Instance.new("UIStroke", dropPanel)
+        pStroke.Color = base.colors.Line
+        pStroke.Transparency = 0.5
+
+        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #mtOptions, 24)
+        local fullHeight = dropPanelContent.openHeight
+        local optionButtons = {}
+        local optVisuals = {}
+        local isOpen = false
+
+        local function refreshToggle()
+            if mt.Enabled then
+                Library:Spring(checkIcon, "Smooth", { ImageTransparency = 0 })
+                Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                Library:Spring(chkStroke, "Smooth", { Color = base.colors.Main, Transparency = 0.3 })
+            else
+                Library:Spring(checkIcon, "Smooth", { ImageTransparency = 1 })
+                Library:Spring(chkFrame, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                Library:Spring(chkStroke, "Smooth", { Color = base.colors.Line, Transparency = 0.5 })
+            end
+        end
+
+        local function refreshSelections()
+            valText.Text = getDisplayText()
+            for optName, visuals in pairs(optVisuals) do
+                local selected = selectedSet[optName] == true
+                visuals.chkIcon.ImageTransparency = selected and 0 or 1
+                visuals.chk.BackgroundColor3 = selected and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+                visuals.chkStroke.Color = selected and base.colors.Main or base.colors.Line
+                visuals.chkStroke.Transparency = selected and 0.3 or 0.5
+                visuals.optLabel.TextColor3 = selected and base.colors.Main or base.colors.Text
+            end
+        end
+
+        local function applyToggleEnabled(enabled, shouldFireToggle)
+            mt.Enabled = enabled and true or false
+            refreshToggle()
+            if shouldFireToggle and not callbacksSuppressed() then
+                pcall(mtToggleCallback, mt.Enabled)
+            end
+        end
+
+        local function applySelectedValues(rawValue)
+            if type(rawValue) ~= "table" then
+                return
+            end
+
+            for key in pairs(selectedSet) do
+                selectedSet[key] = nil
+            end
+            for key, enabled in pairs(buildSelectedSet(mtOptions, rawValue)) do
+                selectedSet[key] = enabled
+            end
+            mt.Values = selectedSet
+            refreshSelections()
+        end
+
+        local function applyState(rawValue, setOptions)
+            if type(rawValue) ~= "table" then
+                return
+            end
+
+            local shouldFireCallbacks = type(setOptions) == "table" and setOptions.fireCallbacks == true
+            if rawValue.selections ~= nil then
+                applySelectedValues(rawValue.selections)
+            elseif rawValue.selected ~= nil then
+                applySelectedValues(rawValue.selected)
+            end
+
+            if rawValue.toggled ~= nil then
+                applyToggleEnabled(rawValue.toggled, shouldFireCallbacks)
+            elseif rawValue.enabled ~= nil then
+                applyToggleEnabled(rawValue.enabled, shouldFireCallbacks)
+            end
+
+            if shouldFireCallbacks then
+                fireMultiToggleCallback()
+            end
+            Library:_markDirty()
+        end
+
+        local function closeDropdown()
+            isOpen = false
+            Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, 0) })
+            task.delay(0.15, function()
+                if not isOpen and dropPanel.Parent then
+                    dropPanel.Visible = false
+                end
+            end)
+        end
+
+        registerTransientPopup(base, dropPanel, closeDropdown)
+        for idx, opt in ipairs(mtOptions) do
+            local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
+            optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            optBtn.BackgroundTransparency = 1
+            optBtn.BorderSizePixel = 0
+            optBtn.Size = UDim2.new(1, 0, 0, 24)
+            optBtn.Text = ""
+            optBtn.ZIndex = 51
+            optBtn.LayoutOrder = idx
+            optBtn.AutoButtonColor = false
+            optBtn.Selectable = false
+            optBtn:SetAttribute("OptionText", tostring(opt))
+
+            local chk = Instance.new("Frame", optBtn)
+            chk.AnchorPoint = Vector2.new(0, 0.5)
+            chk.Position = UDim2.new(0, 8, 0.5, 0)
+            chk.Size = UDim2.new(0, 10, 0, 10)
+            chk.BackgroundColor3 = selectedSet[opt] and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+            chk.BorderSizePixel = 0
+            chk.ZIndex = 52
+            Instance.new("UICorner", chk).CornerRadius = UDim.new(0, 2)
+
+            local chkStroke = Instance.new("UIStroke", chk)
+            chkStroke.Color = selectedSet[opt] and base.colors.Main or base.colors.Line
+            chkStroke.Transparency = selectedSet[opt] and 0.3 or 0.5
+
+            local chkIcon = Instance.new("ImageLabel", chk)
+            chkIcon.BackgroundTransparency = 1
+            chkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+            chkIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+            chkIcon.Size = UDim2.new(0, 8, 0, 8)
+            chkIcon.Image = "rbxassetid://122354904349171"
+            chkIcon.ImageColor3 = base.colors.Main
+            chkIcon.ImageTransparency = selectedSet[opt] and 0 or 1
+            chkIcon.ZIndex = 53
+
+            local optLabel = Instance.new("TextLabel", optBtn)
+            optLabel.BackgroundTransparency = 1
+            optLabel.Position = UDim2.new(0, 24, 0, 0)
+            optLabel.Size = UDim2.new(1, -30, 1, 0)
+            optLabel.Font = base.config.FontMedium
+            optLabel.Text = tostring(opt)
+            optLabel.TextColor3 = selectedSet[opt] and base.colors.Main or base.colors.Text
+            optLabel.TextSize = 11
+            optLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            optLabel.TextXAlignment = Enum.TextXAlignment.Left
+            optLabel.ZIndex = 52
+
+            optBtn.MouseEnter:Connect(function()
+                Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 0.5 })
+            end)
+            optBtn.MouseLeave:Connect(function()
+                Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
+            end)
+            optBtn.Activated:Connect(function()
+                selectedSet[opt] = not selectedSet[opt]
+                if selectedSet[opt] then
+                    Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+                    Library:Spring(chkStroke, "Smooth", { Color = base.colors.Main, Transparency = 0.3 })
+                    Library:Spring(chkIcon, "Smooth", { ImageTransparency = 0 })
+                    optLabel.TextColor3 = base.colors.Main
+                else
+                    Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+                    Library:Spring(chkStroke, "Smooth", { Color = base.colors.Line, Transparency = 0.5 })
+                    Library:Spring(chkIcon, "Smooth", { ImageTransparency = 1 })
+                    optLabel.TextColor3 = base.colors.Text
+                end
+                valText.Text = getDisplayText()
+                mt.Values = selectedSet
+                fireMultiToggleCallback()
+                Library:_markDirty()
+            end)
+
+            optVisuals[opt] = {
+                chk = chk,
+                chkIcon = chkIcon,
+                chkStroke = chkStroke,
+                optLabel = optLabel,
+            }
+            table.insert(optionButtons, optBtn)
+        end
+        dropPanelContent.bindSearch(optionButtons)
+        dropPanelContent.refreshCanvas()
+
+        chkBtn.Activated:Connect(function()
+            if mt.Disabled then
+                return
+            end
+            applyToggleEnabled(not mt.Enabled, true)
+            fireMultiToggleCallback()
+            Library:_markDirty()
+        end)
+
+        selectBtn.Activated:Connect(function()
+            if mt.Disabled then
+                return
+            end
+            isOpen = not isOpen
+            if isOpen then
+                closeTransientPopups(base, dropPanel)
+                dropPanel.Visible = true
+                dropPanel.Size = UDim2.new(1, 0, 0, 0)
+                if dropPanelContent.searchBox then
+                    dropPanelContent.searchBox.Text = ""
+                end
+                dropPanelContent.refreshCanvas()
+                dropPanelContent.optionsScroll.CanvasPosition = Vector2.new(0, 0)
+                local targetHeight = resolveDropdownTargetHeight(base, selectBtn, dropPanel, fullHeight)
+                Library:Spring(dropPanel, "Smooth", { Size = UDim2.new(1, 0, 0, targetHeight) })
+                arrow.Text = DROPDOWN_ARROW_OPEN
+            else
+                closeDropdown()
+                arrow.Text = DROPDOWN_ARROW_CLOSED
+            end
+        end)
+
+        bindOutsideClose(base, function()
+            return isOpen
+        end, dropPanel, selectBtn, function()
+            closeDropdown()
+            arrow.Text = DROPDOWN_ARROW_CLOSED
+        end, "MultiDropdownToggleOutside")
+
+        mt = finalizeControl(base, mt, {
+            clickTargets = { selectBtn, chkBtn },
+            getValue = getState,
+            refresh = function()
+                refreshSelections()
+                refreshToggle()
+            end,
+            root = row,
+            saveKey = mtSaveKey,
+            searchName = mtName,
+            setValue = applyState,
+            updateDisabled = function(disabled)
+                label.TextTransparency = disabled and 0.35 or 0
+                selectBtn.Active = not disabled
+                chkBtn.Active = not disabled
+            end,
+        })
+
+        if base.fitLabel then
+            base.fitLabel(mt, label, {
+                BaseTextSize = 12,
+                MinTextSize = 10,
+                WidthPadding = 2,
+            })
+            base.fitLabel(mt, valText, {
+                BaseTextSize = 11,
+                MinTextSize = 9,
+                WidthPadding = 2,
+            })
+        end
+
+        mt.GetSelections = function()
+            return getSelectedValues(mtOptions, selectedSet)
+        end
+        mt.SetSelection = function(value)
+            mt:Set({ selections = value })
+            return mt
+        end
+        mt.SetValues = mt.SetSelection
+        mt.SetValue = mt.SetSelection
+        mt.GetToggleState = function()
+            return mt.Enabled and true or false
+        end
+        mt.SetToggleState = function(value)
+            mt:Set({ enabled = value and true or false })
+            return mt
+        end
+        mt.GetState = mt.GetToggleState
+        mt.SetState = mt.SetToggleState
+
+        if mtSaveKey then
+            Library:RegisterConfig(mtSaveKey, "multidropdowntoggle",
+                getState,
+                function(val)
+                    applyState(val, { fireCallbacks = true })
+                end,
+                { Aliases = mtSaveAliases }
+            )
+        end
+
+        return mt
+    end
+
     local function addDropdownToggle(base, opts)
         opts = opts or {}
         local dName = opts.Name or opts.Title or "Dropdown"
@@ -1717,6 +2162,7 @@ return function(Library, context)
 
     return {
         addDropdownToggle = addDropdownToggle,
+        addMultiDropdownToggle = addMultiDropdownToggle,
         addMultiDropdown = addMultiDropdown,
         addStandaloneDropdown = addStandaloneDropdown,
         addToggleDropdown = addToggleDropdown,
