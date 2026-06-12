@@ -1373,7 +1373,7 @@ return function(Library, context)
         local mtToggleCallback = opts.OnToggle or opts.OnToggleChange or function() end
         local mtConfigScope = base.configScope or base.secName
         local mtSaveKey, mtSaveAliases = getDropdownConfigKey(opts.SaveKey, mtConfigScope, mtName, base.menuName)
-        local labelWidth = math.clamp(tonumber(opts.LabelWidth) or 0.35, 0.22, 0.48)
+        local labelWidth = math.clamp(tonumber(opts.LabelWidth) or 0.35, 0.22, 0.39)
 
         local selectedSet = buildSelectedSet(mtOptions, mtDefault)
         local mt = {
@@ -1472,9 +1472,9 @@ return function(Library, context)
         chkBtn.BorderSizePixel = 0
 
         local selectBtn = Instance.new("TextButton", row)
-        selectBtn.AnchorPoint = Vector2.new(0, 0.5)
-        selectBtn.Position = UDim2.new(labelWidth, 6, 0.5, 0)
-        selectBtn.Size = UDim2.new(1 - labelWidth, -34, 0, 18)
+        selectBtn.AnchorPoint = Vector2.new(1, 0.5)
+        selectBtn.Position = UDim2.new(1, -24, 0.5, 0)
+        selectBtn.Size = UDim2.new(0.6, -24, 0, 18)
         selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         selectBtn.BorderSizePixel = 0
         selectBtn.Text = ""
@@ -1902,7 +1902,7 @@ return function(Library, context)
         local selectBtn = Instance.new("TextButton", row)
         selectBtn.AnchorPoint = Vector2.new(1, 0.5)
         selectBtn.Position = UDim2.new(1, -24, 0.5, 0)
-        selectBtn.Size = UDim2.new(0.6, 0, 0, 18)
+        selectBtn.Size = UDim2.new(0.6, -24, 0, 18)
         selectBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         selectBtn.BorderSizePixel = 0
         selectBtn.Text = ""

@@ -5822,7 +5822,7 @@ function Library:CreateWindow(opts)
                 local row = controlBase.createRow(contentContainer, "SliderToggle_" .. sName)
                 local label = controlBase.createLabel(row, sName, {
                     Font = config.FontMedium,
-                    Size = UDim2.new(0.3, 0, 1, 0),
+                    Size = UDim2.new(0.35, 0, 1, 0),
                     TextColor3 = colors.Text,
                     TextSize = 12,
                 })
@@ -5839,8 +5839,8 @@ function Library:CreateWindow(opts)
                 -- Slider bar (between label and checkbox)
                 local barBg = Instance.new("Frame", row)
                 barBg.AnchorPoint = Vector2.new(1, 0.5)
-                barBg.Position = UDim2.new(1, -20, 0.5, 0)
-                barBg.Size = UDim2.new(0.45, 0, 0, 18)
+                barBg.Position = UDim2.new(1, -24, 0.5, 0)
+                barBg.Size = UDim2.new(0.6, -24, 0, 18)
                 barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
                 barBg.BorderSizePixel = 0
                 barBg.ClipsDescendants = true
@@ -5854,22 +5854,13 @@ function Library:CreateWindow(opts)
                     end
 
                     local checkboxInset = 24
-                    local labelGap = 8
-                    local minLabelWidth = 72
-                    local minBarWidth = 108
-                    local textWidth = TextService:GetTextSize(
-                        tostring(sName),
-                        label.TextSize,
-                        label.Font,
-                        Vector2.new(1000, row.AbsoluteSize.Y > 0 and row.AbsoluteSize.Y or 22)
-                    ).X + 8
+                    local controlLeft = math.floor(rowWidth * 0.4 + 0.5)
+                    local controlRight = math.max(controlLeft, rowWidth - checkboxInset)
+                    local controlWidth = math.max(0, controlRight - controlLeft)
 
-                    local maxLabelWidth = math.max(minLabelWidth, rowWidth - checkboxInset - labelGap - minBarWidth)
-                    local labelWidth = math.clamp(textWidth, minLabelWidth, maxLabelWidth)
-                    local barWidth = math.max(minBarWidth, rowWidth - labelWidth - checkboxInset - labelGap)
-
-                    label.Size = UDim2.new(0, labelWidth, 1, 0)
-                    barBg.Size = UDim2.new(0, barWidth, 0, 18)
+                    label.Size = UDim2.new(0, math.max(0, controlLeft - 8), 1, 0)
+                    barBg.Position = UDim2.new(0, controlRight, 0.5, 0)
+                    barBg.Size = UDim2.new(0, controlWidth, 0, 18)
                 end
 
                 local fill = Instance.new("Frame", barBg)
