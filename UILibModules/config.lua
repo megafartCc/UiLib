@@ -27,6 +27,8 @@ return function(Library, context)
     Library._loadedConfigData = nil
     Library._configReplayToken = 0
     Library._configMutationSerial = 0
+    Library._configLoadGeneration = 0
+    Library._configAppliedGenerationByKey = {}
 
     local CONFIG_FOLDER = "Eps1lonScript"
 
@@ -179,6 +181,19 @@ return function(Library, context)
         return nil
     end
 
+    function Library:_applyLoadedConfigEntry(key, item, entry)
+        if not item or not entry or entry.value == nil then
+            return false
+        end
+
+        local ok = pcall(item.set, entry.value, { fireCallbacks = true, fromConfig = true })
+        if ok then
+            self._configAppliedGenerationByKey[key] = self._configLoadGeneration or 0
+        end
+
+        return ok
+    end
+
     function Library:RegisterConfig(key, cType, getter, setter, registerOptions)
         registerOptions = registerOptions or {}
         local aliases = {}
@@ -201,7 +216,7 @@ return function(Library, context)
         local loadedEntry = self:_resolveLoadedConfigEntry(key, self._configItems[key])
         if loadedEntry and loadedEntry.value ~= nil then
             self:_beginConfigReplay()
-            pcall(setter, loadedEntry.value)
+            self:_applyLoadedConfigEntry(key, self._configItems[key], loadedEntry)
             self:_endConfigReplay()
             self:_scheduleConfigReplay()
         end
@@ -257,12 +272,13 @@ return function(Library, context)
 
             self:_beginConfigReplay()
             for _, key in ipairs(self._configItemOrder) do
+                if self._configAppliedGenerationByKey[key] == (self._configLoadGeneration or 0) then
+                    continue
+                end
                 local item = self._configItems[key]
                 local entry = self:_resolveLoadedConfigEntry(key, item)
                 if item and entry and entry.value ~= nil then
-                    self:_beginControlSync()
-                    pcall(item.set, entry.value)
-                    self:_endControlSync()
+                    self:_applyLoadedConfigEntry(key, item, entry)
                 end
             end
             self:_endConfigReplay()
@@ -335,12 +351,14 @@ return function(Library, context)
         end
 
         self._loadedConfigData = data
+        self._configLoadGeneration = (self._configLoadGeneration or 0) + 1
+        self._configAppliedGenerationByKey = {}
         self:_beginConfigReplay()
         for _, key in ipairs(self._configItemOrder) do
             local item = self._configItems[key]
             local entry = self:_resolveLoadedConfigEntry(key, item)
             if item and entry and entry.value ~= nil then
-                pcall(item.set, entry.value)
+                self:_applyLoadedConfigEntry(key, item, entry)
             end
         end
         self:_endConfigReplay()
