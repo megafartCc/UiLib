@@ -919,18 +919,10 @@ function Library:CreateWindow(opts)
 
     local smoothScrollStates = {}
 
-    local function synchronizeForInstanceAccess()
-        if type(task) == "table" and type(task.synchronize) == "function" then
-            pcall(task.synchronize)
-        end
-    end
-
     local function readSmoothMaxOffset(getMaxOffset)
         if type(getMaxOffset) ~= "function" then
             return 0
         end
-
-        synchronizeForInstanceAccess()
 
         local ok, value = pcall(getMaxOffset)
         if not ok then
@@ -967,8 +959,6 @@ function Library:CreateWindow(opts)
             if type(self.apply) ~= "function" then
                 return false
             end
-
-            synchronizeForInstanceAccess()
 
             local ok = pcall(self.apply, self.current)
             if ok then
@@ -2848,15 +2838,20 @@ function Library:CreateWindow(opts)
         if mobileUi.RestoreBar then
             local shouldShow = startupReady and isMobileClient and not win.Visible
             if shouldShow and mobileUi.CenterRestoreBar then
-                mobileUi.CenterRestoreBar()
+                pcall(mobileUi.CenterRestoreBar)
             end
-            mobileUi.RestoreBar.Visible = shouldShow
+            pcall(function()
+                mobileUi.RestoreBar.Visible = shouldShow
+            end)
         end
     end
 
     local function syncFloatingPanels()
+        local shouldShow = startupReady and win.Visible and keyGateUnlocked
         for panel, state in pairs(win._floatingPanels) do
-            panel.Visible = startupReady and win.Visible and keyGateUnlocked and state.Active or false
+            pcall(function()
+                panel.Visible = shouldShow and state.Active or false
+            end)
         end
     end
 
