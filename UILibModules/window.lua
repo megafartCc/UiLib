@@ -1436,71 +1436,79 @@ function Library:CreateWindow(opts)
     end
 
     trackGlobal(header:GetPropertyChangedSignal("AbsoluteSize"):Connect(win._refreshHeaderLayout), "HeaderLayoutChanged")
-    local okTabContentSignal, tabContentSignal = pcall(function()
-        return tabListLayout:GetPropertyChangedSignal("AbsoluteContentSize")
-    end)
-    if okTabContentSignal and tabContentSignal then
-        trackGlobal(tabContentSignal:Connect(function()
-            tabScrollState:Refresh(true)
-        end), "HeaderTabContentChanged")
+    do
+        local okTabContentSignal, tabContentSignal = pcall(function()
+            return tabListLayout:GetPropertyChangedSignal("AbsoluteContentSize")
+        end)
+        if okTabContentSignal and tabContentSignal then
+            trackGlobal(tabContentSignal:Connect(function()
+                tabScrollState:Refresh(true)
+            end), "HeaderTabContentChanged")
+        end
     end
     task.defer(win._refreshHeaderLayout)
 
     -- Avatar
-    local userIcon = Instance.new("ImageLabel", userProfile)
-    userIcon.Name = randomStr()
-    userIcon.AnchorPoint = Vector2.new(1, 0.5)
-    userIcon.BackgroundTransparency = 1
-    userIcon.BorderSizePixel = 0
-    userIcon.Position = UDim2.new(1, -AVATAR_RIGHT_INSET, 0.5, 0)
-    userIcon.Size = UDim2.new(0.8, 0, 0.8, 0)
-    userIcon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-    userIcon.ZIndex = 5
-    userIcon.Image = Players:GetUserThumbnailAsync(Client.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size180x180)
+    do
+        local userIcon = Instance.new("ImageLabel", userProfile)
+        userIcon.Name = randomStr()
+        userIcon.AnchorPoint = Vector2.new(1, 0.5)
+        userIcon.BackgroundTransparency = 1
+        userIcon.BorderSizePixel = 0
+        userIcon.Position = UDim2.new(1, -AVATAR_RIGHT_INSET, 0.5, 0)
+        userIcon.Size = UDim2.new(0.8, 0, 0.8, 0)
+        userIcon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+        userIcon.ZIndex = 5
+        userIcon.Image = Players:GetUserThumbnailAsync(Client.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size180x180)
 
-    Instance.new("UICorner", userIcon).CornerRadius = UDim.new(1, 0)
+        Instance.new("UICorner", userIcon).CornerRadius = UDim.new(1, 0)
 
-    local avatarStroke = Instance.new("UIStroke", userIcon)
-    avatarStroke.Thickness = 2.5
-    avatarStroke.Transparency = 0.9
+        local avatarStroke = Instance.new("UIStroke", userIcon)
+        avatarStroke.Thickness = 2.5
+        avatarStroke.Transparency = 0.9
+    end
 
     -- Username
-    local userName = Instance.new("TextLabel", userProfile)
-    userName.Name = randomStr()
-    userName.AnchorPoint = Vector2.new(1, 0)
-    userName.BackgroundTransparency = 1
-    userName.BorderSizePixel = 0
-    userName.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 3)
-    userName.Size = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 15)
-    userName.ZIndex = 4
-    userName.Font = config.FontMedium
-    userName.Text = Client.DisplayName
-    userName.TextColor3 = Color3.fromRGB(255, 255, 255)
-    userName.TextSize = 13
-    userName.TextStrokeTransparency = 0.7
-    userName.TextXAlignment = Enum.TextXAlignment.Right
-    userName.TextTruncate = Enum.TextTruncate.AtEnd
-    bindTheme(userName, "TextColor3", "TextStrong")
+    do
+        local userName = Instance.new("TextLabel", userProfile)
+        userName.Name = randomStr()
+        userName.AnchorPoint = Vector2.new(1, 0)
+        userName.BackgroundTransparency = 1
+        userName.BorderSizePixel = 0
+        userName.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 3)
+        userName.Size = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 15)
+        userName.ZIndex = 4
+        userName.Font = config.FontMedium
+        userName.Text = Client.DisplayName
+        userName.TextColor3 = Color3.fromRGB(255, 255, 255)
+        userName.TextSize = 13
+        userName.TextStrokeTransparency = 0.7
+        userName.TextXAlignment = Enum.TextXAlignment.Right
+        userName.TextTruncate = Enum.TextTruncate.AtEnd
+        bindTheme(userName, "TextColor3", "TextStrong")
+    end
 
     -- Expire / Premium text
-    local expireDays = Instance.new("TextLabel", userProfile)
-    expireDays.Name = randomStr()
-    expireDays.AnchorPoint = Vector2.new(1, 0)
-    expireDays.BackgroundTransparency = 1
-    expireDays.BorderSizePixel = 0
-    expireDays.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 16)
-    expireDays.Size = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 15)
-    expireDays.ZIndex = 4
-    expireDays.Font = config.FontMedium
-    expireDays.RichText = true
-    expireDays.Text = ""
-    expireDays.TextColor3 = Color3.fromRGB(255, 255, 255)
-    expireDays.TextSize = 12
-    expireDays.TextStrokeTransparency = 0.7
-    expireDays.TextXAlignment = Enum.TextXAlignment.Right
-    expireDays.TextTruncate = Enum.TextTruncate.AtEnd
-    bindTheme(expireDays, "TextColor3", "TextStrong")
-    win._keyExpiryLabel = expireDays
+    do
+        local expireDays = Instance.new("TextLabel", userProfile)
+        expireDays.Name = randomStr()
+        expireDays.AnchorPoint = Vector2.new(1, 0)
+        expireDays.BackgroundTransparency = 1
+        expireDays.BorderSizePixel = 0
+        expireDays.Position = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 16)
+        expireDays.Size = UDim2.new(1, -PROFILE_TEXT_RIGHT_INSET, 0, 15)
+        expireDays.ZIndex = 4
+        expireDays.Font = config.FontMedium
+        expireDays.RichText = true
+        expireDays.Text = ""
+        expireDays.TextColor3 = Color3.fromRGB(255, 255, 255)
+        expireDays.TextSize = 12
+        expireDays.TextStrokeTransparency = 0.7
+        expireDays.TextXAlignment = Enum.TextXAlignment.Right
+        expireDays.TextTruncate = Enum.TextTruncate.AtEnd
+        bindTheme(expireDays, "TextColor3", "TextStrong")
+        win._keyExpiryLabel = expireDays
+    end
     setKeyExpiryFromMeta(win, expire, keyExpiryMeta)
     trackGlobal(RunService.Heartbeat:Connect(function()
         if win._keyExpiryDeadline == nil then
@@ -1955,28 +1963,32 @@ function Library:CreateWindow(opts)
     Instance.new("UICorner", bottom).CornerRadius = UDim.new(0, 4)
 
     -- Bottom top line
-    local bottomLine = Instance.new("Frame", bottom)
-    bottomLine.BackgroundColor3 = colors.Line
-    bottomLine.BorderSizePixel = 0
-    bottomLine.Size = UDim2.new(1, 0, 0, 1)
-    bottomLine.ZIndex = 3
-    bindTheme(bottomLine, "BackgroundColor3", "Line")
+    do
+        local bottomLine = Instance.new("Frame", bottom)
+        bottomLine.BackgroundColor3 = colors.Line
+        bottomLine.BorderSizePixel = 0
+        bottomLine.Size = UDim2.new(1, 0, 0, 1)
+        bottomLine.ZIndex = 3
+        bindTheme(bottomLine, "BackgroundColor3", "Line")
+    end
 
     -- Bottom shadow (upward gradient)
-    local bottomShadow = Instance.new("Frame", bottom)
-    bottomShadow.AnchorPoint = Vector2.new(0, 1)
-    bottomShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    bottomShadow.BackgroundTransparency = 0.5
-    bottomShadow.BorderSizePixel = 0
-    bottomShadow.Position = UDim2.new(0, 0, 1, 0)
-    bottomShadow.Size = UDim2.new(1, 0, 1, 5)
-    local bottomGrad = Instance.new("UIGradient", bottomShadow)
-    bottomGrad.Rotation = -90
-    bottomGrad.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    Instance.new("UICorner", bottomShadow).CornerRadius = UDim.new(0, 5)
+    do
+        local bottomShadow = Instance.new("Frame", bottom)
+        bottomShadow.AnchorPoint = Vector2.new(0, 1)
+        bottomShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        bottomShadow.BackgroundTransparency = 0.5
+        bottomShadow.BorderSizePixel = 0
+        bottomShadow.Position = UDim2.new(0, 0, 1, 0)
+        bottomShadow.Size = UDim2.new(1, 0, 1, 5)
+        local bottomGrad = Instance.new("UIGradient", bottomShadow)
+        bottomGrad.Rotation = -90
+        bottomGrad.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+        Instance.new("UICorner", bottomShadow).CornerRadius = UDim.new(0, 5)
+    end
 
     -- ==============================
     -- SETTINGS GEAR BUTTON
@@ -2017,183 +2029,191 @@ function Library:CreateWindow(opts)
     bindTheme(settingsPanel, "BackgroundColor3", "Panel")
     bindTheme(settingsPanel, "BackgroundTransparency", "PanelTransparency")
     Instance.new("UICorner", settingsPanel).CornerRadius = UDim.new(0, 5)
-    local spStroke = Instance.new("UIStroke", settingsPanel)
-    spStroke.Color = colors.Line
-    spStroke.Transparency = 0.3
-    bindTheme(spStroke, "Color", "Line")
+    do
+        local spStroke = Instance.new("UIStroke", settingsPanel)
+        spStroke.Color = colors.Line
+        spStroke.Transparency = 0.3
+        bindTheme(spStroke, "Color", "Line")
+    end
 
     -- Settings header
-    local spHeader = Instance.new("TextLabel", settingsPanel)
-    spHeader.BackgroundTransparency = 1
-    spHeader.Position = UDim2.new(0, 10, 0, 0)
-    spHeader.Size = UDim2.new(1, -20, 0, 28)
-    spHeader.Font = config.Font
-    spHeader.Text = "SETTINGS"
-    spHeader.TextColor3 = Color3.fromRGB(255, 255, 255)
-    spHeader.TextSize = 12
-    spHeader.TextXAlignment = Enum.TextXAlignment.Left
-    spHeader.ZIndex = 101
-    bindTheme(spHeader, "TextColor3", "TextStrong")
+    do
+        local spHeader = Instance.new("TextLabel", settingsPanel)
+        spHeader.BackgroundTransparency = 1
+        spHeader.Position = UDim2.new(0, 10, 0, 0)
+        spHeader.Size = UDim2.new(1, -20, 0, 28)
+        spHeader.Font = config.Font
+        spHeader.Text = "SETTINGS"
+        spHeader.TextColor3 = Color3.fromRGB(255, 255, 255)
+        spHeader.TextSize = 12
+        spHeader.TextXAlignment = Enum.TextXAlignment.Left
+        spHeader.ZIndex = 101
+        bindTheme(spHeader, "TextColor3", "TextStrong")
+    end
 
     -- Separator
-    local spSep = Instance.new("Frame", settingsPanel)
-    spSep.Position = UDim2.new(0, 8, 0, 28)
-    spSep.Size = UDim2.new(1, -16, 0, 1)
-    spSep.BackgroundColor3 = colors.Line
-    spSep.BorderSizePixel = 0
-    spSep.ZIndex = 101
-    bindTheme(spSep, "BackgroundColor3", "Line")
+    do
+        local spSep = Instance.new("Frame", settingsPanel)
+        spSep.Position = UDim2.new(0, 8, 0, 28)
+        spSep.Size = UDim2.new(1, -16, 0, 1)
+        spSep.BackgroundColor3 = colors.Line
+        spSep.BorderSizePixel = 0
+        spSep.ZIndex = 101
+        bindTheme(spSep, "BackgroundColor3", "Line")
+    end
 
     -- Auto-save row
-    local autoSaveRow = Instance.new("Frame", settingsPanel)
-    autoSaveRow.Position = UDim2.new(0, 10, 0, 34)
-    autoSaveRow.Size = UDim2.new(1, -20, 0, 20)
-    autoSaveRow.BackgroundTransparency = 1
-    autoSaveRow.ZIndex = 101
-
-    local asLabel = Instance.new("TextLabel", autoSaveRow)
-    asLabel.BackgroundTransparency = 1
-    asLabel.Size = UDim2.new(0.6, 0, 1, 0)
-    asLabel.Font = config.FontMedium
-    asLabel.Text = "Auto-save"
-    asLabel.TextColor3 = colors.Text
-    asLabel.TextSize = 11
-    asLabel.TextXAlignment = Enum.TextXAlignment.Left
-    asLabel.ZIndex = 101
-    bindTheme(asLabel, "TextColor3", "Text")
-
-    local asChkFrame = Instance.new("Frame", autoSaveRow)
-    asChkFrame.AnchorPoint = Vector2.new(1, 0.5)
-    asChkFrame.Position = UDim2.new(1, 0, 0.5, 0)
-    asChkFrame.Size = UDim2.new(0, 12, 0, 12)
-    asChkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    asChkFrame.BorderSizePixel = 0
-    asChkFrame.ZIndex = 101
-    bindTheme(asChkFrame, "BackgroundColor3", "Control")
-    bindTheme(asChkFrame, "BackgroundTransparency", "ControlTransparency")
-    Instance.new("UICorner", asChkFrame).CornerRadius = UDim.new(0, 3)
-    local asChkStroke = Instance.new("UIStroke", asChkFrame)
-    asChkStroke.Color = colors.Line
-    asChkStroke.Transparency = 0.5
-    bindTheme(asChkStroke, "Color", "Line")
-
-    local asCheckIcon = Instance.new("ImageLabel", asChkFrame)
-    asCheckIcon.BackgroundTransparency = 1
-    asCheckIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-    asCheckIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-    asCheckIcon.Size = UDim2.new(0, 10, 0, 10)
-    asCheckIcon.Image = "rbxassetid://122354904349171"
-    asCheckIcon.ImageColor3 = colors.Main
-    asCheckIcon.ImageTransparency = 1
-    asCheckIcon.ZIndex = 102
-    bindTheme(asCheckIcon, "ImageColor3", "Main")
-
-    local asBtn = Instance.new("TextButton", autoSaveRow)
-    asBtn.BackgroundTransparency = 1
-    asBtn.Size = UDim2.new(1, 0, 1, 0)
-    asBtn.Text = ""
-    asBtn.ZIndex = 103
-    asBtn.AutoButtonColor = false
-    asBtn.Selectable = false
-    asBtn.BorderSizePixel = 0
-
     local settingsAutoSaveToggle
+    local setAutoSaveEnabled
+    do
+        local autoSaveRow = Instance.new("Frame", settingsPanel)
+        autoSaveRow.Position = UDim2.new(0, 10, 0, 34)
+        autoSaveRow.Size = UDim2.new(1, -20, 0, 20)
+        autoSaveRow.BackgroundTransparency = 1
+        autoSaveRow.ZIndex = 101
 
-    local function updateAutoSaveVisual(enabled, animate)
-        local checkTransparency = enabled and 0 or 1
-        local frameColor = enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
-        local strokeColor = enabled and colors.Main or colors.Line
-        local strokeTransparency = enabled and 0.3 or 0.5
+        local asLabel = Instance.new("TextLabel", autoSaveRow)
+        asLabel.BackgroundTransparency = 1
+        asLabel.Size = UDim2.new(0.6, 0, 1, 0)
+        asLabel.Font = config.FontMedium
+        asLabel.Text = "Auto-save"
+        asLabel.TextColor3 = colors.Text
+        asLabel.TextSize = 11
+        asLabel.TextXAlignment = Enum.TextXAlignment.Left
+        asLabel.ZIndex = 101
+        bindTheme(asLabel, "TextColor3", "Text")
 
-        if animate then
-            Library:Spring(asCheckIcon, "Smooth", { ImageTransparency = checkTransparency })
-            Library:Spring(asChkFrame, "Smooth", { BackgroundColor3 = frameColor })
-            Library:Spring(asChkStroke, "Smooth", { Color = strokeColor, Transparency = strokeTransparency })
-            return
+        local asChkFrame = Instance.new("Frame", autoSaveRow)
+        asChkFrame.AnchorPoint = Vector2.new(1, 0.5)
+        asChkFrame.Position = UDim2.new(1, 0, 0.5, 0)
+        asChkFrame.Size = UDim2.new(0, 12, 0, 12)
+        asChkFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        asChkFrame.BorderSizePixel = 0
+        asChkFrame.ZIndex = 101
+        bindTheme(asChkFrame, "BackgroundColor3", "Control")
+        bindTheme(asChkFrame, "BackgroundTransparency", "ControlTransparency")
+        Instance.new("UICorner", asChkFrame).CornerRadius = UDim.new(0, 3)
+        local asChkStroke = Instance.new("UIStroke", asChkFrame)
+        asChkStroke.Color = colors.Line
+        asChkStroke.Transparency = 0.5
+        bindTheme(asChkStroke, "Color", "Line")
+
+        local asCheckIcon = Instance.new("ImageLabel", asChkFrame)
+        asCheckIcon.BackgroundTransparency = 1
+        asCheckIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        asCheckIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+        asCheckIcon.Size = UDim2.new(0, 10, 0, 10)
+        asCheckIcon.Image = "rbxassetid://122354904349171"
+        asCheckIcon.ImageColor3 = colors.Main
+        asCheckIcon.ImageTransparency = 1
+        asCheckIcon.ZIndex = 102
+        bindTheme(asCheckIcon, "ImageColor3", "Main")
+
+        local asBtn = Instance.new("TextButton", autoSaveRow)
+        asBtn.BackgroundTransparency = 1
+        asBtn.Size = UDim2.new(1, 0, 1, 0)
+        asBtn.Text = ""
+        asBtn.ZIndex = 103
+        asBtn.AutoButtonColor = false
+        asBtn.Selectable = false
+        asBtn.BorderSizePixel = 0
+
+        local function updateAutoSaveVisual(enabled, animate)
+            local checkTransparency = enabled and 0 or 1
+            local frameColor = enabled and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+            local strokeColor = enabled and colors.Main or colors.Line
+            local strokeTransparency = enabled and 0.3 or 0.5
+
+            if animate then
+                Library:Spring(asCheckIcon, "Smooth", { ImageTransparency = checkTransparency })
+                Library:Spring(asChkFrame, "Smooth", { BackgroundColor3 = frameColor })
+                Library:Spring(asChkStroke, "Smooth", { Color = strokeColor, Transparency = strokeTransparency })
+                return
+            end
+
+            asCheckIcon.ImageTransparency = checkTransparency
+            asChkFrame.BackgroundColor3 = frameColor
+            asChkStroke.Color = strokeColor
+            asChkStroke.Transparency = strokeTransparency
         end
 
-        asCheckIcon.ImageTransparency = checkTransparency
-        asChkFrame.BackgroundColor3 = frameColor
-        asChkStroke.Color = strokeColor
-        asChkStroke.Transparency = strokeTransparency
-    end
-
-    local function setAutoSaveEnabled(enabled, animate)
-        Library._autoSave = enabled and true or false
-        updateAutoSaveVisual(Library._autoSave, animate)
-        if settingsAutoSaveToggle and settingsAutoSaveToggle.Value ~= Library._autoSave then
-            pcall(function()
-                settingsAutoSaveToggle:Set(Library._autoSave)
-            end)
+        setAutoSaveEnabled = function(enabled, animate)
+            Library._autoSave = enabled and true or false
+            updateAutoSaveVisual(Library._autoSave, animate)
+            if settingsAutoSaveToggle and settingsAutoSaveToggle.Value ~= Library._autoSave then
+                pcall(function()
+                    settingsAutoSaveToggle:Set(Library._autoSave)
+                end)
+            end
         end
+
+        updateAutoSaveVisual(Library._autoSave, false)
+
+        asBtn.Activated:Connect(function()
+            setAutoSaveEnabled(not Library._autoSave, true)
+            pcall(function() Library:SaveConfig() end)
+        end)
+
+        -- Save button
+        local saveBtn = Instance.new("TextButton", settingsPanel)
+        saveBtn.Position = UDim2.new(0, 10, 0, 60)
+        saveBtn.Size = UDim2.new(0.45, -12, 0, 22)
+        saveBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        saveBtn.BorderSizePixel = 0
+        saveBtn.Font = config.FontMedium
+        saveBtn.Text = "Save"
+        saveBtn.TextColor3 = colors.Text
+        saveBtn.TextSize = 11
+        saveBtn.ZIndex = 101
+        saveBtn.AutoButtonColor = false
+        saveBtn.Selectable = false
+        Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 3)
+        bindTheme(saveBtn, "BackgroundColor3", "Control")
+        bindTheme(saveBtn, "BackgroundTransparency", "ControlTransparency")
+        bindTheme(saveBtn, "TextColor3", "Text")
+
+        saveBtn.MouseEnter:Connect(function()
+            Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
+        end)
+        saveBtn.MouseLeave:Connect(function()
+            Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+        end)
+        saveBtn.Activated:Connect(function()
+            pcall(function() Library:SaveConfig() end)
+            Library:Animate(saveBtn, "Press", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+            task.delay(0.3, function() Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
+        end)
+
+        -- Load button
+        local loadBtn = Instance.new("TextButton", settingsPanel)
+        loadBtn.Position = UDim2.new(0.5, 2, 0, 60)
+        loadBtn.Size = UDim2.new(0.45, -12, 0, 22)
+        loadBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        loadBtn.BorderSizePixel = 0
+        loadBtn.Font = config.FontMedium
+        loadBtn.Text = "Load"
+        loadBtn.TextColor3 = colors.Text
+        loadBtn.TextSize = 11
+        loadBtn.ZIndex = 101
+        loadBtn.AutoButtonColor = false
+        loadBtn.Selectable = false
+        Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 3)
+        bindTheme(loadBtn, "BackgroundColor3", "Control")
+        bindTheme(loadBtn, "BackgroundTransparency", "ControlTransparency")
+        bindTheme(loadBtn, "TextColor3", "Text")
+
+        loadBtn.MouseEnter:Connect(function()
+            Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
+        end)
+        loadBtn.MouseLeave:Connect(function()
+            Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+        end)
+        loadBtn.Activated:Connect(function()
+            pcall(function() Library:LoadConfig() end)
+            Library:Animate(loadBtn, "Press", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
+            task.delay(0.3, function() Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
+        end)
     end
-
-    updateAutoSaveVisual(Library._autoSave, false)
-
-    asBtn.Activated:Connect(function()
-        setAutoSaveEnabled(not Library._autoSave, true)
-        pcall(function() Library:SaveConfig() end)
-    end)
-
-    -- Save button
-    local saveBtn = Instance.new("TextButton", settingsPanel)
-    saveBtn.Position = UDim2.new(0, 10, 0, 60)
-    saveBtn.Size = UDim2.new(0.45, -12, 0, 22)
-    saveBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    saveBtn.BorderSizePixel = 0
-    saveBtn.Font = config.FontMedium
-    saveBtn.Text = "Save"
-    saveBtn.TextColor3 = colors.Text
-    saveBtn.TextSize = 11
-    saveBtn.ZIndex = 101
-    saveBtn.AutoButtonColor = false
-    saveBtn.Selectable = false
-    Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 3)
-    bindTheme(saveBtn, "BackgroundColor3", "Control")
-    bindTheme(saveBtn, "BackgroundTransparency", "ControlTransparency")
-    bindTheme(saveBtn, "TextColor3", "Text")
-
-    saveBtn.MouseEnter:Connect(function()
-        Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
-    end)
-    saveBtn.MouseLeave:Connect(function()
-        Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
-    end)
-    saveBtn.Activated:Connect(function()
-        pcall(function() Library:SaveConfig() end)
-        Library:Animate(saveBtn, "Press", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
-        task.delay(0.3, function() Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
-    end)
-
-    -- Load button
-    local loadBtn = Instance.new("TextButton", settingsPanel)
-    loadBtn.Position = UDim2.new(0.5, 2, 0, 60)
-    loadBtn.Size = UDim2.new(0.45, -12, 0, 22)
-    loadBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    loadBtn.BorderSizePixel = 0
-    loadBtn.Font = config.FontMedium
-    loadBtn.Text = "Load"
-    loadBtn.TextColor3 = colors.Text
-    loadBtn.TextSize = 11
-    loadBtn.ZIndex = 101
-    loadBtn.AutoButtonColor = false
-    loadBtn.Selectable = false
-    Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 3)
-    bindTheme(loadBtn, "BackgroundColor3", "Control")
-    bindTheme(loadBtn, "BackgroundTransparency", "ControlTransparency")
-    bindTheme(loadBtn, "TextColor3", "Text")
-
-    loadBtn.MouseEnter:Connect(function()
-        Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(50, 50, 50) })
-    end)
-    loadBtn.MouseLeave:Connect(function()
-        Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
-    end)
-    loadBtn.Activated:Connect(function()
-        pcall(function() Library:LoadConfig() end)
-        Library:Animate(loadBtn, "Press", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
-        task.delay(0.3, function() Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
-    end)
 
     local SETTINGS_DROPDOWN_ARROW_CLOSED = utf8.char(9660)
     local SETTINGS_DROPDOWN_ARROW_OPEN = utf8.char(9650)
