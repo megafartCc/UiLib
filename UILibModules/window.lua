@@ -1398,7 +1398,7 @@ function Library:CreateWindow(opts)
     userProfile.Size = UDim2.new(0, USER_PROFILE_WIDTH, 0.75, 0)
     userProfile.ZIndex = 4
 
-    local function measureTitleWidth()
+    win._measureTitleWidth = function()
         local ok, bounds = pcall(TextService.GetTextSize, TextService, tostring(name or ""), headerText.TextSize, headerText.Font, Vector2.new(1000, config.HeaderHeight))
         if ok and bounds then
             return math.clamp(math.ceil(bounds.X) + 6, 120, 320)
@@ -1406,7 +1406,7 @@ function Library:CreateWindow(opts)
         return 160
     end
 
-    local function measureHeaderTextWidth(text, textSize, font)
+    win._measureHeaderTextWidth = function(text, textSize, font)
         local ok, bounds = pcall(TextService.GetTextSize, TextService, tostring(text or ""), textSize, font, Vector2.new(1000, config.HeaderHeight))
         if ok and bounds then
             return math.ceil(bounds.X)
@@ -1414,17 +1414,17 @@ function Library:CreateWindow(opts)
         return #(tostring(text or "")) * math.max(6, math.floor((textSize or 12) * 0.55))
     end
 
-    local function getMenuTabWidth(menuName, hasIcon)
-        local textWidth = measureHeaderTextWidth(menuName, 13, config.Font)
+    win._getMenuTabWidth = function(menuName, hasIcon)
+        local textWidth = win._measureHeaderTextWidth(menuName, 13, config.Font)
         local width = textWidth + (hasIcon and 36 or 18)
         return math.clamp(width, hasIcon and 62 or 44, 140)
     end
 
-    local function refreshHeaderLayout()
+    win._refreshHeaderLayout = function()
         local headerWidth = header.AbsoluteSize.X > 0 and header.AbsoluteSize.X or initialWindowWidth
         local rightReserved = USER_PROFILE_WIDTH + HEADER_RIGHT_PADDING + 12
         local maxTitleWidth = math.max(72, headerWidth - HEADER_LEFT_PADDING - HEADER_TITLE_GAP - rightReserved - TABS_MIN_WIDTH)
-        local titleWidth = math.min(measureTitleWidth(), maxTitleWidth)
+        local titleWidth = math.min(win._measureTitleWidth(), maxTitleWidth)
         headerText.Size = UDim2.new(0, titleWidth, 1, 0)
 
         local tabsStartX = HEADER_LEFT_PADDING + titleWidth + HEADER_TITLE_GAP
@@ -1435,7 +1435,7 @@ function Library:CreateWindow(opts)
         tabScrollState:Refresh(true)
     end
 
-    trackGlobal(header:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshHeaderLayout), "HeaderLayoutChanged")
+    trackGlobal(header:GetPropertyChangedSignal("AbsoluteSize"):Connect(win._refreshHeaderLayout), "HeaderLayoutChanged")
     local okTabContentSignal, tabContentSignal = pcall(function()
         return tabListLayout:GetPropertyChangedSignal("AbsoluteContentSize")
     end)
@@ -1444,7 +1444,7 @@ function Library:CreateWindow(opts)
             tabScrollState:Refresh(true)
         end), "HeaderTabContentChanged")
     end
-    task.defer(refreshHeaderLayout)
+    task.defer(win._refreshHeaderLayout)
 
     -- Avatar
     local userIcon = Instance.new("ImageLabel", userProfile)
@@ -2915,7 +2915,7 @@ function Library:CreateWindow(opts)
     -- ==============================
     -- CONTENT SCALE (settings panel)
     -- ==============================
-    local function buildUiScaleSection()
+    win._buildUiScaleSection = function()
     local uiScaleRow = Instance.new("Frame", settingsPanel)
     uiScaleRow.Position = UDim2.new(0, 10, 0, 88)
     uiScaleRow.Size = UDim2.new(1, -20, 0, 20)
@@ -3107,12 +3107,12 @@ function Library:CreateWindow(opts)
     })
     end
 
-    buildUiScaleSection()
+    win._buildUiScaleSection()
 
     -- ==============================
     -- KEYBIND CHANGER (in settings panel)
     -- ==============================
-    local function buildKeyControlsSection()
+    win._buildKeyControlsSection = function()
     local kbRow = Instance.new("Frame", settingsPanel)
     kbRow.Position = UDim2.new(0, 10, 0, 114)
     kbRow.Size = UDim2.new(1, -20, 0, 20)
@@ -3531,7 +3531,7 @@ function Library:CreateWindow(opts)
     win._setKeyChromeLocked(keySystemActive and not keyGateUnlocked)
     end
 
-    buildKeyControlsSection()
+    win._buildKeyControlsSection()
 
     -- ==============================
     -- AddMenu (creates tab + page)
@@ -3575,7 +3575,7 @@ function Library:CreateWindow(opts)
             menuIconImage = nil
         end
         local hasMenuIcon = menuIconImage ~= nil
-        menuBtn.Size = UDim2.new(0, getMenuTabWidth(menuName, hasMenuIcon), 0.85, 0)
+        menuBtn.Size = UDim2.new(0, win._getMenuTabWidth(menuName, hasMenuIcon), 0.85, 0)
 
         -- Tab label text
         local menuLabel = Instance.new("TextLabel", menuBtn)
@@ -3598,7 +3598,7 @@ function Library:CreateWindow(opts)
         bindTheme(menuLabel, "TextColor3", "TextDim")
         task.defer(function()
             if menuBtn.Parent then
-                menuBtn.Size = UDim2.new(0, getMenuTabWidth(menuName, menuIconImage ~= nil), 0.85, 0)
+                menuBtn.Size = UDim2.new(0, win._getMenuTabWidth(menuName, menuIconImage ~= nil), 0.85, 0)
                 tabScrollState:Refresh(true)
             end
         end)
