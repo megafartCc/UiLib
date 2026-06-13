@@ -963,6 +963,21 @@ function Library:CreateWindow(opts)
             return maxOffset
         end
 
+        function state:_applyCurrent()
+            if type(self.apply) ~= "function" then
+                return false
+            end
+
+            synchronizeForInstanceAccess()
+
+            local ok = pcall(self.apply, self.current)
+            if ok then
+                self._lastApplied = self.current
+            end
+
+            return ok
+        end
+
         function state:SetTarget(offset, snap)
             local maxOffset = readSmoothMaxOffset(self.getMaxOffset)
             self.target = math.clamp(offset, 0, maxOffset)
@@ -970,9 +985,7 @@ function Library:CreateWindow(opts)
                 self.current = self.target
             end
 
-            synchronizeForInstanceAccess()
-            self.apply(self.current)
-            self._lastApplied = self.current
+            self:_applyCurrent()
         end
 
         function state:ScrollBy(delta)
@@ -1132,9 +1145,7 @@ function Library:CreateWindow(opts)
                 end
 
                 if state._lastApplied ~= state.current then
-                    synchronizeForInstanceAccess()
-                    state.apply(state.current)
-                    state._lastApplied = state.current
+                    state:_applyCurrent()
                 end
             else
                 local alpha = 1 - math.exp(-state.speed * dt)
@@ -1144,9 +1155,7 @@ function Library:CreateWindow(opts)
                     state.current = state.target
                 end
 
-                synchronizeForInstanceAccess()
-                state.apply(state.current)
-                state._lastApplied = state.current
+                state:_applyCurrent()
             end
         end
     end), "SmoothScrollTick")
