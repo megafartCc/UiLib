@@ -2852,7 +2852,7 @@ function Library:CreateWindow(opts)
     })
     win._keybindManager = keybindManager
 
-    local function smoothToggle()
+    win._smoothToggle = function()
         win.Visible = not win.Visible
 
         if not startupReady then
@@ -2892,13 +2892,13 @@ function Library:CreateWindow(opts)
     trackGlobal(UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
         if input.KeyCode == guiKeybind or (typeof(guiKeybind) == "string" and input.KeyCode.Name == guiKeybind) then
-            smoothToggle()
+            win._smoothToggle()
         end
     end), "ToggleKeybind")
 
     if mobileUi.MinimizeButton then
         mobileUi.MinimizeButton.Activated:Connect(function()
-            smoothToggle()
+            win._smoothToggle()
         end)
     end
 
@@ -2908,7 +2908,7 @@ function Library:CreateWindow(opts)
                 mobileUi.RestoreBarDragged = false
                 return
             end
-            smoothToggle()
+            win._smoothToggle()
         end)
     end
 
