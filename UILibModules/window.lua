@@ -919,6 +919,24 @@ function Library:CreateWindow(opts)
 
     local smoothScrollStates = {}
 
+    local function readSmoothMaxOffset(getMaxOffset)
+        if type(getMaxOffset) ~= "function" then
+            return 0
+        end
+
+        local ok, value = pcall(getMaxOffset)
+        if not ok then
+            return 0
+        end
+
+        value = tonumber(value) or 0
+        if value ~= value then
+            return 0
+        end
+
+        return math.max(0, value)
+    end
+
     local function createSmoothScrollState(opts)
         local state = {
             current = opts.InitialOffset or 0,
@@ -931,14 +949,14 @@ function Library:CreateWindow(opts)
         }
 
         function state:_clamp()
-            local maxOffset = math.max(0, self.getMaxOffset())
+            local maxOffset = readSmoothMaxOffset(self.getMaxOffset)
             self.target = math.clamp(self.target, 0, maxOffset)
             self.current = math.clamp(self.current, 0, maxOffset)
             return maxOffset
         end
 
         function state:SetTarget(offset, snap)
-            local maxOffset = math.max(0, self.getMaxOffset())
+            local maxOffset = readSmoothMaxOffset(self.getMaxOffset)
             self.target = math.clamp(offset, 0, maxOffset)
             if snap then
                 self.current = self.target
@@ -1418,9 +1436,14 @@ function Library:CreateWindow(opts)
     end
 
     trackGlobal(header:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshHeaderLayout), "HeaderLayoutChanged")
-    trackGlobal(tabListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        tabScrollState:Refresh(true)
-    end), "HeaderTabContentChanged")
+    local okTabContentSignal, tabContentSignal = pcall(function()
+        return tabListLayout:GetPropertyChangedSignal("AbsoluteContentSize")
+    end)
+    if okTabContentSignal and tabContentSignal then
+        trackGlobal(tabContentSignal:Connect(function()
+            tabScrollState:Refresh(true)
+        end), "HeaderTabContentChanged")
+    end
     task.defer(refreshHeaderLayout)
 
     -- Avatar
@@ -3643,11 +3666,19 @@ function Library:CreateWindow(opts)
                 colPad.PaddingBottom = UDim.new(0, 4)
 
                 local function refreshScroll()
-                    local canvasHeight = colLayout.AbsoluteContentSize.Y + 12
+                    local okSize, contentSize = pcall(function()
+                        return colLayout.AbsoluteContentSize
+                    end)
+                    local canvasHeight = (okSize and contentSize and contentSize.Y or 0) + 12
                     col.CanvasSize = UDim2.new(0, 0, 0, math.max(0, math.floor(canvasHeight + 0.5)))
                 end
 
-                trackGlobal(colLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshScroll), nextCleanupKey("MobileColumnCanvas"))
+                local okSignal, contentSignal = pcall(function()
+                    return colLayout:GetPropertyChangedSignal("AbsoluteContentSize")
+                end)
+                if okSignal and contentSignal then
+                    trackGlobal(contentSignal:Connect(refreshScroll), nextCleanupKey("MobileColumnCanvas"))
+                end
                 task.defer(refreshScroll)
 
                 table.insert(menu._columnScrollers, refreshScroll)
