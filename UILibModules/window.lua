@@ -919,10 +919,18 @@ function Library:CreateWindow(opts)
 
     local smoothScrollStates = {}
 
+    local function synchronizeForInstanceAccess()
+        if type(task) == "table" and type(task.synchronize) == "function" then
+            pcall(task.synchronize)
+        end
+    end
+
     local function readSmoothMaxOffset(getMaxOffset)
         if type(getMaxOffset) ~= "function" then
             return 0
         end
+
+        synchronizeForInstanceAccess()
 
         local ok, value = pcall(getMaxOffset)
         if not ok then
@@ -962,6 +970,7 @@ function Library:CreateWindow(opts)
                 self.current = self.target
             end
 
+            synchronizeForInstanceAccess()
             self.apply(self.current)
             self._lastApplied = self.current
         end
@@ -1123,6 +1132,7 @@ function Library:CreateWindow(opts)
                 end
 
                 if state._lastApplied ~= state.current then
+                    synchronizeForInstanceAccess()
                     state.apply(state.current)
                     state._lastApplied = state.current
                 end
@@ -1134,6 +1144,7 @@ function Library:CreateWindow(opts)
                     state.current = state.target
                 end
 
+                synchronizeForInstanceAccess()
                 state.apply(state.current)
                 state._lastApplied = state.current
             end
