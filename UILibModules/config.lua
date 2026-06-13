@@ -18,7 +18,7 @@ return function(Library, context)
     Library._configItems = {}
     Library._configName = nil
     Library._windowStorageName = nil
-    Library._autoSave = false
+    Library._autoSave = true
     Library._autoSaveDelay = 2
     Library._dirty = false
     Library._controlSyncDepth = 0

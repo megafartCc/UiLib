@@ -631,7 +631,7 @@ function Library:CreateWindow(opts)
     local name = opts.Name or opts.Title or "FATALITY"
     local expire = opts.Expire or "never"
     local keybind = opts.Keybind or self.Config.ToggleKey
-    local configName = opts.ConfigName or nil
+    local configName = opts.ConfigName or opts.SaveName or opts.SaveFile or name
     local keySystemEnabled = opts.KeySystem == true
     local requiredKey = trimText(opts.Key)
     local unknownHubScriptId = trimText(opts.UnknownHubScriptId or opts.UnknownHubScriptID or opts.ScriptId or opts.ScriptID)
