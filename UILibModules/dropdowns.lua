@@ -254,36 +254,131 @@ return function(Library, context)
         return out
     end
 
-    local function buildSelectedSet(options, rawValue)
+    local function resolveChoiceAllConfig(opts)
+        if type(opts) ~= "table" then
+            return nil
+        end
+
+        local raw = opts.ChoiceAll
+        if raw == nil then
+            raw = opts.SelectAll
+        end
+        if raw == nil then
+            raw = opts.AllChoice
+        end
+        if raw == nil then
+            raw = opts.ChoiceAllOption
+        end
+        if raw == nil or raw == false then
+            return nil
+        end
+
+        local label = "All"
+        if type(raw) == "table" then
+            label = raw.Label or raw.Name or raw.Text or raw.Value or label
+        elseif raw ~= true then
+            label = raw
+        end
+
+        label = tostring(label or ""):gsub("^%s+", ""):gsub("%s+$", "")
+        if label == "" then
+            label = "All"
+        end
+
+        return {
+            Label = label,
+        }
+    end
+
+    local function isChoiceAllValue(choiceAll, value)
+        return choiceAll ~= nil and tostring(value) == choiceAll.Label
+    end
+
+    local function getSelectableOptions(options, choiceAll)
+        if not choiceAll then
+            return options
+        end
+
+        local out = {}
+        for _, opt in ipairs(options or {}) do
+            if not isChoiceAllValue(choiceAll, opt) then
+                table.insert(out, opt)
+            end
+        end
+
+        return out
+    end
+
+    local function getPanelOptions(options, choiceAll)
+        if not choiceAll then
+            return options
+        end
+
+        local out = { choiceAll.Label }
+        for _, opt in ipairs(options or {}) do
+            table.insert(out, opt)
+        end
+        return out
+    end
+
+    local function setAllSelected(options, selectedSet, enabled)
+        for _, opt in ipairs(options or {}) do
+            selectedSet[opt] = enabled and true or nil
+        end
+    end
+
+    local function allOptionsSelected(options, selectedSet)
+        if type(options) ~= "table" or #options == 0 then
+            return false
+        end
+
+        for _, opt in ipairs(options) do
+            if not (selectedSet and selectedSet[opt]) then
+                return false
+            end
+        end
+
+        return true
+    end
+
+    local function buildSelectedSet(options, rawValue, choiceAll)
         local selected = {}
         if type(rawValue) ~= "table" then
             return selected
         end
 
+        local shouldSelectAll = false
+        local function addValue(value)
+            if isChoiceAllValue(choiceAll, value) then
+                shouldSelectAll = true
+                return
+            end
+
+            local resolved = resolveDropdownValue(options, value, false)
+            if resolved ~= nil then
+                selected[resolved] = true
+            end
+        end
+
         local sequenceCount = #rawValue
         if sequenceCount > 0 then
             for _, value in ipairs(rawValue) do
-                local resolved = resolveDropdownValue(options, value, false)
-                if resolved ~= nil then
-                    selected[resolved] = true
-                end
+                addValue(value)
             end
         end
 
         for key, value in pairs(rawValue) do
             if not (type(key) == "number" and key >= 1 and key <= sequenceCount) then
                 if value == true then
-                    local resolved = resolveDropdownValue(options, key, false)
-                    if resolved ~= nil then
-                        selected[resolved] = true
-                    end
+                    addValue(key)
                 elseif value then
-                    local resolved = resolveDropdownValue(options, value, false)
-                    if resolved ~= nil then
-                        selected[resolved] = true
-                    end
+                    addValue(value)
                 end
             end
+        end
+
+        if shouldSelectAll then
+            setAllSelected(options, selected, true)
         end
 
         return selected
@@ -1014,12 +1109,15 @@ return function(Library, context)
         dropOpts = dropOpts or {}
         local dName = dropOpts.Name or dropOpts.Title or "Multi Select"
         local dOptions = normalizeDropdownOptions(dropOpts.Options or dropOpts.Items, { "Option 1", "Option 2" })
+        local dChoiceAll = resolveChoiceAllConfig(dropOpts)
+        dOptions = getSelectableOptions(dOptions, dChoiceAll)
+        local dPanelOptions = getPanelOptions(dOptions, dChoiceAll)
         local dDefaults = dropOpts.Default or {}
         local dCallback = dropOpts.Callback or function() end
         local dConfigScope = base.configScope or base.secName
         local dSaveKey, dSaveAliases = getDropdownConfigKey(dropOpts.SaveKey, dConfigScope, dName, base.menuName)
 
-        local selectedSet = buildSelectedSet(dOptions, dDefaults)
+        local selectedSet = buildSelectedSet(dOptions, dDefaults, dChoiceAll)
         local multi = { Values = selectedSet }
 
         local function getDisplayText()
@@ -1034,7 +1132,7 @@ return function(Library, context)
                 return "None"
             end
             if selectedCount == #dOptions then
-                return "All"
+                return dChoiceAll and dChoiceAll.Label or "All"
             end
             if selectedCount == 1 then
                 return selected[1]
@@ -1117,7 +1215,7 @@ return function(Library, context)
         pStroke.Color = base.colors.Line
         pStroke.Transparency = 0.5
 
-        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #dOptions, 24)
+        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #dPanelOptions, 24)
         local fullHeight = dropPanelContent.openHeight
 
         local optionButtons = {}
@@ -1125,7 +1223,7 @@ return function(Library, context)
         local function refreshMulti()
             valText.Text = getDisplayText()
             for optName, visuals in pairs(optVisuals) do
-                local selected = selectedSet[optName]
+                local selected = isChoiceAllValue(dChoiceAll, optName) and allOptionsSelected(dOptions, selectedSet) or selectedSet[optName]
                 visuals.chkIcon.ImageTransparency = selected and 0 or 1
                 visuals.chk.BackgroundColor3 = selected and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
                 visuals.chkStroke.Color = selected and base.colors.Main or base.colors.Line
@@ -1142,7 +1240,7 @@ return function(Library, context)
             for key in pairs(selectedSet) do
                 selectedSet[key] = nil
             end
-            for key, enabled in pairs(buildSelectedSet(dOptions, rawValue)) do
+            for key, enabled in pairs(buildSelectedSet(dOptions, rawValue, dChoiceAll)) do
                 selectedSet[key] = enabled
             end
 
@@ -1172,7 +1270,9 @@ return function(Library, context)
         end
 
         registerTransientPopup(base, dropPanel, closeDropdown)
-        for idx, opt in ipairs(dOptions) do
+        for idx, opt in ipairs(dPanelOptions) do
+            local isChoiceAllOption = isChoiceAllValue(dChoiceAll, opt)
+            local isSelected = isChoiceAllOption and allOptionsSelected(dOptions, selectedSet) or selectedSet[opt]
             local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
             optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
             optBtn.BackgroundTransparency = 1
@@ -1189,14 +1289,14 @@ return function(Library, context)
             chk.AnchorPoint = Vector2.new(0, 0.5)
             chk.Position = UDim2.new(0, 8, 0.5, 0)
             chk.Size = UDim2.new(0, 10, 0, 10)
-            chk.BackgroundColor3 = selectedSet[opt] and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+            chk.BackgroundColor3 = isSelected and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
             chk.BorderSizePixel = 0
             chk.ZIndex = 52
             Instance.new("UICorner", chk).CornerRadius = UDim.new(0, 2)
 
             local chkStroke = Instance.new("UIStroke", chk)
-            chkStroke.Color = selectedSet[opt] and base.colors.Main or base.colors.Line
-            chkStroke.Transparency = selectedSet[opt] and 0.3 or 0.5
+            chkStroke.Color = isSelected and base.colors.Main or base.colors.Line
+            chkStroke.Transparency = isSelected and 0.3 or 0.5
 
             local chkIcon = Instance.new("ImageLabel", chk)
             chkIcon.BackgroundTransparency = 1
@@ -1205,7 +1305,7 @@ return function(Library, context)
             chkIcon.Size = UDim2.new(0, 8, 0, 8)
             chkIcon.Image = "rbxassetid://122354904349171"
             chkIcon.ImageColor3 = base.colors.Main
-            chkIcon.ImageTransparency = selectedSet[opt] and 0 or 1
+            chkIcon.ImageTransparency = isSelected and 0 or 1
             chkIcon.ZIndex = 53
 
             local optLabel = Instance.new("TextLabel", optBtn)
@@ -1214,7 +1314,7 @@ return function(Library, context)
             optLabel.Size = UDim2.new(1, -30, 1, 0)
             optLabel.Font = base.config.FontMedium
             optLabel.Text = tostring(opt)
-            optLabel.TextColor3 = selectedSet[opt] and base.colors.Main or base.colors.Text
+            optLabel.TextColor3 = isSelected and base.colors.Main or base.colors.Text
             optLabel.TextSize = 11
             optLabel.TextXAlignment = Enum.TextXAlignment.Left
             optLabel.ZIndex = 52
@@ -1226,18 +1326,12 @@ return function(Library, context)
                 Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
             end)
             optBtn.Activated:Connect(function()
-                selectedSet[opt] = not selectedSet[opt]
-                chkIcon.ImageTransparency = selectedSet[opt] and 0 or 1
-                if selectedSet[opt] then
-                    Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
-                    Library:Spring(chkStroke, "Smooth", { Color = base.colors.Main, Transparency = 0.3 })
-                    optLabel.TextColor3 = base.colors.Main
+                if isChoiceAllOption then
+                    setAllSelected(dOptions, selectedSet, not allOptionsSelected(dOptions, selectedSet))
                 else
-                    Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
-                    Library:Spring(chkStroke, "Smooth", { Color = base.colors.Line, Transparency = 0.5 })
-                    optLabel.TextColor3 = base.colors.Text
+                    selectedSet[opt] = not selectedSet[opt]
                 end
-                valText.Text = getDisplayText()
+                refreshMulti()
                 multi.Values = selectedSet
                 if not callbacksSuppressed() then
                     fireMultiDropdownCallback(dCallback, dOptions, selectedSet)
@@ -1341,6 +1435,10 @@ return function(Library, context)
             for _, opt in ipairs(getSelectedValues(dOptions, selectedSet)) do
                 temp[opt] = true
             end
+            if isChoiceAllValue(dChoiceAll, name) then
+                multi:Set(state == false and {} or { [dChoiceAll.Label] = true })
+                return multi
+            end
             if state == false then
                 temp[name] = nil
             else
@@ -1358,6 +1456,9 @@ return function(Library, context)
         opts = opts or {}
         local mtName = opts.Name or opts.Title or "Multi Select Toggle"
         local mtOptions = normalizeDropdownOptions(opts.Options or opts.Items, { "Option 1", "Option 2" })
+        local mtChoiceAll = resolveChoiceAllConfig(opts)
+        mtOptions = getSelectableOptions(mtOptions, mtChoiceAll)
+        local mtPanelOptions = getPanelOptions(mtOptions, mtChoiceAll)
         local mtDefault = opts.Default or opts.Selected or {}
         local mtEnabled = opts.Enabled
         if mtEnabled == nil then
@@ -1375,7 +1476,7 @@ return function(Library, context)
         local mtSaveKey, mtSaveAliases = getDropdownConfigKey(opts.SaveKey, mtConfigScope, mtName, base.menuName)
         local labelWidth = math.clamp(tonumber(opts.LabelWidth) or 0.35, 0.22, 0.39)
 
-        local selectedSet = buildSelectedSet(mtOptions, mtDefault)
+        local selectedSet = buildSelectedSet(mtOptions, mtDefault, mtChoiceAll)
         local mt = {
             Enabled = mtEnabled,
             Values = selectedSet,
@@ -1394,7 +1495,7 @@ return function(Library, context)
                 return "None"
             end
             if selectedCount == #mtOptions then
-                return "All"
+                return mtChoiceAll and mtChoiceAll.Label or "All"
             end
             if selectedCount == 1 then
                 return selected[1]
@@ -1525,7 +1626,7 @@ return function(Library, context)
         pStroke.Color = base.colors.Line
         pStroke.Transparency = 0.5
 
-        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #mtOptions, 24)
+        local dropPanelContent = createDropdownPanelContent(base, dropPanel, #mtPanelOptions, 24)
         local fullHeight = dropPanelContent.openHeight
         local optionButtons = {}
         local optVisuals = {}
@@ -1546,7 +1647,7 @@ return function(Library, context)
         local function refreshSelections()
             valText.Text = getDisplayText()
             for optName, visuals in pairs(optVisuals) do
-                local selected = selectedSet[optName] == true
+                local selected = isChoiceAllValue(mtChoiceAll, optName) and allOptionsSelected(mtOptions, selectedSet) or selectedSet[optName] == true
                 visuals.chkIcon.ImageTransparency = selected and 0 or 1
                 visuals.chk.BackgroundColor3 = selected and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
                 visuals.chkStroke.Color = selected and base.colors.Main or base.colors.Line
@@ -1571,7 +1672,7 @@ return function(Library, context)
             for key in pairs(selectedSet) do
                 selectedSet[key] = nil
             end
-            for key, enabled in pairs(buildSelectedSet(mtOptions, rawValue)) do
+            for key, enabled in pairs(buildSelectedSet(mtOptions, rawValue, mtChoiceAll)) do
                 selectedSet[key] = enabled
             end
             mt.Values = selectedSet
@@ -1613,7 +1714,9 @@ return function(Library, context)
         end
 
         registerTransientPopup(base, dropPanel, closeDropdown)
-        for idx, opt in ipairs(mtOptions) do
+        for idx, opt in ipairs(mtPanelOptions) do
+            local isChoiceAllOption = isChoiceAllValue(mtChoiceAll, opt)
+            local isSelected = isChoiceAllOption and allOptionsSelected(mtOptions, selectedSet) or selectedSet[opt] == true
             local optBtn = Instance.new("TextButton", dropPanelContent.optionsParent)
             optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
             optBtn.BackgroundTransparency = 1
@@ -1630,14 +1733,14 @@ return function(Library, context)
             chk.AnchorPoint = Vector2.new(0, 0.5)
             chk.Position = UDim2.new(0, 8, 0.5, 0)
             chk.Size = UDim2.new(0, 10, 0, 10)
-            chk.BackgroundColor3 = selectedSet[opt] and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
+            chk.BackgroundColor3 = isSelected and Color3.fromRGB(45, 25, 30) or Color3.fromRGB(35, 35, 35)
             chk.BorderSizePixel = 0
             chk.ZIndex = 52
             Instance.new("UICorner", chk).CornerRadius = UDim.new(0, 2)
 
             local chkStroke = Instance.new("UIStroke", chk)
-            chkStroke.Color = selectedSet[opt] and base.colors.Main or base.colors.Line
-            chkStroke.Transparency = selectedSet[opt] and 0.3 or 0.5
+            chkStroke.Color = isSelected and base.colors.Main or base.colors.Line
+            chkStroke.Transparency = isSelected and 0.3 or 0.5
 
             local chkIcon = Instance.new("ImageLabel", chk)
             chkIcon.BackgroundTransparency = 1
@@ -1646,7 +1749,7 @@ return function(Library, context)
             chkIcon.Size = UDim2.new(0, 8, 0, 8)
             chkIcon.Image = "rbxassetid://122354904349171"
             chkIcon.ImageColor3 = base.colors.Main
-            chkIcon.ImageTransparency = selectedSet[opt] and 0 or 1
+            chkIcon.ImageTransparency = isSelected and 0 or 1
             chkIcon.ZIndex = 53
 
             local optLabel = Instance.new("TextLabel", optBtn)
@@ -1655,7 +1758,7 @@ return function(Library, context)
             optLabel.Size = UDim2.new(1, -30, 1, 0)
             optLabel.Font = base.config.FontMedium
             optLabel.Text = tostring(opt)
-            optLabel.TextColor3 = selectedSet[opt] and base.colors.Main or base.colors.Text
+            optLabel.TextColor3 = isSelected and base.colors.Main or base.colors.Text
             optLabel.TextSize = 11
             optLabel.TextTruncate = Enum.TextTruncate.AtEnd
             optLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1668,19 +1771,12 @@ return function(Library, context)
                 Library:Spring(optBtn, "Smooth", { BackgroundTransparency = 1 })
             end)
             optBtn.Activated:Connect(function()
-                selectedSet[opt] = not selectedSet[opt]
-                if selectedSet[opt] then
-                    Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
-                    Library:Spring(chkStroke, "Smooth", { Color = base.colors.Main, Transparency = 0.3 })
-                    Library:Spring(chkIcon, "Smooth", { ImageTransparency = 0 })
-                    optLabel.TextColor3 = base.colors.Main
+                if isChoiceAllOption then
+                    setAllSelected(mtOptions, selectedSet, not allOptionsSelected(mtOptions, selectedSet))
                 else
-                    Library:Spring(chk, "Smooth", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
-                    Library:Spring(chkStroke, "Smooth", { Color = base.colors.Line, Transparency = 0.5 })
-                    Library:Spring(chkIcon, "Smooth", { ImageTransparency = 1 })
-                    optLabel.TextColor3 = base.colors.Text
+                    selectedSet[opt] = not selectedSet[opt]
                 end
-                valText.Text = getDisplayText()
+                refreshSelections()
                 mt.Values = selectedSet
                 fireMultiToggleCallback()
                 Library:_markDirty()
@@ -1776,6 +1872,27 @@ return function(Library, context)
         end
         mt.SetValues = mt.SetSelection
         mt.SetValue = mt.SetSelection
+        mt.SetSelected = function(name, state)
+            if name == nil then
+                return mt
+            end
+            local temp = {}
+            for _, opt in ipairs(getSelectedValues(mtOptions, selectedSet)) do
+                temp[opt] = true
+            end
+            if isChoiceAllValue(mtChoiceAll, name) then
+                mt:Set({ selections = state == false and {} or { [mtChoiceAll.Label] = true } })
+                return mt
+            end
+            if state == false then
+                temp[name] = nil
+            else
+                temp[name] = true
+            end
+            mt:Set({ selections = temp })
+            return mt
+        end
+        mt.Select = mt.SetSelected
         mt.GetToggleState = function()
             return mt.Enabled and true or false
         end
