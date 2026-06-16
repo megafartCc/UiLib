@@ -3996,21 +3996,135 @@ function Library:CreateWindow(opts)
         function menu:AddStatsGraph(graphOpts)
             graphOpts = graphOpts or {}
 
+            local graphName = tostring(graphOpts.Name or graphOpts.Title or "STATS")
+            local metrics = graphOpts.Metrics or { "Status", "Found", "Matched", "Polls", "Last ms" }
+            local maxSamples = math.max(2, math.floor(tonumber(graphOpts.MaxSamples) or 32))
+            local graphHeight = math.max(160, tonumber(graphOpts.Height) or 248)
+            local accent = graphOpts.AccentColor or colors.Accent
+            local mutedTextColor = getThemeValueOr(Library, "TextDark", getThemeValueOr(Library, "TextDim", Color3.fromRGB(155, 155, 155)))
+            local partialPanel = nil
+
+            local function readMetric(stats, metricName)
+                if type(stats) ~= "table" then
+                    return nil
+                end
+                local value = stats[metricName]
+                if value == nil then
+                    value = stats[(tostring(metricName):gsub("%s+", ""))]
+                end
+                return value
+            end
+
             local function createStatsGraphFallback(reason)
+                if partialPanel and type(partialPanel.Destroy) == "function" then
+                    pcall(function()
+                        partialPanel:Destroy()
+                    end)
+                    partialPanel = nil
+                end
+
                 local fallback = {
                     Panel = nil,
                     Samples = {},
-                    MaxSamples = math.max(2, math.floor(tonumber(graphOpts.MaxSamples) or 32)),
+                    MaxSamples = maxSamples,
                     Status = tostring(graphOpts.Status or "Idle"),
                     Disabled = true,
                     Error = tostring(reason or "graph unavailable"),
+                    Values = {},
                 }
+                local statusLabel = nil
+                local metricsLabel = nil
+                local samplesLabel = nil
+
+                local okFallback, fallbackErr = pcall(function()
+                    local panel = menu:AddWidePanel({
+                        Name = graphName,
+                        Height = math.max(92, tonumber(graphOpts.FallbackHeight) or 112),
+                        TopPadding = graphOpts.TopPadding or 8,
+                        SidePadding = graphOpts.SidePadding or 4,
+                    })
+                    fallback.Panel = panel
+
+                    local content = panel.Content
+                    statusLabel = Instance.new("TextLabel", content)
+                    statusLabel.Name = "FallbackStatus"
+                    statusLabel.BackgroundTransparency = 1
+                    statusLabel.Position = UDim2.new(0, 0, 0, 0)
+                    statusLabel.Size = UDim2.new(1, 0, 0, 18)
+                    statusLabel.Font = config.FontMedium
+                    statusLabel.Text = "STATUS: " .. string.upper(fallback.Status)
+                    statusLabel.TextColor3 = mutedTextColor
+                    statusLabel.TextSize = 12
+                    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    statusLabel.ZIndex = 5
+                    bindTheme(statusLabel, "TextColor3", "TextDim")
+
+                    metricsLabel = Instance.new("TextLabel", content)
+                    metricsLabel.Name = "FallbackMetrics"
+                    metricsLabel.BackgroundTransparency = 1
+                    metricsLabel.Position = UDim2.new(0, 0, 0, 26)
+                    metricsLabel.Size = UDim2.new(1, 0, 0, 22)
+                    metricsLabel.Font = config.Font
+                    metricsLabel.Text = ""
+                    metricsLabel.TextColor3 = colors.Text
+                    metricsLabel.TextSize = 12
+                    metricsLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    metricsLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                    metricsLabel.ZIndex = 5
+                    bindTheme(metricsLabel, "TextColor3", "Text")
+
+                    samplesLabel = Instance.new("TextLabel", content)
+                    samplesLabel.Name = "FallbackSamples"
+                    samplesLabel.BackgroundTransparency = 1
+                    samplesLabel.Position = UDim2.new(0, 0, 0, 54)
+                    samplesLabel.Size = UDim2.new(1, 0, 0, 18)
+                    samplesLabel.Font = config.Font
+                    samplesLabel.Text = "COMPACT MODE"
+                    samplesLabel.TextColor3 = mutedTextColor
+                    samplesLabel.TextSize = 11
+                    samplesLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    samplesLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                    samplesLabel.ZIndex = 5
+                    bindTheme(samplesLabel, "TextColor3", "TextDim")
+                end)
+                if not okFallback and type(warn) == "function" then
+                    warn("[UILib] AddStatsGraph compact fallback failed: " .. tostring(fallbackErr))
+                end
+
+                function fallback:_refresh()
+                    if statusLabel then
+                        statusLabel.Text = "STATUS: " .. string.upper(tostring(self.Status or "Idle"))
+                    end
+
+                    if metricsLabel then
+                        local parts = {}
+                        for _, metricName in ipairs(metrics) do
+                            local value = self.Values[metricName]
+                            if value == nil then
+                                value = "--"
+                            end
+                            table.insert(parts, tostring(metricName) .. ": " .. tostring(value))
+                        end
+                        metricsLabel.Text = table.concat(parts, " | ")
+                    end
+
+                    if samplesLabel then
+                        samplesLabel.Text = tostring(#self.Samples) .. " samples tracked | graph disabled on this executor"
+                    end
+                end
 
                 function fallback:SetStats(stats)
                     stats = type(stats) == "table" and stats or {}
                     if stats.Status ~= nil then
                         self.Status = tostring(stats.Status)
                     end
+                    for _, metricName in ipairs(metrics) do
+                        local value = readMetric(stats, metricName)
+                        if value ~= nil then
+                            self.Values[metricName] = value
+                        end
+                    end
+                    self:_refresh()
                 end
 
                 function fallback:AddSample(value, sample)
@@ -4021,6 +4135,7 @@ function Library:CreateWindow(opts)
                     while #self.Samples > self.MaxSamples do
                         table.remove(self.Samples, 1)
                     end
+                    self:_refresh()
                 end
 
                 function fallback:SetSamples(samples)
@@ -4030,21 +4145,24 @@ function Library:CreateWindow(opts)
                             self:AddSample(type(sample) == "table" and sample.Value or sample, sample)
                         end
                     end
+                    self:_refresh()
                 end
 
-                function fallback:Refresh() end
-                function fallback:Destroy() end
+                function fallback:Refresh()
+                    self:_refresh()
+                end
 
+                function fallback:Destroy()
+                    if self.Panel and type(self.Panel.Destroy) == "function" then
+                        self.Panel:Destroy()
+                    end
+                end
+
+                fallback:SetStats(graphOpts.DefaultStats or {})
                 return fallback
             end
 
             local okGraph, graphControl = pcall(function()
-            local graphName = tostring(graphOpts.Name or graphOpts.Title or "STATS")
-            local metrics = graphOpts.Metrics or { "Status", "Found", "Matched", "Polls", "Last ms" }
-            local maxSamples = math.max(2, math.floor(tonumber(graphOpts.MaxSamples) or 32))
-            local graphHeight = math.max(160, tonumber(graphOpts.Height) or 248)
-            local accent = graphOpts.AccentColor or colors.Accent
-            local mutedTextColor = getThemeValueOr(Library, "TextDark", getThemeValueOr(Library, "TextDim", Color3.fromRGB(155, 155, 155)))
             local function bindMutedText(instance)
                 bindTheme(instance, "TextColor3", "TextDark", function(value)
                     if typeof(value) == "Color3" then
@@ -4059,6 +4177,7 @@ function Library:CreateWindow(opts)
                 TopPadding = graphOpts.TopPadding or 8,
                 SidePadding = graphOpts.SidePadding or 4,
             })
+            partialPanel = panel
             local content = panel.Content
             local control = {
                 Panel = panel,
@@ -4407,6 +4526,7 @@ function Library:CreateWindow(opts)
 
             control:SetStats(graphOpts.DefaultStats or {})
             task.defer(redrawGraph)
+            partialPanel = nil
             return control
             end)
 
