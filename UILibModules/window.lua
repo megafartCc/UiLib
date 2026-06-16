@@ -3996,6 +3996,49 @@ function Library:CreateWindow(opts)
         function menu:AddStatsGraph(graphOpts)
             graphOpts = graphOpts or {}
 
+            local function createStatsGraphFallback(reason)
+                local fallback = {
+                    Panel = nil,
+                    Samples = {},
+                    MaxSamples = math.max(2, math.floor(tonumber(graphOpts.MaxSamples) or 32)),
+                    Status = tostring(graphOpts.Status or "Idle"),
+                    Disabled = true,
+                    Error = tostring(reason or "graph unavailable"),
+                }
+
+                function fallback:SetStats(stats)
+                    stats = type(stats) == "table" and stats or {}
+                    if stats.Status ~= nil then
+                        self.Status = tostring(stats.Status)
+                    end
+                end
+
+                function fallback:AddSample(value, sample)
+                    sample = type(sample) == "table" and sample or {}
+                    sample.Value = math.max(0, tonumber(sample.Value or value) or 0)
+                    sample.Time = sample.Time or os.clock()
+                    table.insert(self.Samples, sample)
+                    while #self.Samples > self.MaxSamples do
+                        table.remove(self.Samples, 1)
+                    end
+                end
+
+                function fallback:SetSamples(samples)
+                    self.Samples = {}
+                    if type(samples) == "table" then
+                        for _, sample in ipairs(samples) do
+                            self:AddSample(type(sample) == "table" and sample.Value or sample, sample)
+                        end
+                    end
+                end
+
+                function fallback:Refresh() end
+                function fallback:Destroy() end
+
+                return fallback
+            end
+
+            local okGraph, graphControl = pcall(function()
             local graphName = tostring(graphOpts.Name or graphOpts.Title or "STATS")
             local metrics = graphOpts.Metrics or { "Status", "Found", "Matched", "Polls", "Last ms" }
             local maxSamples = math.max(2, math.floor(tonumber(graphOpts.MaxSamples) or 32))
@@ -4365,6 +4408,16 @@ function Library:CreateWindow(opts)
             control:SetStats(graphOpts.DefaultStats or {})
             task.defer(redrawGraph)
             return control
+            end)
+
+            if okGraph and type(graphControl) == "table" then
+                return graphControl
+            end
+
+            if type(warn) == "function" then
+                warn("[UILib] AddStatsGraph disabled: " .. tostring(graphControl))
+            end
+            return createStatsGraphFallback(graphControl)
         end
 
         -- ==============================

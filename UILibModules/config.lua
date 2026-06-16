@@ -31,6 +31,7 @@ return function(Library, context)
     Library._configAppliedGenerationByKey = {}
 
     local CONFIG_FOLDER = "Eps1lonScript"
+    local runtimeDataStore = {}
 
     function Library:_ensureFolder()
         if type(isfolder) == "function" then
@@ -80,6 +81,13 @@ return function(Library, context)
         return CONFIG_FOLDER .. "_" .. self:_getStorageBaseName() .. "_" .. sanitizePathSegment(tag) .. ".json"
     end
 
+    function Library:_getRuntimeDataKey(tag)
+        if type(tag) ~= "string" or tag == "" then
+            return nil
+        end
+        return self:_getStorageBaseName() .. "::" .. sanitizePathSegment(tag)
+    end
+
     function Library:_readJsonFile(path)
         if type(path) ~= "string" or path == "" or type(readfile) ~= "function" then
             return nil
@@ -108,6 +116,11 @@ return function(Library, context)
     end
 
     function Library:ReadData(tag)
+        local memoryKey = self:_getRuntimeDataKey(tag)
+        if memoryKey and runtimeDataStore[memoryKey] ~= nil then
+            return runtimeDataStore[memoryKey]
+        end
+
         local primary = self:_getDataPath(tag)
         local fallback = self:_getFlatDataPath(tag)
 
@@ -120,9 +133,14 @@ return function(Library, context)
     end
 
     function Library:WriteData(tag, value)
+        local memoryKey = self:_getRuntimeDataKey(tag)
+        if memoryKey then
+            runtimeDataStore[memoryKey] = value
+        end
+
         local path = self:_getDataPath(tag)
         if not path or type(writefile) ~= "function" then
-            return false, "writefile unavailable"
+            return memoryKey ~= nil, "memory"
         end
 
         local okEncode, encoded = pcall(function()
@@ -152,6 +170,9 @@ return function(Library, context)
         end
 
         lastError = lastError:gsub("[%c\r\n]+", " ")
+        if memoryKey then
+            return true, "memory"
+        end
         return false, lastError
     end
 
