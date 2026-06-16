@@ -8,7 +8,12 @@
 ]]
 
 local moduleCache = {}
-local RobloxInstance = Instance
+local okRobloxInstance, RobloxInstance = pcall(function()
+    return Instance
+end)
+if not okRobloxInstance then
+    RobloxInstance = nil
+end
 local safeModuleEnvironment = nil
 local remoteModuleBases = {
     "https://raw.githubusercontent.com/megafartCc/UiLib/main/UILibModules/",
@@ -66,7 +71,10 @@ local function resolvePath(baseDir, relativePath)
 end
 
 local function canHttpGet()
-    return typeof(game) == "Instance" and type(game.HttpGet) == "function"
+    local ok, result = pcall(function()
+        return game ~= nil and type(game.HttpGet) == "function"
+    end)
+    return ok and result == true
 end
 
 local function remoteModulePath(path)
@@ -103,9 +111,16 @@ local function setParentSafe(object, parent)
 end
 
 local function safeInstanceNew(className, parent)
-    local object = RobloxInstance.new(className)
+    local object = (RobloxInstance or Instance).new(className)
     setParentSafe(object, parent)
     return object
+end
+
+local function shouldRetryWithoutSafeEnvironment(err)
+    local text = string.lower(tostring(err or ""))
+    return string.find(text, "lacking capability", 1, true) ~= nil
+        or string.find(text, "cannot access 'instance'", 1, true) ~= nil
+        or string.find(text, "current thread cannot access", 1, true) ~= nil
 end
 
 local function getSafeModuleEnvironment()
@@ -113,15 +128,39 @@ local function getSafeModuleEnvironment()
         return safeModuleEnvironment
     end
 
+    local baseEnvironment = _G
+    if type(getfenv) == "function" then
+        local okEnv, env = pcall(getfenv, 0)
+        if okEnv and type(env) == "table" then
+            baseEnvironment = env
+        end
+    end
+
     safeModuleEnvironment = setmetatable({
         Instance = {
             new = safeInstanceNew,
         },
     }, {
-        __index = type(getfenv) == "function" and getfenv(0) or _G,
+        __index = baseEnvironment,
     })
 
     return safeModuleEnvironment
+end
+
+local function compileModuleChunk(source, normalized)
+    local chunk, err = loadstring(source, "@" .. normalized)
+    if not chunk then
+        error(string.format("UILib module load failed for %s: %s", normalized, tostring(err)))
+    end
+    return chunk
+end
+
+local function runModuleChunk(source, normalized, useSafeEnvironment)
+    local chunk = compileModuleChunk(source, normalized)
+    if useSafeEnvironment and type(setfenv) == "function" then
+        setfenv(chunk, getSafeModuleEnvironment())
+    end
+    return chunk()
 end
 
 local function previewText(value)
@@ -195,16 +234,14 @@ local function loadModule(path)
     end
 
     local source = readModuleSource(normalized)
-    local chunk, err = loadstring(source, "@" .. normalized)
-    if not chunk then
-        error(string.format("UILib module load failed for %s: %s", normalized, tostring(err)))
+    local okRun, exported = pcall(runModuleChunk, source, normalized, true)
+    if not okRun and shouldRetryWithoutSafeEnvironment(exported) then
+        okRun, exported = pcall(runModuleChunk, source, normalized, false)
+    end
+    if not okRun then
+        error(tostring(exported))
     end
 
-    if type(setfenv) == "function" then
-        setfenv(chunk, getSafeModuleEnvironment())
-    end
-
-    local exported = chunk()
     moduleCache[normalized] = exported
     return exported
 end

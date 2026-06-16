@@ -15,11 +15,30 @@ return function(moduleRequire)
     local Animator = createAnimator(RunService)
 
     local function getHiddenParent()
-        if typeof(gethui) == "function" then
-            return gethui()
+        if type(gethui) == "function" then
+            local okHui, hui = pcall(gethui)
+            if okHui and hui then
+                return hui
+            end
         end
 
-        error("UILib requires gethui() for UI parenting")
+        if Client then
+            local okPlayerGui, playerGui = pcall(function()
+                return Client:FindFirstChildOfClass("PlayerGui") or Client:WaitForChild("PlayerGui", 5)
+            end)
+            if okPlayerGui and playerGui then
+                return playerGui
+            end
+        end
+
+        local okCoreGui, coreGui = pcall(function()
+            return game:GetService("CoreGui")
+        end)
+        if okCoreGui and coreGui then
+            return coreGui
+        end
+
+        error("UILib could not resolve a UI parent")
     end
 
     local function protectGui(gui)
