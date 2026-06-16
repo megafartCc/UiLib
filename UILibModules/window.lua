@@ -4001,6 +4001,15 @@ function Library:CreateWindow(opts)
             local maxSamples = math.max(2, math.floor(tonumber(graphOpts.MaxSamples) or 32))
             local graphHeight = math.max(160, tonumber(graphOpts.Height) or 248)
             local accent = graphOpts.AccentColor or colors.Accent
+            local mutedTextColor = getThemeValueOr(Library, "TextDark", getThemeValueOr(Library, "TextDim", Color3.fromRGB(155, 155, 155)))
+            local function bindMutedText(instance)
+                bindTheme(instance, "TextColor3", "TextDark", function(value)
+                    if typeof(value) == "Color3" then
+                        return value
+                    end
+                    return getThemeValueOr(Library, "TextDim", mutedTextColor)
+                end)
+            end
             local panel = menu:AddWidePanel({
                 Name = graphName,
                 Height = graphHeight,
@@ -4022,11 +4031,11 @@ function Library:CreateWindow(opts)
             subtitle.Size = UDim2.new(0.62, 0, 0, 16)
             subtitle.Font = config.Font
             subtitle.Text = tostring(graphOpts.Subtitle or "LIVE HISTORY")
-            subtitle.TextColor3 = colors.TextDark
+            subtitle.TextColor3 = mutedTextColor
             subtitle.TextSize = 11
             subtitle.TextXAlignment = Enum.TextXAlignment.Left
             subtitle.ZIndex = 5
-            bindTheme(subtitle, "TextColor3", "TextDark")
+            bindMutedText(subtitle)
 
             local statusLabel = Instance.new("TextLabel", content)
             statusLabel.Name = "Status"
@@ -4035,11 +4044,11 @@ function Library:CreateWindow(opts)
             statusLabel.Size = UDim2.new(0.38, 0, 0, 16)
             statusLabel.Font = config.FontMedium
             statusLabel.Text = "STATUS: " .. string.upper(control.Status)
-            statusLabel.TextColor3 = colors.TextDark
+            statusLabel.TextColor3 = mutedTextColor
             statusLabel.TextSize = 11
             statusLabel.TextXAlignment = Enum.TextXAlignment.Right
             statusLabel.ZIndex = 5
-            bindTheme(statusLabel, "TextColor3", "TextDark")
+            bindMutedText(statusLabel)
 
             local statsRow = Instance.new("Frame", content)
             statsRow.Name = "StatsRow"
@@ -4066,11 +4075,11 @@ function Library:CreateWindow(opts)
                 title.Size = UDim2.new(1, 0, 0, 12)
                 title.Font = config.FontMedium
                 title.Text = string.upper(tostring(titleText))
-                title.TextColor3 = colors.TextDark
+                title.TextColor3 = mutedTextColor
                 title.TextSize = 10
                 title.TextXAlignment = Enum.TextXAlignment.Left
                 title.ZIndex = 5
-                bindTheme(title, "TextColor3", "TextDark")
+                bindMutedText(title)
 
                 local value = Instance.new("TextLabel", block)
                 value.Name = "Value"
@@ -4114,11 +4123,11 @@ function Library:CreateWindow(opts)
             seriesLabel.Size = UDim2.new(0.5, 0, 0, 14)
             seriesLabel.Font = config.FontMedium
             seriesLabel.Text = tostring(graphOpts.SeriesName or "MATCHED SERVERS")
-            seriesLabel.TextColor3 = colors.TextDark
+            seriesLabel.TextColor3 = mutedTextColor
             seriesLabel.TextSize = 10
             seriesLabel.TextXAlignment = Enum.TextXAlignment.Left
             seriesLabel.ZIndex = 6
-            bindTheme(seriesLabel, "TextColor3", "TextDark")
+            bindMutedText(seriesLabel)
 
             local peakLabel = Instance.new("TextLabel", chartFrame)
             peakLabel.Name = "Peak"
@@ -4127,11 +4136,11 @@ function Library:CreateWindow(opts)
             peakLabel.Size = UDim2.new(0.25, 0, 0, 14)
             peakLabel.Font = config.Font
             peakLabel.Text = "PEAK 0"
-            peakLabel.TextColor3 = colors.TextDark
+            peakLabel.TextColor3 = mutedTextColor
             peakLabel.TextSize = 10
             peakLabel.TextXAlignment = Enum.TextXAlignment.Right
             peakLabel.ZIndex = 6
-            bindTheme(peakLabel, "TextColor3", "TextDark")
+            bindMutedText(peakLabel)
 
             local currentLabel = Instance.new("TextLabel", chartFrame)
             currentLabel.Name = "Current"
@@ -4140,11 +4149,11 @@ function Library:CreateWindow(opts)
             currentLabel.Size = UDim2.new(0.25, -10, 0, 14)
             currentLabel.Font = config.Font
             currentLabel.Text = "NOW 0"
-            currentLabel.TextColor3 = colors.TextDark
+            currentLabel.TextColor3 = mutedTextColor
             currentLabel.TextSize = 10
             currentLabel.TextXAlignment = Enum.TextXAlignment.Right
             currentLabel.ZIndex = 6
-            bindTheme(currentLabel, "TextColor3", "TextDark")
+            bindMutedText(currentLabel)
 
             local graphCanvas = Instance.new("Frame", chartFrame)
             graphCanvas.Name = "GraphCanvas"
@@ -4168,12 +4177,12 @@ function Library:CreateWindow(opts)
             emptyLabel.Size = UDim2.new(1, 0, 1, 0)
             emptyLabel.Font = config.Font
             emptyLabel.Text = "WAITING FOR DATA"
-            emptyLabel.TextColor3 = colors.TextDark
+            emptyLabel.TextColor3 = mutedTextColor
             emptyLabel.TextSize = 11
             emptyLabel.TextXAlignment = Enum.TextXAlignment.Center
             emptyLabel.TextYAlignment = Enum.TextYAlignment.Center
             emptyLabel.ZIndex = 6
-            bindTheme(emptyLabel, "TextColor3", "TextDark")
+            bindMutedText(emptyLabel)
 
             local rangeLabel = Instance.new("TextLabel", chartFrame)
             rangeLabel.Name = "Range"
@@ -4182,11 +4191,11 @@ function Library:CreateWindow(opts)
             rangeLabel.Size = UDim2.new(1, -30, 0, 12)
             rangeLabel.Font = config.Font
             rangeLabel.Text = "0 POLLS TRACKED"
-            rangeLabel.TextColor3 = colors.TextDark
+            rangeLabel.TextColor3 = mutedTextColor
             rangeLabel.TextSize = 10
             rangeLabel.TextXAlignment = Enum.TextXAlignment.Left
             rangeLabel.ZIndex = 6
-            bindTheme(rangeLabel, "TextColor3", "TextDark")
+            bindMutedText(rangeLabel)
 
             local function clearGraph()
                 for _, child in ipairs(graphCanvas:GetChildren()) do
@@ -4300,7 +4309,7 @@ function Library:CreateWindow(opts)
                 elseif string.find(loweredStatus, "live", 1, true) or string.find(loweredStatus, "loading", 1, true) then
                     statusLabel.TextColor3 = Color3.fromRGB(110, 220, 145)
                 else
-                    statusLabel.TextColor3 = colors.TextDark
+                    statusLabel.TextColor3 = mutedTextColor
                 end
 
                 for _, metricName in ipairs(metrics) do
