@@ -3991,6 +3991,374 @@ function Library:CreateWindow(opts)
         end
 
         -- ==============================
+        -- AddStatsGraph (full-width metrics + history graph)
+        -- ==============================
+        function menu:AddStatsGraph(graphOpts)
+            graphOpts = graphOpts or {}
+
+            local graphName = tostring(graphOpts.Name or graphOpts.Title or "STATS")
+            local metrics = graphOpts.Metrics or { "Status", "Found", "Matched", "Polls", "Last ms" }
+            local maxSamples = math.max(2, math.floor(tonumber(graphOpts.MaxSamples) or 32))
+            local graphHeight = math.max(160, tonumber(graphOpts.Height) or 248)
+            local accent = graphOpts.AccentColor or colors.Accent
+            local panel = menu:AddWidePanel({
+                Name = graphName,
+                Height = graphHeight,
+                TopPadding = graphOpts.TopPadding or 8,
+                SidePadding = graphOpts.SidePadding or 4,
+            })
+            local content = panel.Content
+            local control = {
+                Panel = panel,
+                Samples = {},
+                MaxSamples = maxSamples,
+                Status = tostring(graphOpts.Status or "Idle"),
+            }
+
+            local subtitle = Instance.new("TextLabel", content)
+            subtitle.Name = "Subtitle"
+            subtitle.BackgroundTransparency = 1
+            subtitle.Position = UDim2.new(0, 0, 0, 0)
+            subtitle.Size = UDim2.new(0.62, 0, 0, 16)
+            subtitle.Font = config.Font
+            subtitle.Text = tostring(graphOpts.Subtitle or "LIVE HISTORY")
+            subtitle.TextColor3 = colors.TextDark
+            subtitle.TextSize = 11
+            subtitle.TextXAlignment = Enum.TextXAlignment.Left
+            subtitle.ZIndex = 5
+            bindTheme(subtitle, "TextColor3", "TextDark")
+
+            local statusLabel = Instance.new("TextLabel", content)
+            statusLabel.Name = "Status"
+            statusLabel.BackgroundTransparency = 1
+            statusLabel.Position = UDim2.new(0.62, 0, 0, 0)
+            statusLabel.Size = UDim2.new(0.38, 0, 0, 16)
+            statusLabel.Font = config.FontMedium
+            statusLabel.Text = "STATUS: " .. string.upper(control.Status)
+            statusLabel.TextColor3 = colors.TextDark
+            statusLabel.TextSize = 11
+            statusLabel.TextXAlignment = Enum.TextXAlignment.Right
+            statusLabel.ZIndex = 5
+            bindTheme(statusLabel, "TextColor3", "TextDark")
+
+            local statsRow = Instance.new("Frame", content)
+            statsRow.Name = "StatsRow"
+            statsRow.BackgroundTransparency = 1
+            statsRow.BorderSizePixel = 0
+            statsRow.Position = UDim2.new(0, 0, 0, 20)
+            statsRow.Size = UDim2.new(1, 0, 0, 34)
+            statsRow.ZIndex = 5
+
+            local statValues = {}
+            local function createStat(index, total, titleText)
+                local block = Instance.new("Frame", statsRow)
+                block.Name = tostring(titleText):gsub("[^%w_]", "") .. "Stat"
+                block.BackgroundTransparency = 1
+                block.BorderSizePixel = 0
+                block.Position = UDim2.new((index - 1) / total, 0, 0, 0)
+                block.Size = UDim2.new(1 / total, index == total and 0 or -6, 1, 0)
+                block.ZIndex = 5
+
+                local title = Instance.new("TextLabel", block)
+                title.Name = "Title"
+                title.BackgroundTransparency = 1
+                title.Position = UDim2.new(0, 0, 0, 0)
+                title.Size = UDim2.new(1, 0, 0, 12)
+                title.Font = config.FontMedium
+                title.Text = string.upper(tostring(titleText))
+                title.TextColor3 = colors.TextDark
+                title.TextSize = 10
+                title.TextXAlignment = Enum.TextXAlignment.Left
+                title.ZIndex = 5
+                bindTheme(title, "TextColor3", "TextDark")
+
+                local value = Instance.new("TextLabel", block)
+                value.Name = "Value"
+                value.BackgroundTransparency = 1
+                value.Position = UDim2.new(0, 0, 0, 14)
+                value.Size = UDim2.new(1, 0, 0, 16)
+                value.Font = config.FontMedium
+                value.Text = "--"
+                value.TextColor3 = colors.Text
+                value.TextSize = 13
+                value.TextXAlignment = Enum.TextXAlignment.Left
+                value.TextTruncate = Enum.TextTruncate.AtEnd
+                value.ZIndex = 5
+                bindTheme(value, "TextColor3", "Text")
+
+                return value
+            end
+
+            for index, metricName in ipairs(metrics) do
+                statValues[metricName] = createStat(index, #metrics, metricName)
+            end
+
+            local chartFrame = Instance.new("Frame", content)
+            chartFrame.Name = "Chart"
+            chartFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+            chartFrame.BorderSizePixel = 0
+            chartFrame.Position = UDim2.new(0, 0, 0, 62)
+            chartFrame.Size = UDim2.new(1, 0, 1, -62)
+            chartFrame.ClipsDescendants = true
+            chartFrame.ZIndex = 5
+            Instance.new("UICorner", chartFrame).CornerRadius = UDim.new(0, 4)
+
+            local chartStroke = Instance.new("UIStroke", chartFrame)
+            chartStroke.Color = Color3.fromRGB(34, 34, 34)
+            chartStroke.Transparency = 0.18
+
+            local seriesLabel = Instance.new("TextLabel", chartFrame)
+            seriesLabel.Name = "SeriesLabel"
+            seriesLabel.BackgroundTransparency = 1
+            seriesLabel.Position = UDim2.new(0, 10, 0, 6)
+            seriesLabel.Size = UDim2.new(0.5, 0, 0, 14)
+            seriesLabel.Font = config.FontMedium
+            seriesLabel.Text = tostring(graphOpts.SeriesName or "MATCHED SERVERS")
+            seriesLabel.TextColor3 = colors.TextDark
+            seriesLabel.TextSize = 10
+            seriesLabel.TextXAlignment = Enum.TextXAlignment.Left
+            seriesLabel.ZIndex = 6
+            bindTheme(seriesLabel, "TextColor3", "TextDark")
+
+            local peakLabel = Instance.new("TextLabel", chartFrame)
+            peakLabel.Name = "Peak"
+            peakLabel.BackgroundTransparency = 1
+            peakLabel.Position = UDim2.new(0.5, 0, 0, 6)
+            peakLabel.Size = UDim2.new(0.25, 0, 0, 14)
+            peakLabel.Font = config.Font
+            peakLabel.Text = "PEAK 0"
+            peakLabel.TextColor3 = colors.TextDark
+            peakLabel.TextSize = 10
+            peakLabel.TextXAlignment = Enum.TextXAlignment.Right
+            peakLabel.ZIndex = 6
+            bindTheme(peakLabel, "TextColor3", "TextDark")
+
+            local currentLabel = Instance.new("TextLabel", chartFrame)
+            currentLabel.Name = "Current"
+            currentLabel.BackgroundTransparency = 1
+            currentLabel.Position = UDim2.new(0.75, 0, 0, 6)
+            currentLabel.Size = UDim2.new(0.25, -10, 0, 14)
+            currentLabel.Font = config.Font
+            currentLabel.Text = "NOW 0"
+            currentLabel.TextColor3 = colors.TextDark
+            currentLabel.TextSize = 10
+            currentLabel.TextXAlignment = Enum.TextXAlignment.Right
+            currentLabel.ZIndex = 6
+            bindTheme(currentLabel, "TextColor3", "TextDark")
+
+            local graphCanvas = Instance.new("Frame", chartFrame)
+            graphCanvas.Name = "GraphCanvas"
+            graphCanvas.BackgroundTransparency = 1
+            graphCanvas.BorderSizePixel = 0
+            graphCanvas.Position = UDim2.new(0, 18, 0, 24)
+            graphCanvas.Size = UDim2.new(1, -30, 1, -44)
+            graphCanvas.ClipsDescendants = true
+            graphCanvas.ZIndex = 6
+
+            local gridFrame = Instance.new("Frame", graphCanvas)
+            gridFrame.Name = "Grid"
+            gridFrame.BackgroundTransparency = 1
+            gridFrame.BorderSizePixel = 0
+            gridFrame.Size = UDim2.new(1, 0, 1, 0)
+            gridFrame.ZIndex = 5
+
+            local emptyLabel = Instance.new("TextLabel", graphCanvas)
+            emptyLabel.Name = "Empty"
+            emptyLabel.BackgroundTransparency = 1
+            emptyLabel.Size = UDim2.new(1, 0, 1, 0)
+            emptyLabel.Font = config.Font
+            emptyLabel.Text = "WAITING FOR DATA"
+            emptyLabel.TextColor3 = colors.TextDark
+            emptyLabel.TextSize = 11
+            emptyLabel.TextXAlignment = Enum.TextXAlignment.Center
+            emptyLabel.TextYAlignment = Enum.TextYAlignment.Center
+            emptyLabel.ZIndex = 6
+            bindTheme(emptyLabel, "TextColor3", "TextDark")
+
+            local rangeLabel = Instance.new("TextLabel", chartFrame)
+            rangeLabel.Name = "Range"
+            rangeLabel.BackgroundTransparency = 1
+            rangeLabel.Position = UDim2.new(0, 18, 1, -16)
+            rangeLabel.Size = UDim2.new(1, -30, 0, 12)
+            rangeLabel.Font = config.Font
+            rangeLabel.Text = "0 POLLS TRACKED"
+            rangeLabel.TextColor3 = colors.TextDark
+            rangeLabel.TextSize = 10
+            rangeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            rangeLabel.ZIndex = 6
+            bindTheme(rangeLabel, "TextColor3", "TextDark")
+
+            local function clearGraph()
+                for _, child in ipairs(graphCanvas:GetChildren()) do
+                    if child ~= gridFrame and child ~= emptyLabel then
+                        child:Destroy()
+                    end
+                end
+                for _, child in ipairs(gridFrame:GetChildren()) do
+                    child:Destroy()
+                end
+            end
+
+            local function drawLine(name, color, x1, y1, x2, y2)
+                local dx = x2 - x1
+                local dy = y2 - y1
+                local length = math.max(1, math.sqrt(dx * dx + dy * dy))
+                local line = Instance.new("Frame", graphCanvas)
+                line.Name = name
+                line.AnchorPoint = Vector2.new(0.5, 0.5)
+                line.BackgroundColor3 = color
+                line.BorderSizePixel = 0
+                line.Position = UDim2.new(0, (x1 + x2) * 0.5, 0, (y1 + y2) * 0.5)
+                line.Size = UDim2.new(0, length, 0, 2)
+                local angle = math.atan2 and math.atan2(dy, dx) or math.atan(dy, dx)
+                line.Rotation = math.deg(angle)
+                line.ZIndex = 6
+            end
+
+            local function redrawGraph()
+                clearGraph()
+
+                local samples = control.Samples
+                local width = graphCanvas.AbsoluteSize.X
+                local height = graphCanvas.AbsoluteSize.Y
+                emptyLabel.Visible = #samples == 0
+
+                if #samples == 0 or width <= 4 or height <= 4 then
+                    peakLabel.Text = "PEAK 0"
+                    currentLabel.Text = "NOW 0"
+                    rangeLabel.Text = "0 POLLS TRACKED"
+                    return
+                end
+
+                local peak = 1
+                for _, sample in ipairs(samples) do
+                    peak = math.max(peak, math.max(0, tonumber(sample.Value) or 0))
+                end
+
+                for index = 1, 4 do
+                    local alpha = index / 4
+                    local line = Instance.new("Frame", gridFrame)
+                    line.Name = "GridLine_" .. tostring(index)
+                    line.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+                    line.BorderSizePixel = 0
+                    line.AnchorPoint = Vector2.new(0, 0.5)
+                    line.Position = UDim2.new(0, 0, 1 - alpha, 0)
+                    line.Size = UDim2.new(1, 0, 0, 1)
+                    line.ZIndex = 5
+                end
+
+                local sampleCount = #samples
+                local function toPoint(index, value)
+                    local x = sampleCount <= 1 and width * 0.5 or ((index - 1) / (sampleCount - 1)) * width
+                    local y = height - (math.clamp((tonumber(value) or 0) / peak, 0, 1) * height)
+                    return x, math.clamp(y, 2, height - 2)
+                end
+
+                for index = 1, sampleCount - 1 do
+                    local current = samples[index]
+                    local nextSample = samples[index + 1]
+                    local x1, y1 = toPoint(index, current.Value)
+                    local x2, y2 = toPoint(index + 1, nextSample.Value)
+                    drawLine("Line_" .. tostring(index), accent, x1, y1, x2, y2)
+                end
+
+                for index, sample in ipairs(samples) do
+                    local x, y = toPoint(index, sample.Value)
+                    local dot = Instance.new("Frame", graphCanvas)
+                    dot.Name = "Dot_" .. tostring(index)
+                    dot.AnchorPoint = Vector2.new(0.5, 0.5)
+                    dot.BackgroundColor3 = accent
+                    dot.BorderSizePixel = 0
+                    dot.Position = UDim2.new(0, x, 0, y)
+                    dot.Size = UDim2.new(0, 5, 0, 5)
+                    dot.ZIndex = 7
+                    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+                end
+
+                peakLabel.Text = "PEAK " .. tostring(math.floor(peak + 0.5))
+                currentLabel.Text = "NOW " .. tostring(math.floor((tonumber(samples[sampleCount].Value) or 0) + 0.5))
+                rangeLabel.Text = tostring(sampleCount) .. " POLLS TRACKED"
+            end
+
+            function control:SetStats(stats)
+                stats = type(stats) == "table" and stats or {}
+
+                if stats.Subtitle ~= nil then
+                    subtitle.Text = tostring(stats.Subtitle)
+                end
+                if stats.SeriesName ~= nil then
+                    seriesLabel.Text = tostring(stats.SeriesName)
+                end
+                if stats.Status ~= nil then
+                    control.Status = tostring(stats.Status)
+                end
+
+                statusLabel.Text = "STATUS: " .. string.upper(tostring(control.Status or "Idle"))
+                local loweredStatus = string.lower(tostring(control.Status or ""))
+                if string.find(loweredStatus, "error", 1, true) or string.find(loweredStatus, "fail", 1, true) then
+                    statusLabel.TextColor3 = Color3.fromRGB(235, 110, 110)
+                elseif string.find(loweredStatus, "live", 1, true) or string.find(loweredStatus, "loading", 1, true) then
+                    statusLabel.TextColor3 = Color3.fromRGB(110, 220, 145)
+                else
+                    statusLabel.TextColor3 = colors.TextDark
+                end
+
+                for _, metricName in ipairs(metrics) do
+                    local value = stats[metricName]
+                    if value == nil then
+                        value = stats[(tostring(metricName):gsub("%s+", ""))]
+                    end
+                    if value ~= nil and statValues[metricName] then
+                        statValues[metricName].Text = tostring(value)
+                    end
+                end
+            end
+
+            function control:AddSample(value, sample)
+                sample = type(sample) == "table" and sample or {}
+                sample.Value = math.max(0, tonumber(sample.Value or value) or 0)
+                sample.Time = sample.Time or os.clock()
+                table.insert(control.Samples, sample)
+                while #control.Samples > control.MaxSamples do
+                    table.remove(control.Samples, 1)
+                end
+                redrawGraph()
+            end
+
+            function control:SetSamples(samples)
+                control.Samples = {}
+                if type(samples) == "table" then
+                    for _, sample in ipairs(samples) do
+                        if type(sample) == "table" then
+                            control:AddSample(sample.Value, sample)
+                        else
+                            control:AddSample(sample)
+                        end
+                    end
+                end
+                redrawGraph()
+            end
+
+            function control:Refresh()
+                redrawGraph()
+            end
+
+            function control:Destroy()
+                if panel and panel.Destroy then
+                    panel:Destroy()
+                end
+            end
+
+            panel:TrackConnection(graphCanvas:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                task.defer(redrawGraph)
+            end), nextCleanupKey("StatsGraphResize"))
+
+            control:SetStats(graphOpts.DefaultStats or {})
+            task.defer(redrawGraph)
+            return control
+        end
+
+        -- ==============================
         -- AddSection (auto-height box in a column)
         -- ==============================
         function menu:AddSection(sectionOpts)
