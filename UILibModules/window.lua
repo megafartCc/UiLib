@@ -4736,7 +4736,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -22, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 12,
+                    TextSize = 13,
                     ThemeKey = "Text",
                 })
                 local checkFrame, checkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
@@ -4933,8 +4933,8 @@ function Library:CreateWindow(opts)
                     Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
                 end), "ToggleCheckHoverLeave")
                 controlBase.bindAdaptiveLabel(toggle, label, {
-                    BaseTextSize = 12,
-                    MinTextSize = 10,
+                    BaseTextSize = 13,
+                    MinTextSize = 11,
                     WidthPadding = 2,
                 })
 
@@ -5966,7 +5966,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(0.4, 0, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 12,
+                    TextSize = 13,
                     ThemeKey = "Text",
                 })
 
@@ -6096,8 +6096,8 @@ function Library:CreateWindow(opts)
                     end
                 end), nextCleanupKey("SliderDrag"))
                 controlBase.bindAdaptiveLabel(slider, label, {
-                    BaseTextSize = 12,
-                    MinTextSize = 10,
+                    BaseTextSize = 13,
+                    MinTextSize = 11,
                     WidthPadding = 2,
                 })
 
@@ -6439,7 +6439,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(0.35, 0, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 12,
+                    TextSize = 13,
                 })
                 label.TextTruncate = Enum.TextTruncate.AtEnd
                 local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
@@ -6603,8 +6603,8 @@ function Library:CreateWindow(opts)
                     end
                 end)
                 controlBase.bindAdaptiveLabel(st, label, {
-                    BaseTextSize = 12,
-                    MinTextSize = 9,
+                    BaseTextSize = 13,
+                    MinTextSize = 11,
                     WidthPadding = 2,
                 })
 
@@ -6687,7 +6687,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -24, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 12,
+                    TextSize = 13,
                     ThemeKey = "Text",
                 })
 
@@ -6776,8 +6776,8 @@ function Library:CreateWindow(opts)
                 buttonControl:TrackConnection(btnBox.Activated:Connect(activateButton), "ButtonActivated")
                 buttonControl:TrackConnection(rowBtn.Activated:Connect(activateButton), "ButtonRowActivated")
                 controlBase.bindAdaptiveLabel(buttonControl, label, {
-                    BaseTextSize = 12,
-                    MinTextSize = 10,
+                    BaseTextSize = 13,
+                    MinTextSize = 11,
                     WidthPadding = 2,
                 })
 
@@ -6834,7 +6834,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(0.35, 0, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 12,
+                    TextSize = 13,
                     ThemeKey = "Text",
                 })
 
@@ -6914,8 +6914,8 @@ function Library:CreateWindow(opts)
                     applyInputValue(box.Text, true, true)
                 end), "InputBoxFocusLost")
                 controlBase.bindAdaptiveLabel(inputControl, label, {
-                    BaseTextSize = 12,
-                    MinTextSize = 10,
+                    BaseTextSize = 13,
+                    MinTextSize = 11,
                     WidthPadding = 2,
                 })
 
@@ -6956,7 +6956,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -24, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 12,
+                    TextSize = 13,
                 })
 
                 -- Color preview box (clickable)
@@ -7242,8 +7242,8 @@ function Library:CreateWindow(opts)
                     )
                 end
                 controlBase.bindAdaptiveLabel(cpicker, label, {
-                    BaseTextSize = 12,
-                    MinTextSize = 10,
+                    BaseTextSize = 13,
+                    MinTextSize = 11,
                     WidthPadding = 2,
                 })
 
@@ -7403,7 +7403,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -20, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 12,
+                    TextSize = 13,
                 })
 
                 -- Checkbox (right side)
@@ -7713,8 +7713,8 @@ function Library:CreateWindow(opts)
                     end,
                 })
                 controlBase.bindAdaptiveLabel(hitbox, label, {
-                    BaseTextSize = 12,
-                    MinTextSize = 10,
+                    BaseTextSize = 13,
+                    MinTextSize = 11,
                     WidthPadding = 2,
                 })
                 hitbox:TrackInstance(hPanel, "HitboxPanel")
