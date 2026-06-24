@@ -4738,7 +4738,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -22, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 15,
+                    TextSize = 14,
                     ThemeKey = "Text",
                 })
                 local checkFrame, checkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
@@ -4935,8 +4935,8 @@ function Library:CreateWindow(opts)
                     Library:Spring(label, "Smooth", { TextColor3 = colors.Text })
                 end), "ToggleCheckHoverLeave")
                 controlBase.bindAdaptiveLabel(toggle, label, {
-                    BaseTextSize = 15,
-                    MinTextSize = 13,
+                    BaseTextSize = 14,
+                    MinTextSize = 14,
                     WidthPadding = 2,
                 })
 
@@ -5286,7 +5286,7 @@ function Library:CreateWindow(opts)
                     sLabel.Font = config.FontMedium
                     sLabel.Text = sName
                     sLabel.TextColor3 = colors.Text
-                    sLabel.TextSize = 13
+                    sLabel.TextSize = 12
                     sLabel.TextXAlignment = Enum.TextXAlignment.Left
                     sLabel.ZIndex = 5
                     bindTheme(sLabel, "TextColor3", "Text")
@@ -5383,7 +5383,7 @@ function Library:CreateWindow(opts)
                     end), "SubToggleCheckHoverLeave")
 
                     controlBase.bindAdaptiveLabel(subToggle, sLabel, {
-                        BaseTextSize = 13,
+                        BaseTextSize = 12,
                         MinTextSize = 12,
                         WidthPadding = 2,
                     })
@@ -5449,7 +5449,7 @@ function Library:CreateWindow(opts)
                     sLabel.Font = config.FontMedium
                     sLabel.Text = iName
                     sLabel.TextColor3 = colors.Text
-                    sLabel.TextSize = 13
+                    sLabel.TextSize = 12
                     sLabel.TextXAlignment = Enum.TextXAlignment.Left
                     sLabel.ZIndex = 5
                     bindTheme(sLabel, "TextColor3", "Text")
@@ -5530,7 +5530,7 @@ function Library:CreateWindow(opts)
                         applyInputValue(box.Text, true, true)
                     end), "SubInputBoxFocusLost")
                     controlBase.bindAdaptiveLabel(inputControl, sLabel, {
-                        BaseTextSize = 13,
+                        BaseTextSize = 12,
                         MinTextSize = 12,
                         WidthPadding = 2,
                     })
@@ -5564,7 +5564,7 @@ function Library:CreateWindow(opts)
                     sLabel.Font = config.FontMedium
                     sLabel.Text = bName
                     sLabel.TextColor3 = colors.Text
-                    sLabel.TextSize = 13
+                    sLabel.TextSize = 12
                     sLabel.TextXAlignment = Enum.TextXAlignment.Left
                     sLabel.ZIndex = 5
                     bindTheme(sLabel, "TextColor3", "Text")
@@ -5651,7 +5651,7 @@ function Library:CreateWindow(opts)
                     buttonControl:TrackConnection(btnBox.Activated:Connect(activateButton), "SubButtonActivated")
                     buttonControl:TrackConnection(rowBtn.Activated:Connect(activateButton), "SubButtonRowActivated")
                     controlBase.bindAdaptiveLabel(buttonControl, sLabel, {
-                        BaseTextSize = 13,
+                        BaseTextSize = 12,
                         MinTextSize = 12,
                         WidthPadding = 2,
                     })
@@ -5784,7 +5784,7 @@ function Library:CreateWindow(opts)
                     sLabel.Font = config.FontMedium
                     sLabel.Text = sName
                     sLabel.TextColor3 = colors.Text
-                    sLabel.TextSize = 13
+                    sLabel.TextSize = 12
                     sLabel.TextXAlignment = Enum.TextXAlignment.Left
                     sLabel.ZIndex = 5
                     bindTheme(sLabel, "TextColor3", "Text")
@@ -5862,7 +5862,7 @@ function Library:CreateWindow(opts)
                         end
                     end), nextCleanupKey("ToggleSliderDrag"))
                     controlBase.bindAdaptiveLabel(toggle, sLabel, {
-                        BaseTextSize = 13,
+                        BaseTextSize = 12,
                         MinTextSize = 12,
                         WidthPadding = 2,
                     })
@@ -5968,7 +5968,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(0.4, 0, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 15,
+                    TextSize = 14,
                     ThemeKey = "Text",
                 })
 
@@ -6098,8 +6098,8 @@ function Library:CreateWindow(opts)
                     end
                 end), nextCleanupKey("SliderDrag"))
                 controlBase.bindAdaptiveLabel(slider, label, {
-                    BaseTextSize = 15,
-                    MinTextSize = 13,
+                    BaseTextSize = 14,
+                    MinTextSize = 14,
                     WidthPadding = 2,
                 })
 
@@ -6442,7 +6442,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(0.35, 0, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 15,
+                    TextSize = 14,
                 })
                 label.TextTruncate = Enum.TextTruncate.AtEnd
                 local chkFrame, chkStroke, checkIcon = controlBase.createCheckbox(row, colors, {
@@ -6606,8 +6606,8 @@ function Library:CreateWindow(opts)
                     end
                 end)
                 controlBase.bindAdaptiveLabel(st, label, {
-                    BaseTextSize = 15,
-                    MinTextSize = 13,
+                    BaseTextSize = 14,
+                    MinTextSize = 14,
                     WidthPadding = 2,
                 })
 
@@ -6690,7 +6690,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -24, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 15,
+                    TextSize = 14,
                     ThemeKey = "Text",
                 })
 
@@ -6779,8 +6779,8 @@ function Library:CreateWindow(opts)
                 buttonControl:TrackConnection(btnBox.Activated:Connect(activateButton), "ButtonActivated")
                 buttonControl:TrackConnection(rowBtn.Activated:Connect(activateButton), "ButtonRowActivated")
                 controlBase.bindAdaptiveLabel(buttonControl, label, {
-                    BaseTextSize = 15,
-                    MinTextSize = 13,
+                    BaseTextSize = 14,
+                    MinTextSize = 14,
                     WidthPadding = 2,
                 })
 
@@ -6837,7 +6837,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(0.35, 0, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 15,
+                    TextSize = 14,
                     ThemeKey = "Text",
                 })
 
@@ -6917,8 +6917,8 @@ function Library:CreateWindow(opts)
                     applyInputValue(box.Text, true, true)
                 end), "InputBoxFocusLost")
                 controlBase.bindAdaptiveLabel(inputControl, label, {
-                    BaseTextSize = 15,
-                    MinTextSize = 13,
+                    BaseTextSize = 14,
+                    MinTextSize = 14,
                     WidthPadding = 2,
                 })
 
@@ -6959,7 +6959,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -24, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 15,
+                    TextSize = 14,
                 })
 
                 -- Color preview box (clickable)
@@ -7245,8 +7245,8 @@ function Library:CreateWindow(opts)
                     )
                 end
                 controlBase.bindAdaptiveLabel(cpicker, label, {
-                    BaseTextSize = 15,
-                    MinTextSize = 13,
+                    BaseTextSize = 14,
+                    MinTextSize = 14,
                     WidthPadding = 2,
                 })
 
@@ -7406,7 +7406,7 @@ function Library:CreateWindow(opts)
                     Font = config.FontMedium,
                     Size = UDim2.new(1, -20, 1, 0),
                     TextColor3 = colors.Text,
-                    TextSize = 15,
+                    TextSize = 14,
                 })
 
                 -- Checkbox (right side)
@@ -7716,8 +7716,8 @@ function Library:CreateWindow(opts)
                     end,
                 })
                 controlBase.bindAdaptiveLabel(hitbox, label, {
-                    BaseTextSize = 15,
-                    MinTextSize = 13,
+                    BaseTextSize = 14,
+                    MinTextSize = 14,
                     WidthPadding = 2,
                 })
                 hitbox:TrackInstance(hPanel, "HitboxPanel")
