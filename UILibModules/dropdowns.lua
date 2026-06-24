@@ -852,7 +852,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 13
+        label.TextSize = 12
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
 
@@ -1029,8 +1029,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(dropdown, label, {
-                BaseTextSize = 13,
-                MinTextSize = 11,
+                BaseTextSize = 12,
+                MinTextSize = 10,
                 WidthPadding = 2,
             })
             base.fitLabel(dropdown, valText, {
@@ -1157,7 +1157,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 13
+        label.TextSize = 12
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
 
@@ -1412,8 +1412,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(multi, label, {
-                BaseTextSize = 13,
-                MinTextSize = 11,
+                BaseTextSize = 12,
+                MinTextSize = 10,
                 WidthPadding = 2,
             })
         end
