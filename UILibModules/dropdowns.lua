@@ -597,7 +597,7 @@ return function(Library, context)
         dLabel.Font = base.config.FontMedium
         dLabel.Text = dName
         dLabel.TextColor3 = base.colors.Text
-        dLabel.TextSize = 14
+        dLabel.TextSize = 15
         dLabel.TextXAlignment = Enum.TextXAlignment.Left
         dLabel.ZIndex = 5
 
@@ -756,8 +756,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(dropdown, dLabel, {
-                BaseTextSize = 14,
-                MinTextSize = 12,
+                BaseTextSize = 15,
+                MinTextSize = 13,
                 WidthPadding = 2,
             })
             base.fitLabel(dropdown, selVal, {
@@ -852,7 +852,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 14
+        label.TextSize = 15
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
 
@@ -1029,8 +1029,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(dropdown, label, {
-                BaseTextSize = 14,
-                MinTextSize = 12,
+                BaseTextSize = 15,
+                MinTextSize = 13,
                 WidthPadding = 2,
             })
             base.fitLabel(dropdown, valText, {
@@ -1157,7 +1157,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 14
+        label.TextSize = 15
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
 
@@ -1412,8 +1412,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(multi, label, {
-                BaseTextSize = 14,
-                MinTextSize = 12,
+                BaseTextSize = 15,
+                MinTextSize = 13,
                 WidthPadding = 2,
             })
         end
@@ -1535,7 +1535,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = mtName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 14
+        label.TextSize = 15
         label.TextTruncate = Enum.TextTruncate.AtEnd
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
@@ -1852,8 +1852,8 @@ return function(Library, context)
 
         if base.fitLabel then
             base.fitLabel(mt, label, {
-                BaseTextSize = 14,
-                MinTextSize = 12,
+                BaseTextSize = 15,
+                MinTextSize = 13,
                 WidthPadding = 2,
             })
             base.fitLabel(mt, valText, {
@@ -1960,7 +1960,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 14
+        label.TextSize = 15
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
 
@@ -2191,8 +2191,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(dt, label, {
-                BaseTextSize = 14,
-                MinTextSize = 12,
+                BaseTextSize = 15,
+                MinTextSize = 13,
                 WidthPadding = 2,
             })
             base.fitLabel(dt, valText, {
