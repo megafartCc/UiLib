@@ -3862,7 +3862,9 @@ function Library:CreateWindow(opts)
 
         for i, existingMenu in ipairs(win.Menus) do
             if existingMenu and existingMenu._btn then
-                existingMenu._btn.LayoutOrder = existingMenu._isSettingsMenu and 1000000 or i
+                pcall(function()
+                    existingMenu._btn.LayoutOrder = existingMenu._isSettingsMenu and 1000000 or i
+                end)
             end
         end
         task.defer(refreshMenuScrolls)
