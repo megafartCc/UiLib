@@ -597,7 +597,7 @@ return function(Library, context)
         dLabel.Font = base.config.FontMedium
         dLabel.Text = dName
         dLabel.TextColor3 = base.colors.Text
-        dLabel.TextSize = 13
+        dLabel.TextSize = 11
         dLabel.TextXAlignment = Enum.TextXAlignment.Left
         dLabel.ZIndex = 5
 
@@ -756,8 +756,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(dropdown, dLabel, {
-                BaseTextSize = 13,
-                MinTextSize = 11,
+                BaseTextSize = 11,
+                MinTextSize = 9,
                 WidthPadding = 2,
             })
             base.fitLabel(dropdown, selVal, {
@@ -1535,7 +1535,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = mtName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 13
+        label.TextSize = 12
         label.TextTruncate = Enum.TextTruncate.AtEnd
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
@@ -1852,8 +1852,8 @@ return function(Library, context)
 
         if base.fitLabel then
             base.fitLabel(mt, label, {
-                BaseTextSize = 13,
-                MinTextSize = 11,
+                BaseTextSize = 12,
+                MinTextSize = 10,
                 WidthPadding = 2,
             })
             base.fitLabel(mt, valText, {
@@ -1960,7 +1960,7 @@ return function(Library, context)
         label.Font = base.config.FontMedium
         label.Text = dName
         label.TextColor3 = base.colors.Text
-        label.TextSize = 13
+        label.TextSize = 12
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 5
 
@@ -2191,8 +2191,8 @@ return function(Library, context)
         })
         if base.fitLabel then
             base.fitLabel(dt, label, {
-                BaseTextSize = 13,
-                MinTextSize = 11,
+                BaseTextSize = 12,
+                MinTextSize = 10,
                 WidthPadding = 2,
             })
             base.fitLabel(dt, valText, {
