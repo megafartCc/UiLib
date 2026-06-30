@@ -2189,7 +2189,10 @@ function Library:CreateWindow(opts)
             Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
         end)
         saveBtn.Activated:Connect(function()
-            pcall(function() Library:SaveConfig() end)
+            pcall(function()
+                Library:SaveConfig()
+                Library:SaveTheme()
+            end)
             Library:Animate(saveBtn, "Press", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
             task.delay(0.3, function() Library:Animate(saveBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
         end)
@@ -2219,7 +2222,10 @@ function Library:CreateWindow(opts)
             Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
         end)
         loadBtn.Activated:Connect(function()
-            pcall(function() Library:LoadConfig() end)
+            pcall(function()
+                Library:LoadTheme()
+                Library:LoadConfig()
+            end)
             Library:Animate(loadBtn, "Press", { BackgroundColor3 = Color3.fromRGB(45, 25, 30) })
             task.delay(0.3, function() Library:Animate(loadBtn, "Hover", { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }) end)
         end)
@@ -7761,8 +7767,12 @@ function Library:CreateWindow(opts)
             Name = "UI VISUAL TRANSPARENCY",
             Column = 2,
         })
+        local uiConfigPresetSection = settingsMenu:AddSection({
+            Name = "UI CONFIG PRESETS",
+            Column = 2,
+        })
         local uiVisualConfigSection = settingsMenu:AddSection({
-            Name = "VISUAL SETTINGS CONFIG",
+            Name = "THEME PRESETS",
             Column = 2,
         })
 
@@ -7835,6 +7845,171 @@ function Library:CreateWindow(opts)
                 end
             end,
         })
+
+        local function getConfigPresetName(rawValue)
+            local valueType = type(rawValue)
+            if valueType == "table" then
+                rawValue = rawValue.Name or rawValue.name or rawValue.label or rawValue.Label
+                valueType = type(rawValue)
+            end
+            if valueType ~= "string" and valueType ~= "number" then
+                return nil
+            end
+
+            local text = tostring(rawValue or ""):match("^%s*(.-)%s*$")
+            if text == "" or text == "No Presets" then
+                return nil
+            end
+            if text:sub(1, 6):lower() == "table:" then
+                return nil
+            end
+            return text
+        end
+
+        local configPresetNameInput = uiConfigPresetSection:AddInputBox({
+            Name = "Config Name",
+            Placeholder = "main_preset",
+            Default = "",
+            SaveKey = false,
+        })
+
+        local configPresetDropdown = uiConfigPresetSection:AddDropdown({
+            Name = "Saved Configs",
+            Options = { "No Presets" },
+            Default = "No Presets",
+            SaveKey = false,
+            Callback = function(selected)
+                local presetName = getConfigPresetName(selected)
+                if presetName then
+                    configPresetNameInput:SetText(presetName)
+                end
+            end,
+        })
+
+        local configPresetStatusTone = "neutral"
+        local configPresetStatusMessage = "Ready"
+
+        local configPresetStatusRow = Instance.new("Frame", uiConfigPresetSection.Container)
+        configPresetStatusRow.Name = "ConfigPresetStatus"
+        configPresetStatusRow.BackgroundTransparency = 1
+        configPresetStatusRow.BorderSizePixel = 0
+        configPresetStatusRow.Size = UDim2.new(1, 0, 0, 18)
+        configPresetStatusRow.ZIndex = 5
+
+        local configPresetStatusLabel = Instance.new("TextLabel", configPresetStatusRow)
+        configPresetStatusLabel.Name = "StatusLabel"
+        configPresetStatusLabel.BackgroundTransparency = 1
+        configPresetStatusLabel.BorderSizePixel = 0
+        configPresetStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+        configPresetStatusLabel.Font = config.FontMedium
+        configPresetStatusLabel.Text = ""
+        configPresetStatusLabel.TextSize = 11
+        configPresetStatusLabel.TextWrapped = false
+        configPresetStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        configPresetStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
+        configPresetStatusLabel.ZIndex = 5
+
+        local function getConfigPresetStatusColor()
+            if configPresetStatusTone == "error" then
+                return colors.Main
+            end
+            if configPresetStatusTone == "success" then
+                return colors.Text
+            end
+            return colors.TextDim
+        end
+
+        local function applyConfigPresetStatus()
+            configPresetStatusLabel.Text = "Status: " .. tostring(configPresetStatusMessage or "Ready")
+            configPresetStatusLabel.TextColor3 = getConfigPresetStatusColor()
+        end
+
+        local function setConfigPresetStatus(message, tone)
+            configPresetStatusMessage = tostring(message or "Ready")
+            configPresetStatusTone = tone or "neutral"
+            applyConfigPresetStatus()
+        end
+
+        onThemeChanged(function()
+            applyConfigPresetStatus()
+        end)
+
+        local function refreshConfigPresetDropdown(selectedName)
+            local presets = {}
+            local seen = {}
+            for _, value in ipairs(Library:ListConfigPresets()) do
+                local presetName = getConfigPresetName(value)
+                if presetName then
+                    local key = presetName:lower()
+                    if not seen[key] then
+                        seen[key] = true
+                        table.insert(presets, presetName)
+                    end
+                end
+            end
+            local hasPresets = #presets > 0
+            if #presets == 0 then
+                presets = { "No Presets" }
+            end
+
+            local targetValue = getConfigPresetName(selectedName)
+            if targetValue and not seen[targetValue:lower()] then
+                table.insert(presets, 1, targetValue)
+                hasPresets = true
+            end
+            if targetValue == nil then
+                targetValue = presets[1]
+            end
+
+            configPresetDropdown:SetOptions(presets, targetValue)
+            return hasPresets
+        end
+
+        uiConfigPresetSection:AddButton({
+            Name = "Save Config Preset",
+            Callback = function()
+                local presetName = getConfigPresetName(configPresetNameInput:GetText()) or getConfigPresetName(configPresetDropdown:Get())
+                if not presetName then
+                    setConfigPresetStatus("enter a config name", "error")
+                    return
+                end
+
+                local success, message = Library:SaveConfigPreset(presetName)
+                if success then
+                    configPresetNameInput:SetText(presetName)
+                    refreshConfigPresetDropdown(presetName)
+                    setConfigPresetStatus(message or ("saved config preset: " .. presetName), "success")
+                else
+                    setConfigPresetStatus(message or ("failed to save config preset: " .. presetName), "error")
+                end
+            end,
+        })
+
+        uiConfigPresetSection:AddButton({
+            Name = "Load Config Preset",
+            Callback = function()
+                local presetName = getConfigPresetName(configPresetNameInput:GetText()) or getConfigPresetName(configPresetDropdown:Get())
+                if not presetName then
+                    setConfigPresetStatus("select a config preset", "error")
+                    return
+                end
+
+                local success, message = Library:LoadConfigPreset(presetName)
+                if success then
+                    configPresetNameInput:SetText(presetName)
+                    refreshConfigPresetDropdown(presetName)
+                    setConfigPresetStatus(message or ("loaded config preset: " .. presetName), "success")
+                else
+                    setConfigPresetStatus(message or ("failed to load config preset: " .. presetName), "error")
+                end
+            end,
+        })
+
+        if refreshConfigPresetDropdown() then
+            setConfigPresetStatus("config preset manager ready", "neutral")
+        else
+            setConfigPresetStatus("no config presets saved yet", "neutral")
+        end
 
         local colorThemeControls = {
             { Name = "Accent", Key = "Main" },

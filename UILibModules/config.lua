@@ -30,8 +30,13 @@ return function(Library, context)
     Library._configLoadGeneration = 0
     Library._configAppliedGenerationByKey = {}
 
-    local CONFIG_FOLDER = "Eps1lonScript"
+    local CONFIG_FOLDER = "UnknownHub"
     local runtimeDataStore = {}
+    Library._configFolder = CONFIG_FOLDER
+
+    function Library:GetConfigFolder()
+        return CONFIG_FOLDER
+    end
 
     function Library:_ensureFolder()
         if type(isfolder) == "function" then
@@ -53,14 +58,21 @@ return function(Library, context)
         return type(makefolder) ~= "function"
     end
 
-    function Library:_getConfigPath()
+    function Library:_getConfigFileName()
         if not self._configName then return nil end
-        return CONFIG_FOLDER .. "/" .. self._configName .. ".json"
+        return sanitizePathSegment(self._configName)
+    end
+
+    function Library:_getConfigPath()
+        local fileName = self:_getConfigFileName()
+        if not fileName then return nil end
+        return CONFIG_FOLDER .. "/" .. fileName .. ".json"
     end
 
     function Library:_getFlatConfigPath()
-        if not self._configName then return nil end
-        return CONFIG_FOLDER .. "_" .. sanitizePathSegment(self._configName) .. ".json"
+        local fileName = self:_getConfigFileName()
+        if not fileName then return nil end
+        return CONFIG_FOLDER .. "_" .. fileName .. ".json"
     end
 
     function Library:_getStorageBaseName()
@@ -86,6 +98,33 @@ return function(Library, context)
             return nil
         end
         return self:_getStorageBaseName() .. "::" .. sanitizePathSegment(tag)
+    end
+
+    local function normalizePresetName(value)
+        local valueType = type(value)
+        if valueType == "table" then
+            value = value.Name or value.name or value.label or value.Label
+            valueType = type(value)
+        end
+
+        if valueType ~= "string" and valueType ~= "number" then
+            return nil
+        end
+
+        local text = tostring(value or ""):match("^%s*(.-)%s*$")
+        if text == "" then
+            return nil
+        end
+
+        if text == "No Presets" then
+            return nil
+        end
+
+        if text:sub(1, 6):lower() == "table:" then
+            return nil
+        end
+
+        return text
     end
 
     function Library:_readJsonFile(path)
@@ -306,12 +345,7 @@ return function(Library, context)
         end)
     end
 
-    function Library:SaveConfig()
-        local path = self:_getConfigPath()
-        if not path or type(writefile) ~= "function" then
-            return false, "writefile unavailable"
-        end
-
+    function Library:_getConfigSnapshot()
         local data = {}
         for key, item in pairs(self._configItems) do
             local ok, value = pcall(item.get)
@@ -322,7 +356,38 @@ return function(Library, context)
                 }
             end
         end
+        return data
+    end
 
+    function Library:_applyConfigSnapshot(data)
+        if type(data) ~= "table" then
+            self._loadedConfigData = nil
+            return false
+        end
+
+        self._loadedConfigData = data
+        self._configLoadGeneration = (self._configLoadGeneration or 0) + 1
+        self._configAppliedGenerationByKey = {}
+        self:_beginConfigReplay()
+        for _, key in ipairs(self._configItemOrder) do
+            local item = self._configItems[key]
+            local entry = self:_resolveLoadedConfigEntry(key, item)
+            if item and entry and entry.value ~= nil then
+                self:_applyLoadedConfigEntry(key, item, entry)
+            end
+        end
+        self:_endConfigReplay()
+        self:_scheduleConfigReplay()
+        return true
+    end
+
+    function Library:SaveConfig()
+        local path = self:_getConfigPath()
+        if not path or type(writefile) ~= "function" then
+            return false, "writefile unavailable"
+        end
+
+        local data = self:_getConfigSnapshot()
         local okEncode, encoded = pcall(function()
             return HttpService:JSONEncode(data)
         end)
@@ -362,8 +427,10 @@ return function(Library, context)
         end
 
         local data = self:_readJsonFile(path)
+        local loadedPath = path
         if data == nil then
-            data = self:_readJsonFile(self:_getFlatConfigPath())
+            loadedPath = self:_getFlatConfigPath()
+            data = self:_readJsonFile(loadedPath)
         end
 
         if type(data) ~= "table" then
@@ -371,20 +438,172 @@ return function(Library, context)
             return false, "config not found"
         end
 
-        self._loadedConfigData = data
-        self._configLoadGeneration = (self._configLoadGeneration or 0) + 1
-        self._configAppliedGenerationByKey = {}
-        self:_beginConfigReplay()
-        for _, key in ipairs(self._configItemOrder) do
-            local item = self._configItems[key]
-            local entry = self:_resolveLoadedConfigEntry(key, item)
-            if item and entry and entry.value ~= nil then
-                self:_applyLoadedConfigEntry(key, item, entry)
+        self:_applyConfigSnapshot(data)
+        return true, loadedPath
+    end
+
+    function Library:_readNamedPresetIndex(indexTag)
+        local payload = self:ReadData(indexTag)
+        if type(payload) ~= "table" then
+            return {}
+        end
+
+        local names = {}
+        local seen = {}
+        for _, value in ipairs(payload) do
+            local text = normalizePresetName(value)
+            if text then
+                local normalizedKey = text:lower()
+                if not seen[normalizedKey] then
+                    seen[normalizedKey] = true
+                    table.insert(names, text)
+                end
             end
         end
-        self:_endConfigReplay()
-        self:_scheduleConfigReplay()
-        return true, path
+        return names
+    end
+
+    function Library:_writeNamedPresetIndex(indexTag, names)
+        local cleaned = {}
+        local seen = {}
+        for _, value in ipairs(names or {}) do
+            local text = normalizePresetName(value)
+            if text then
+                local normalizedKey = text:lower()
+                if not seen[normalizedKey] then
+                    seen[normalizedKey] = true
+                    table.insert(cleaned, text)
+                end
+            end
+        end
+
+        table.sort(cleaned, function(left, right)
+            return tostring(left):lower() < tostring(right):lower()
+        end)
+
+        local success, writeResult = self:WriteData(indexTag, cleaned)
+        if not success then
+            return nil, writeResult or "failed to write preset index"
+        end
+
+        return cleaned, writeResult
+    end
+
+    function Library:_getConfigPresetTag(name)
+        local sanitized = sanitizePathSegment(name)
+        if sanitized == "" then
+            return nil
+        end
+        return "config_preset_" .. sanitized
+    end
+
+    function Library:_getConfigPresetIndexTag()
+        return "config_presets_index"
+    end
+
+    function Library:_readConfigPresetIndex()
+        return self:_readNamedPresetIndex(self:_getConfigPresetIndexTag())
+    end
+
+    function Library:_writeConfigPresetIndex(names)
+        return self:_writeNamedPresetIndex(self:_getConfigPresetIndexTag(), names)
+    end
+
+    function Library:SaveConfigPreset(name)
+        local trimmedName = tostring(name or ""):match("^%s*(.-)%s*$")
+        if trimmedName == "" then
+            return false, "enter a preset name"
+        end
+
+        local tag = self:_getConfigPresetTag(name)
+        if not tag then
+            return false, "invalid preset name"
+        end
+
+        local success, writeResult = self:WriteData(tag, {
+            Name = trimmedName,
+            Config = self:_getConfigSnapshot(),
+        })
+        if not success then
+            return false, writeResult or "failed to write preset"
+        end
+
+        local payload = self:ReadData(tag)
+        if type(payload) ~= "table" or type(payload.Config) ~= "table" then
+            return false, "preset write verification failed"
+        end
+
+        local presets = self:_readConfigPresetIndex()
+        table.insert(presets, trimmedName)
+        local cleaned, indexResult = self:_writeConfigPresetIndex(presets)
+        if not cleaned then
+            return false, indexResult or "failed to update preset list"
+        end
+
+        return true, string.format("saved config preset: %s", trimmedName)
+    end
+
+    function Library:LoadConfigPreset(name)
+        local trimmedName = tostring(name or ""):match("^%s*(.-)%s*$")
+        if trimmedName == "" then
+            return false, "select a preset to load"
+        end
+
+        local tag = self:_getConfigPresetTag(name)
+        if not tag then
+            return false, "invalid preset name"
+        end
+
+        local payload = self:ReadData(tag)
+        local configData = type(payload) == "table" and (payload.Config or payload.config or payload.Settings or payload.settings) or nil
+        if type(configData) ~= "table" then
+            return false, string.format("config preset not found: %s", trimmedName)
+        end
+
+        self:_applyConfigSnapshot(configData)
+        pcall(function()
+            self:SaveConfig()
+        end)
+        return true, string.format("loaded config preset: %s", trimmedName)
+    end
+
+    function Library:ListConfigPresets()
+        local presets = self:_readConfigPresetIndex()
+        if #presets > 0 then
+            return presets
+        end
+
+        if type(listfiles) ~= "function" then
+            return {}
+        end
+
+        self:_ensureFolder()
+
+        local ok, files = pcall(listfiles, CONFIG_FOLDER)
+        if not ok or type(files) ~= "table" then
+            return {}
+        end
+
+        local prefix = self:_getStorageBaseName() .. "_config_preset_"
+        for _, filePath in ipairs(files) do
+            local normalized = tostring(filePath):gsub("\\", "/")
+            local fileName = normalized:match("([^/]+)$")
+            if fileName and fileName:sub(1, #prefix) == prefix and fileName:sub(-5) == ".json" then
+                local presetTagName = fileName:sub(#prefix + 1, -6)
+                local payload = self:ReadData("config_preset_" .. presetTagName)
+                local presetName = normalizePresetName(type(payload) == "table" and payload.Name or presetTagName)
+                if presetName then
+                    table.insert(presets, presetName)
+                end
+            end
+        end
+
+        local cleaned = self:_writeConfigPresetIndex(presets)
+        if cleaned then
+            return cleaned
+        end
+
+        return {}
     end
 
     function Library:_markDirty()
@@ -613,78 +832,12 @@ return function(Library, context)
         return "theme_presets_index"
     end
 
-    local function normalizePresetName(value)
-        local valueType = type(value)
-        if valueType == "table" then
-            value = value.Name or value.name or value.label or value.Label
-            valueType = type(value)
-        end
-
-        if valueType ~= "string" and valueType ~= "number" then
-            return nil
-        end
-
-        local text = tostring(value or ""):match("^%s*(.-)%s*$")
-        if text == "" then
-            return nil
-        end
-
-        if text == "No Presets" then
-            return nil
-        end
-
-        if text:sub(1, 6):lower() == "table:" then
-            return nil
-        end
-
-        return text
-    end
-
     function Library:_readThemePresetIndex()
-        local payload = self:ReadData(self:_getThemePresetIndexTag())
-        if type(payload) ~= "table" then
-            return {}
-        end
-
-        local names = {}
-        local seen = {}
-        for _, value in ipairs(payload) do
-            local text = normalizePresetName(value)
-            if text then
-                local normalizedKey = text:lower()
-                if not seen[normalizedKey] then
-                    seen[normalizedKey] = true
-                    table.insert(names, text)
-                end
-            end
-        end
-        return names
+        return self:_readNamedPresetIndex(self:_getThemePresetIndexTag())
     end
 
     function Library:_writeThemePresetIndex(names)
-        local cleaned = {}
-        local seen = {}
-        for _, value in ipairs(names or {}) do
-            local text = normalizePresetName(value)
-            if text then
-                local normalizedKey = text:lower()
-                if not seen[normalizedKey] then
-                    seen[normalizedKey] = true
-                    table.insert(cleaned, text)
-                end
-            end
-        end
-
-        table.sort(cleaned, function(left, right)
-            return tostring(left):lower() < tostring(right):lower()
-        end)
-
-        local success, writeResult = self:WriteData(self:_getThemePresetIndexTag(), cleaned)
-        if not success then
-            return nil, writeResult or "failed to write preset index"
-        end
-
-        return cleaned, writeResult
+        return self:_writeNamedPresetIndex(self:_getThemePresetIndexTag(), names)
     end
 
     function Library:SaveThemePreset(name)
