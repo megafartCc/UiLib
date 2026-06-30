@@ -29,6 +29,9 @@ return function(Library, context)
     Library._configMutationSerial = 0
     Library._configLoadGeneration = 0
     Library._configAppliedGenerationByKey = {}
+    Library._autoLoadEnabled = true
+    Library._autoLoadData = nil
+    Library.AutoLoadBootstrapUrl = "https://raw.githubusercontent.com/megafartCc/UiLib/main/build.lua"
 
     local CONFIG_FOLDER = "UnknownHub"
     local runtimeDataStore = {}
@@ -213,6 +216,396 @@ return function(Library, context)
             return true, "memory"
         end
         return false, lastError
+    end
+
+    local function trimString(value)
+        return tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    end
+
+    local function quoteLuaString(value)
+        local text = tostring(value or "")
+        text = text:gsub("\\", "\\\\")
+        text = text:gsub("\"", "\\\"")
+        text = text:gsub("\r", "\\r")
+        text = text:gsub("\n", "\\n")
+        return "\"" .. text .. "\""
+    end
+
+    local function getQueueOnTeleport()
+        if type(queue_on_teleport) == "function" then
+            return queue_on_teleport
+        end
+        if type(queueonteleport) == "function" then
+            return queueonteleport
+        end
+        if type(syn) == "table" then
+            if type(syn.queue_on_teleport) == "function" then
+                return function(source)
+                    return syn.queue_on_teleport(source)
+                end
+            end
+            if type(syn.queueonteleport) == "function" then
+                return function(source)
+                    return syn.queueonteleport(source)
+                end
+            end
+        end
+        if type(fluxus) == "table" and type(fluxus.queue_on_teleport) == "function" then
+            return function(source)
+                return fluxus.queue_on_teleport(source)
+            end
+        end
+        return nil
+    end
+
+    local function getAutoLoadStore()
+        if type(getgenv) == "function" then
+            local ok, env = pcall(getgenv)
+            if ok and type(env) == "table" then
+                return env
+            end
+        end
+        if type(_G) == "table" then
+            return _G
+        end
+        return nil
+    end
+
+    local function readOptionalBoolean(payload)
+        if type(payload) == "boolean" then
+            return payload
+        end
+        if type(payload) ~= "table" then
+            return nil
+        end
+
+        local value = payload.enabled
+        if value == nil then
+            value = payload.Enabled
+        end
+        if value == nil then
+            value = payload.autoLoad
+        end
+        if value == nil then
+            value = payload.AutoLoad
+        end
+        if value == nil then
+            return nil
+        end
+
+        return value == true
+    end
+
+    local function appendNormalizedId(out, seen, value)
+        local text = trimString(value)
+        if text == "" then
+            return
+        end
+        if seen[text] then
+            return
+        end
+        seen[text] = true
+        table.insert(out, text)
+    end
+
+    local function normalizeIdList(...)
+        local out = {}
+        local seen = {}
+
+        local function collect(value)
+            if type(value) == "table" then
+                for _, entry in ipairs(value) do
+                    collect(entry)
+                end
+                for key, entry in pairs(value) do
+                    if type(key) ~= "number" then
+                        if entry == true then
+                            appendNormalizedId(out, seen, key)
+                        else
+                            collect(entry)
+                        end
+                    end
+                end
+                return
+            end
+
+            appendNormalizedId(out, seen, value)
+        end
+
+        for index = 1, select("#", ...) do
+            collect(select(index, ...))
+        end
+
+        return out
+    end
+
+    local function currentGameId()
+        local ok, value = pcall(function()
+            return game.GameId
+        end)
+        if ok then
+            return trimString(value)
+        end
+        return ""
+    end
+
+    local function currentPlaceId()
+        local ok, value = pcall(function()
+            return game.PlaceId
+        end)
+        if ok then
+            return trimString(value)
+        end
+        return ""
+    end
+
+    local function currentJobId()
+        local ok, value = pcall(function()
+            return game.JobId
+        end)
+        if ok then
+            return trimString(value)
+        end
+        return ""
+    end
+
+    local function listContains(values, target)
+        target = trimString(target)
+        if target == "" then
+            return false
+        end
+        for _, value in ipairs(values or {}) do
+            if trimString(value) == target then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function normalizeAutoLoadData(payload)
+        if type(payload) ~= "table" then
+            payload = {}
+        end
+
+        local enabled = readOptionalBoolean(payload)
+        if enabled == nil then
+            enabled = true
+        end
+
+        local loaderUrl = trimString(payload.loaderUrl or payload.LoaderUrl or payload.url or payload.Url)
+        local bootstrapUrl = trimString(payload.bootstrapUrl or payload.BootstrapUrl or Library.AutoLoadBootstrapUrl)
+        if bootstrapUrl == "" then
+            bootstrapUrl = Library.AutoLoadBootstrapUrl
+        end
+
+        return {
+            version = 1,
+            enabled = enabled,
+            loaderUrl = loaderUrl,
+            bootstrapUrl = bootstrapUrl,
+            gameIds = normalizeIdList(payload.gameIds, payload.GameIds, payload.game_id, payload.gameId, payload.GameId),
+            placeIds = normalizeIdList(payload.placeIds, payload.PlaceIds, payload.place_id, payload.placeId, payload.PlaceId),
+            scriptId = trimString(payload.scriptId or payload.ScriptId or payload.script_id),
+            projectId = trimString(payload.projectId or payload.ProjectId or payload.project_id),
+            mode = trimString(payload.mode or payload.Mode),
+            configName = trimString(payload.configName or payload.ConfigName),
+        }
+    end
+
+    local function autoLoadMatchesCurrentTarget(data)
+        local gameIds = data.gameIds or {}
+        if #gameIds > 0 then
+            return listContains(gameIds, currentGameId())
+        end
+
+        local placeIds = data.placeIds or {}
+        if #placeIds > 0 then
+            return listContains(placeIds, currentPlaceId())
+        end
+
+        return false
+    end
+
+    function Library:_getAutoLoadTag()
+        return "__uilib.autoload"
+    end
+
+    function Library:_buildAutoLoadQueuedSource(data)
+        data = normalizeAutoLoadData(data)
+        if data.loaderUrl == "" then
+            return nil
+        end
+
+        local okEncode, encoded = pcall(function()
+            return HttpService:JSONEncode(data)
+        end)
+        if not okEncode or type(encoded) ~= "string" then
+            return nil
+        end
+
+        return table.concat({
+            "do\n",
+            "local HttpService = game:GetService(\"HttpService\")\n",
+            "local payload = HttpService:JSONDecode(", quoteLuaString(encoded), ")\n",
+            "local bootstrapUrl = ", quoteLuaString(data.bootstrapUrl), "\n",
+            "local okSource, source = pcall(function()\n",
+            "    return game:HttpGet(bootstrapUrl)\n",
+            "end)\n",
+            "if okSource and type(source) == \"string\" and source ~= \"\" then\n",
+            "    local chunk = loadstring(source)\n",
+            "    if chunk then\n",
+            "        local okLibrary, Library = pcall(chunk)\n",
+            "        if okLibrary and type(Library) == \"table\" and type(Library.RunAutoLoad) == \"function\" then\n",
+            "            pcall(function()\n",
+            "                Library:RunAutoLoad(payload)\n",
+            "            end)\n",
+            "        end\n",
+            "    end\n",
+            "end\n",
+            "end",
+        })
+    end
+
+    function Library:QueueAutoLoad(data)
+        data = normalizeAutoLoadData(data)
+        if data.enabled == false then
+            return false, "autoload disabled"
+        end
+        if data.loaderUrl == "" then
+            return false, "loader url missing"
+        end
+
+        local queueOnTeleport = getQueueOnTeleport()
+        if type(queueOnTeleport) ~= "function" then
+            return false, "queue_on_teleport unavailable"
+        end
+
+        local source = self:_buildAutoLoadQueuedSource(data)
+        if type(source) ~= "string" or source == "" then
+            return false, "autoload source build failed"
+        end
+
+        local ok, err = pcall(queueOnTeleport, source)
+        if not ok then
+            return false, tostring(err or "queue_on_teleport failed")
+        end
+
+        return true
+    end
+
+    function Library:RunAutoLoad(data)
+        data = normalizeAutoLoadData(data)
+        if data.enabled == false then
+            return false, "autoload disabled"
+        end
+        if data.loaderUrl == "" then
+            return false, "loader url missing"
+        end
+
+        pcall(function()
+            self:QueueAutoLoad(data)
+        end)
+
+        if not autoLoadMatchesCurrentTarget(data) then
+            return false, "game mismatch"
+        end
+
+        local runKey = table.concat({ data.loaderUrl, currentGameId(), currentPlaceId(), currentJobId() }, "::")
+        local store = getAutoLoadStore()
+        if store then
+            if type(store.__UnknownHubUiAutoLoadRan) ~= "table" then
+                store.__UnknownHubUiAutoLoadRan = {}
+            end
+            if store.__UnknownHubUiAutoLoadRan[runKey] then
+                return false, "already loaded"
+            end
+            store.__UnknownHubUiAutoLoadRan[runKey] = true
+        end
+
+        local okSource, source = pcall(function()
+            return game:HttpGet(data.loaderUrl)
+        end)
+        if not okSource or type(source) ~= "string" or source == "" then
+            return false, tostring(source or "loader download failed")
+        end
+
+        local chunk, compileError = loadstring(source)
+        if not chunk then
+            return false, tostring(compileError or "loader compile failed")
+        end
+
+        local okRun, runResult = pcall(chunk)
+        if not okRun then
+            return false, tostring(runResult or "loader run failed")
+        end
+
+        return true, runResult
+    end
+
+    function Library:ConfigureAutoLoad(options)
+        options = type(options) == "table" and options or {}
+        local saved = self:ReadData(self:_getAutoLoadTag())
+        local savedData = normalizeAutoLoadData(saved)
+        local optionData = normalizeAutoLoadData(options)
+
+        local explicitEnabled = readOptionalBoolean(options)
+        local savedEnabled = readOptionalBoolean(saved)
+        local enabled = explicitEnabled
+        if enabled == nil then
+            enabled = savedEnabled
+        end
+        if enabled == nil then
+            enabled = true
+        end
+
+        local gameIds = normalizeIdList(savedData.gameIds, optionData.gameIds, currentGameId())
+        local placeIds = normalizeIdList(savedData.placeIds, optionData.placeIds)
+        local data = {
+            version = 1,
+            enabled = enabled,
+            loaderUrl = optionData.loaderUrl ~= "" and optionData.loaderUrl or savedData.loaderUrl,
+            bootstrapUrl = optionData.bootstrapUrl ~= "" and optionData.bootstrapUrl or savedData.bootstrapUrl,
+            gameIds = gameIds,
+            placeIds = placeIds,
+            scriptId = optionData.scriptId ~= "" and optionData.scriptId or savedData.scriptId,
+            projectId = optionData.projectId ~= "" and optionData.projectId or savedData.projectId,
+            mode = optionData.mode ~= "" and optionData.mode or savedData.mode,
+            configName = self._configName,
+        }
+        if data.loaderUrl == "" then
+            data.enabled = false
+        end
+
+        self._autoLoadEnabled = data.enabled
+        self._autoLoadData = data
+        self:WriteData(self:_getAutoLoadTag(), data)
+
+        if data.enabled then
+            pcall(function()
+                self:QueueAutoLoad(data)
+            end)
+        end
+
+        return data
+    end
+
+    function Library:SetAutoLoadEnabled(enabled, options)
+        options = type(options) == "table" and options or {}
+        options.enabled = enabled == true
+
+        local existing = self._autoLoadData
+        if type(existing) ~= "table" then
+            existing = self:ReadData(self:_getAutoLoadTag())
+        end
+        existing = normalizeAutoLoadData(existing)
+
+        for key, value in pairs(existing) do
+            if options[key] == nil then
+                options[key] = value
+            end
+        end
+
+        return self:ConfigureAutoLoad(options)
     end
 
     function Library:_resolveLoadedConfigEntry(key, item)

@@ -626,6 +626,48 @@ return function(Library, context, moduleRequire)
         return false, payload
     end
 
+    local function firstOptionValue(options, ...)
+        if type(options) ~= "table" then
+            return nil
+        end
+
+        for index = 1, select("#", ...) do
+            local key = select(index, ...)
+            local value = options[key]
+            if value ~= nil then
+                return value
+            end
+        end
+        return nil
+    end
+
+    local function optionalBooleanOption(options, ...)
+        local value = firstOptionValue(options, ...)
+        if value == nil then
+            return nil
+        end
+        return value == true
+    end
+
+    local function loaderOriginFromUrl(url)
+        local origin = trimText(url):match("^(https?://[^/]+)")
+        if origin and origin ~= "" then
+            return origin
+        end
+        return "https://unknownhub.win"
+    end
+
+    local function deriveUnknownHubLoaderUrl(verifyUrl, scriptId, projectId)
+        local origin = loaderOriginFromUrl(verifyUrl)
+        if trimText(projectId) ~= "" then
+            return origin .. "/api/projects/" .. trimText(projectId) .. "/loader", "project"
+        end
+        if trimText(scriptId) ~= "" then
+            return origin .. "/api/scripts/" .. trimText(scriptId) .. "/loader", "script"
+        end
+        return "", ""
+    end
+
 function Library:CreateWindow(opts)
     opts = opts or {}
     local name = opts.Name or opts.Title or "FATALITY"
@@ -637,6 +679,12 @@ function Library:CreateWindow(opts)
     local unknownHubScriptId = trimText(opts.UnknownHubScriptId or opts.UnknownHubScriptID or opts.ScriptId or opts.ScriptID)
     local unknownHubProjectId = trimText(opts.UnknownHubProjectId or opts.UnknownHubProjectID or opts.ProjectId or opts.ProjectID)
     local unknownHubVerifyUrl = trimText(opts.UnknownHubVerifyUrl or opts.KeyVerifyUrl or "https://unknownhub.win/api/lua/key/verify")
+    local explicitAutoLoadEnabled = optionalBooleanOption(opts, "AutoLoadUI", "AutoloadUI", "AutoLoad", "Autoload")
+    local autoLoadUrl = trimText(firstOptionValue(opts, "AutoLoadUrl", "AutoloadUrl", "UnknownHubAutoLoadUrl", "UnknownHubLoaderUrl", "LoaderUrl"))
+    local autoLoadMode = ""
+    if autoLoadUrl == "" then
+        autoLoadUrl, autoLoadMode = deriveUnknownHubLoaderUrl(unknownHubVerifyUrl, unknownHubScriptId, unknownHubProjectId)
+    end
     local unknownHubKeySystemEnabled = opts.UnknownHubKey == true
         or opts.UnknownHubKeySystem == true
         or (keySystemEnabled and requiredKey == "" and (unknownHubScriptId ~= "" or unknownHubProjectId ~= ""))
@@ -675,6 +723,20 @@ function Library:CreateWindow(opts)
     self._configItemOrder = {}
     self._loadedConfigData = nil
     self._configReplayToken = 0
+    if type(self.ConfigureAutoLoad) == "function" then
+        local autoLoadOptions = {
+            loaderUrl = autoLoadUrl,
+            gameIds = firstOptionValue(opts, "AutoLoadGameIds", "AutoloadGameIds", "SupportedGameIds", "GameIds"),
+            placeIds = firstOptionValue(opts, "AutoLoadPlaceIds", "AutoloadPlaceIds", "SupportedPlaceIds", "PlaceIds"),
+            scriptId = unknownHubScriptId,
+            projectId = unknownHubProjectId,
+            mode = autoLoadMode,
+        }
+        if explicitAutoLoadEnabled ~= nil then
+            autoLoadOptions.enabled = explicitAutoLoadEnabled
+        end
+        self:ConfigureAutoLoad(autoLoadOptions)
+    end
 
     local hardcodedKeySystemActive = (not unknownHubKeySystemEnabled) and keySystemEnabled and requiredKey ~= ""
     local keyValidationMode = unknownHubKeySystemEnabled and "unknownhub" or (hardcodedKeySystemActive and "hardcoded" or "none")
@@ -7791,6 +7853,17 @@ function Library:CreateWindow(opts)
                     Library:SaveConfig()
                     Library:SaveTheme()
                 end)
+            end,
+        })
+
+        uiFunctionSection:AddToggle({
+            Name = "Auto Load UI",
+            Default = Library._autoLoadEnabled == true,
+            SaveKey = false,
+            Callback = function(enabled)
+                if type(Library.SetAutoLoadEnabled) == "function" then
+                    Library:SetAutoLoadEnabled(enabled == true)
+                end
             end,
         })
 
