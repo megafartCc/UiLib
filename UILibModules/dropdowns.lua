@@ -1091,7 +1091,13 @@ return function(Library, context)
             return dropdown
         end
         dropdown.SetText = dropdown.SetSelection
-        dropdown.SetOptions = function(options, selectedValue)
+        dropdown.SetOptions = function(selfOrOptions, optionsOrSelectedValue, maybeSelectedValue)
+            local options = selfOrOptions
+            local selectedValue = optionsOrSelectedValue
+            if selfOrOptions == dropdown then
+                options = optionsOrSelectedValue
+                selectedValue = maybeSelectedValue
+            end
             dOptions = normalizeDropdownOptions(options, dOptions)
             applyDropdownValue(selectedValue ~= nil and selectedValue or dropdown.Value)
             rebuildOptions()
